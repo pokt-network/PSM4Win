@@ -1052,17 +1052,10 @@ function BridgePanel(): React.JSX.Element {
       {st?.running ? (
         <>
           <div className="hint" style={{ marginTop: 8 }}>
-            Claude Code: run once in any terminal (the token is part of the command).
-          </div>
-          <div className="filerow" style={{ marginTop: 6 }}>
-            <input type="text" readOnly value={cli} className="mono" />
-            <button className="btn small" onClick={() => copy(cli)}>
-              Copy command
-            </button>
-          </div>
-          <div className="hint" style={{ marginTop: 8 }}>
-            Or a project <span className="mono">.mcp.json</span> (it then holds the token: keep that
-            file out of version control):
+            <b>Claude desktop app.</b> Open the Code tab on the folder you work in and save this as{' '}
+            <span className="mono">.mcp.json</span> in that folder. Claude Code finds it when the
+            session starts and asks you once to allow the server. The file holds the token, so keep
+            it out of version control.
           </div>
           <div className="plan">
             <div className="lbl">.mcp.json</div>
@@ -1071,6 +1064,16 @@ function BridgePanel(): React.JSX.Element {
           <div className="btnrow">
             <button className="btn small" onClick={() => copy(mcpJson)}>
               Copy .mcp.json
+            </button>
+          </div>
+          <div className="hint" style={{ marginTop: 8 }}>
+            <b>Terminal.</b> If you run Claude Code from a terminal instead, this one command
+            registers the bridge for every folder:
+          </div>
+          <div className="filerow" style={{ marginTop: 6 }}>
+            <input type="text" readOnly value={cli} className="mono" />
+            <button className="btn small" onClick={() => copy(cli)}>
+              Copy command
             </button>
           </div>
           <ul className="checks">

@@ -18,6 +18,9 @@ export const CHAIN_IDS = { beta: 'pocket-lego-testnet', main: 'pocket' } as cons
 /** The remote MCP server assistants connect to (Settings, Claude Integration). */
 export const MCP_ENDPOINT = 'https://mcp.pocketmcp.network/mcp'
 
+/** Docker Desktop's download page (Help and the welcome dialog link to it, so users do not go searching). */
+export const DOCKER_DESKTOP_URL = 'https://www.docker.com/products/docker-desktop/'
+
 /** The local action bridge's default loopback port (Settings can change it). */
 export const BRIDGE_DEFAULT_PORT = 41777
 

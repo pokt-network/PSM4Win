@@ -6,11 +6,13 @@ import { useState } from 'react'
 import { useStore } from '../store'
 import { fmtPokt } from '@core/format'
 import { NETWORK_INFO } from '@core/networks'
+import { DOCKER_DESKTOP_URL } from '@core/versions'
 import { Badge, netLabel } from '../components/ui'
 import { copy, openUrl, refreshNetwork, tab } from '../lib/actions'
 
 const FOUNDATION_EMAIL = 'directors@pokt.foundation'
 const LINKS = {
+  dockerDesktop: DOCKER_DESKTOP_URL,
   docs: 'https://docs.pocket.network',
   app: 'https://github.com/pokt-network/PSM4Win',
   poktroll: 'https://github.com/pokt-network/poktroll',
@@ -93,7 +95,9 @@ function BeforeYouStart(): React.JSX.Element {
       <p className="welcome-lead">
         Four things. Have them ready and the steps take about twenty minutes.
       </p>
-      <h3>1. Docker Desktop, running on this PC</h3>
+      <h3>
+        1. <Link href={LINKS.dockerDesktop}>Docker Desktop</Link>, running on this PC
+      </h3>
       <p>The Pocket tools run in containers. The top bar tells you when Docker is not running.</p>
       <h3>2. The owner wallet, with POKT</h3>
       <p>
@@ -118,7 +122,7 @@ function BeforeYouStart(): React.JSX.Element {
       </table>
       <div className="btnrow">
         <button className="btn small" onClick={() => refreshNetwork()}>
-          Read again
+          Requery
         </button>
       </div>
       <p>
@@ -127,10 +131,11 @@ function BeforeYouStart(): React.JSX.Element {
       </p>
       <h3>3. Your service app</h3>
       <p>
-        An HTTP API in a folder on this PC with a <span className="mono">Dockerfile</span> under{' '}
-        <span className="mono">backend</span>. It answers every request with a JSON object, answers{' '}
-        <span className="mono">GET /</span> with success, and has a version path and a health path.
-        No app yet? Ask Claude Code; see chapter 4.
+        Your API enabled app code, kept in a folder on this PC with a{' '}
+        <span className="mono">Dockerfile</span> under <span className="mono">backend</span>. It
+        runs on your server once deployed; this PC only holds the code. It must answer every request
+        with a JSON object, answer <span className="mono">GET /</span> with success, and have a
+        version path and a health path. No app yet? Ask Claude Code; see chapter 4.
       </p>
       <h3>4. A server</h3>
       <p>
@@ -196,8 +201,8 @@ function WithClaude(): React.JSX.Element {
       </p>
       <p>
         Turn on the <b>local action bridge</b> under{' '}
-        <Go screen="settings">Settings, Claude Integration</Go> and paste the command it shows into
-        Claude Code. Status now:{' '}
+        <Go screen="settings">Settings, Claude Integration</Go> and follow the instructions there
+        for the Claude desktop app, or for a terminal. Status now:{' '}
         {bridge?.running ? (
           <Badge cls="ok">on, port {bridge.port}</Badge>
         ) : (

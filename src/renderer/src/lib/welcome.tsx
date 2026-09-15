@@ -1,7 +1,8 @@
 // The welcome dialog (docs/SCREENS.md 1.6), text verbatim from app.js showWelcome().
 import mark from '../assets/pocket-mark-40.png'
 import { openModal, closeModal } from './modal'
-import { saveSettings } from './actions'
+import { saveSettings, openUrl } from './actions'
+import { DOCKER_DESKTOP_URL } from '@core/versions'
 
 export function showWelcome(): void {
   openModal(
@@ -22,7 +23,10 @@ export function showWelcome(): void {
           <h4>Have these ready</h4>
           <ul className="checks">
             <li className="info">
-              <b>Docker Desktop</b>, installed and running.
+              <b>
+                <a onClick={() => openUrl(DOCKER_DESKTOP_URL)}>Docker Desktop</a>
+              </b>
+              , installed and running.
               <span className="sub">
                 The Pocket tools run in containers here; the app downloads them once.
               </span>
