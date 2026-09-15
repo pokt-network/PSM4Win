@@ -29,7 +29,7 @@
       ],
       "not_available": [
         "no auto-update (Scoop updates it)",
-        "no macOS build yet (phase 3)"
+        "Windows only; the macOS app is a separate product"
       ]
     },
     "hta-2026-09-14": {
@@ -57,9 +57,9 @@
     }
   },
   "planned": {
-    "electron-macos": {
-      "status": "phase 3, not started",
-      "notes": "DMG, signing, notarisation; encrypted keyring export/import between machines"
+    "electron-keyring-bundle": {
+      "status": "later, not started",
+      "notes": "encrypted keyring export/import for moving between machines"
     }
   },
   "protocol_verified_against": {

@@ -1,6 +1,6 @@
 # Migration: importing the HTA's data into the Electron app
 
-Scope for this phase: the same Windows PC and the same Windows user account. The Electron app takes over the HTA's settings, wallet metadata, activity, and test log, and keeps using the HTA's Docker keyring volume. Nothing is retyped and no key is re-imported. Moving to another machine (the encrypted export and import bundle) is phase 3.
+Scope for this phase: the same Windows PC and the same Windows user account. The Electron app takes over the HTA's settings, wallet metadata, activity, and test log, and keeps using the HTA's Docker keyring volume. Nothing is retyped and no key is re-imported. Moving to another machine (the encrypted export and import bundle) is a later phase.
 
 ## 1. Where the HTA keeps things
 

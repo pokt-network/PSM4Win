@@ -1,6 +1,6 @@
 # Packaging, CI, and code signing
 
-Windows only in this phase. macOS (DMG, Developer ID signing, notarisation, Apple Developer account) is phase 3 and nothing here should pre-empt it beyond a `// phase 3` marker.
+Windows only. The macOS app is a separate effort outside this repository; nothing here should pre-empt it beyond the existing `# phase 3` markers.
 
 ## 1. electron-builder
 

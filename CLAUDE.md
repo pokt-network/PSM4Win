@@ -10,9 +10,9 @@ The app performs every transaction and every signature. It is the only thing in 
 |---|---|---|
 | 1 | Platform layer: main-process signer with the HTA's exact operation contract, typed IPC, Docker and SSH drivers, same-PC importer from the HTA, NSIS installer, CI build. Verified with a signer self-test on Beta before any screen exists. | current |
 | 2 | Renderer rewrite in React + TypeScript, screen by screen in the order Wallets, Settings, Services, Suppliers, Deploy, Test, Dashboard (which holds Recent activity; there is no separate Activity screen), each checked against the HTA on the same keyring. Then the local MCP action bridge. | next |
-| 3 | macOS build (DMG, signing, notarisation; needs an Apple Developer account) and the encrypted export/import bundle for moving a keyring between machines. | later, not started |
+| 3 | The encrypted export/import bundle for moving a keyring between machines. The macOS app is not part of this repository: PSM4Win is Pocket Service Manager for Windows, and the Mac build is a separate effort. | later, not started |
 
-Windows only in phases 1 and 2. Do not add macOS conditionals, universal-binary config, or Keychain code paths yet; design so they can be added, and leave a `// phase 3` note where a platform split will go.
+Windows only, in every phase of this repository. Do not add macOS conditionals, universal-binary config, or Keychain code paths; the existing `// phase 3` notes mark where a platform split would go and stay as pointers for the separate macOS effort.
 
 ## Stack
 
