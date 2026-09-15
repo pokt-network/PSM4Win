@@ -214,7 +214,7 @@ export function CreateScreen(): React.JSX.Element {
         <div className="row">
           <div>
             <label>Service ID</label>
-            {text('id', { id: 'crId', placeholder: 'pretty-charts', maxLength: 42 })}
+            {text('id', { id: 'crId', placeholder: 'example-charts', maxLength: 42 })}
             <div className="hint" id="crIdHint">
               {idHint.kind === 'default' ? (
                 'Permanent once registered. Also becomes the folder name. Lowercase letters, digits, hyphen, underscore.'
@@ -229,7 +229,7 @@ export function CreateScreen(): React.JSX.Element {
           </div>
           <div>
             <label>Display name</label>
-            {text('name', { placeholder: 'Pretty Charts', maxLength: 169 })}
+            {text('name', { placeholder: 'Example Charts', maxLength: 169 })}
             <div className="hint">
               Shown in the catalog. Letters, digits, spaces, hyphen, underscore.
             </div>
@@ -280,7 +280,7 @@ export function CreateScreen(): React.JSX.Element {
             <div className="hint">
               For supplier operators: what process listens behind their RelayMiner, on which port,
               and at which path prefix. "mount at /" means paths pass through unchanged. Example:
-              "pretty-charts container on :8080; mount at /". Up to 256 characters.
+              "example-charts container on :8080; mount at /". Up to 256 characters.
             </div>
           </div>
         </div>
@@ -296,7 +296,7 @@ export function CreateScreen(): React.JSX.Element {
         <div className="row">
           <div>
             <label>API contract names</label>
-            {text('apis', { placeholder: 'pretty-charts-api' })}
+            {text('apis', { placeholder: 'example-charts-api' })}
             <div className="hint">
               Comma-separated, lowercase kebab-case,{' '}
               <span className="mono">&lt;service&gt;-&lt;family&gt;</span>. Other cards claiming the
@@ -355,12 +355,12 @@ export function CreateScreen(): React.JSX.Element {
           maxLength={1024}
           value={cr.backend}
           onChange={(e) => set('backend', e.target.value)}
-          placeholder="What a supplier deploys, e.g. the pretty-charts container behind a RelayMiner with the rest backend pointed at it. No auth toward the backend; callers cannot send headers."
+          placeholder="What a supplier deploys, e.g. the example-charts container behind a RelayMiner with the rest backend pointed at it. No auth toward the backend; callers cannot send headers."
         />
         <div className="row">
           <div>
             <label>Implementations</label>
-            {text('impl', { placeholder: 'pretty-charts >= 1.0' })}
+            {text('impl', { placeholder: 'example-charts >= 1.0' })}
             <div className="hint">
               Comma-separated software and version constraints a supplier may run.
             </div>
@@ -418,7 +418,7 @@ export function CreateScreen(): React.JSX.Element {
           </div>
           <div>
             <label>Must match</label>
-            {text('idMatch', { placeholder: '^pretty-charts$' })}
+            {text('idMatch', { placeholder: '^example-charts$' })}
           </div>
         </div>
         <div className="row">

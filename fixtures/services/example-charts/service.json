@@ -1,0 +1,32 @@
+{
+  "service_id": "example-charts",
+  "name": "Example Charts",
+  "compute_units_per_relay": 10000,
+  "card": "card.json",
+  "networks": {
+    "beta": {
+      "register_tx": "0000000000000000000000000000000000000000000000000000000000000005",
+      "app_stake_tx": "0000000000000000000000000000000000000000000000000000000000000003",
+      "app_wallet": "app-example-charts",
+      "app_address": "pokt1qszqgpqyqszqgpqyqszqgpqyqszqgpqyl37th0",
+      "supplier_stake_tx": "0000000000000000000000000000000000000000000000000000000000000006",
+      "supplier_operator": "pokt1qgpqyqszqgpqyqszqgpqyqszqgpqyqsz73c06j",
+      "supplier_url": "https://services-beta.example.org",
+      "deploy_host": "example-host",
+      "deploy_path": "/opt/pocket/supplier",
+      "deployed_at": "2026-09-14T17:12:04.207Z"
+    },
+    "main": {
+      "register_tx": "0000000000000000000000000000000000000000000000000000000000000002",
+      "app_stake_tx": "0000000000000000000000000000000000000000000000000000000000000007",
+      "app_wallet": "app-example-charts",
+      "app_address": "pokt1qszqgpqyqszqgpqyqszqgpqyqszqgpqyl37th0",
+      "supplier_stake_tx": "0000000000000000000000000000000000000000000000000000000000000004",
+      "supplier_operator": "pokt1qvpsxqcrqvpsxqcrqvpsxqcrqvpsxqcrlpewsn",
+      "supplier_url": "https://services.example.org",
+      "deploy_host": "example-host",
+      "deploy_path": "/opt/pocket/supplier-main",
+      "deployed_at": "2026-09-14T17:24:34.710Z"
+    }
+  }
+}

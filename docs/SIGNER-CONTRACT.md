@@ -901,7 +901,7 @@ Windows PowerShell 5.1 writes a UTF-8 BOM for `Set-Content`/`Add-Content -Encodi
 
 ### 6.13 Self-test mode
 
-There is no self-test in the signer. `app.js` enters `selftest()` when launched with `--selftest` or when `%LOCALAPPDATA%\PocketServiceManager\selftest.flag` exists (deleted on read). It sets `state.noSave`, exercises the read paths (`docker-check`, `wallet-status`, `wallet-list`, `history`, an unknown op `nope`), drives every preflight with test values (nothing is signed; `tx-add-service` is stubbed to return the most recent real tx hash from history so the post-broadcast path runs), creates a scratch service under `<StateDir>\selftest-services`, writes `<StateDir>\selftest.txt`, and closes the window. It references a real Beta test server entry (`servers/cherry`) via `state.serversOverride`.
+There is no self-test in the signer. `app.js` enters `selftest()` when launched with `--selftest` or when `%LOCALAPPDATA%\PocketServiceManager\selftest.flag` exists (deleted on read). It sets `state.noSave`, exercises the read paths (`docker-check`, `wallet-status`, `wallet-list`, `history`, an unknown op `nope`), drives every preflight with test values (nothing is signed; `tx-add-service` is stubbed to return the most recent real tx hash from history so the post-broadcast path runs), creates a scratch service under `<StateDir>\selftest-services`, writes `<StateDir>\selftest.txt`, and closes the window. It references a real Beta test server entry (`servers/example-host`) via `state.serversOverride`.
 
 ### 6.14 Latent issues worth fixing in the port
 

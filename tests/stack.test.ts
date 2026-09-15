@@ -27,7 +27,7 @@ describe('supplier-ship rendering', () => {
   const r = renderStack(templates, {
     network: 'beta',
     blockTime: 30,
-    hostname: 'services-beta.agentdata.network',
+    hostname: 'services-beta.example.org',
     project: 'pocket-supplier',
     healthPort: 8081,
     relayerMetricsPort: 9090,
@@ -42,14 +42,14 @@ describe('supplier-ship rendering', () => {
   })
   it('reproduces the stack.env the HTA wrote on the reference host', () => {
     const ref = readFileSync(
-      join(process.cwd(), 'reference', 'servers', 'cherry', 'supplier-beta', 'stack.env'),
+      join(process.cwd(), 'reference', 'servers', 'example-host', 'supplier-beta', 'stack.env'),
       'utf8'
     ).replace(/\r\n/g, '\n')
     expect(r.stack['stack.env']).toBe(ref)
   })
   it('reproduces the beta site file on the reference host', () => {
     const ref = readFileSync(
-      join(process.cwd(), 'reference', 'servers', 'cherry', 'caddy', 'sites', 'beta.caddy'),
+      join(process.cwd(), 'reference', 'servers', 'example-host', 'caddy', 'sites', 'beta.caddy'),
       'utf8'
     ).replace(/\r\n/g, '\n')
     expect(r.site.name).toBe('beta.caddy')
@@ -63,8 +63,8 @@ describe('supplier-ship rendering', () => {
 
 describe('YAML the transactions mount', () => {
   it('app stake', () => {
-    expect(appStakeYaml(1000000000, 'pretty-charts')).toBe(
-      'stake_amount: 1000000000upokt\nservice_ids:\n  - pretty-charts\n'
+    expect(appStakeYaml(1000000000, 'example-charts')).toBe(
+      'stake_amount: 1000000000upokt\nservice_ids:\n  - example-charts\n'
     )
   })
   it('supplier stake', () => {

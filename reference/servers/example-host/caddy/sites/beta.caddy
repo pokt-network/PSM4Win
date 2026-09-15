@@ -1,0 +1,12 @@
+# beta supplier stack "pocket-supplier", written by the Pocket Service Manager.
+# Imported by the server's shared Caddy. The supplier stakes https://services-beta.example.org for
+# every service it serves on beta; the relayer routes by the service id inside
+# each relay. Caddy fetches and renews the certificate; the DNS record must already
+# point at this server.
+
+services-beta.example.org {
+	reverse_proxy pocket-supplier-relayer:8080
+	request_body {
+		max_size 20MB
+	}
+}

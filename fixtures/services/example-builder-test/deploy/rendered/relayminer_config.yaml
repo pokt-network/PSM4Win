@@ -1,0 +1,39 @@
+# Single-process RelayMiner config for example-builder-test on beta.
+# Start with:
+#   pocketd relayminer start --config ./relayminer_config.yaml \
+#     --chain-id pocket-lego-testnet --keyring-backend file --grpc-insecure=false
+#
+# The RelayMiner listens on plain HTTP; terminate TLS with the reverse proxy
+# (Caddyfile / nginx.conf) and stake the proxy's public https URL.
+
+default_signing_key_names:
+  - operator          # the operator key's name in your keyring
+default_request_timeout_seconds: 30
+default_max_body_size: 20MB
+
+# Persistent path for the Sparse Merkle Sum Trie. Losing it forfeits unclaimed relays.
+smt_store_path: /var/lib/pocket/smt
+
+pocket_node:
+  query_node_rpc_url: https://sauron-rpc.beta.infra.pocket.network
+  query_node_grpc_url: sauron-grpc.beta.infra.pocket.network:443
+  tx_node_rpc_url: https://sauron-rpc.beta.infra.pocket.network
+
+metrics:
+  enabled: true
+  addr: :9090            # scrape-only; do not expose publicly
+ping:
+  enabled: true
+  addr: :8081            # GET /ping -> 204 when all backends are reachable
+
+suppliers:
+  - service_id: example-builder-test
+    listen_url: http://0.0.0.0:8545      # the reverse proxy forwards here
+    service_config:
+      backend_url: http://backend:8080
+      forward_pocket_headers: true
+    rpc_type_service_configs:
+      # key is the card's rpc_types[].type, lowercased
+      rest:
+        backend_url: http://backend:8080
+        forward_pocket_headers: true

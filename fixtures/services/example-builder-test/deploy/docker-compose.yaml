@@ -1,0 +1,20 @@
+# example-builder-test backend on the supplier host. Joins the supplier stack's
+# network (see servers/example-host/); the relayer reaches it as
+# http://example-builder-test-backend:8080. Nothing here is exposed publicly.
+#
+#   docker compose -p example-builder-test -f docker-compose.yaml up -d --build
+
+services:
+  backend:
+    build: ../backend
+    image: example-builder-test-backend:latest
+    container_name: example-builder-test-backend
+    restart: unless-stopped
+    expose:
+      - "8080"
+    networks: [supplier]
+
+networks:
+  supplier:
+    external: true
+    name: pocket-supplier

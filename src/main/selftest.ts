@@ -157,7 +157,7 @@ export async function runSelfTest(network: string): Promise<number> {
   const tmpName = `psm-selftest-${Date.now().toString(36).slice(-6)}`
   let created: { address: string } | null = null
   if (ws.ok && ws.imported && ws.verified) {
-    const wc = await signer.run('wallet-create', { name: tmpName, service_id: 'pretty-charts' })
+    const wc = await signer.run('wallet-create', { name: tmpName, service_id: 'example-charts' })
     if (wc.ok) {
       created = { address: wc.address }
       const phraseWords = wc.mnemonic.split(' ').length
@@ -218,7 +218,7 @@ export async function runSelfTest(network: string): Promise<number> {
       add('lcd-new-wallet-balance', bal === 0, `${bal} upokt`)
       const setsvc = await signer.run('wallet-set-service', {
         name: tmpName,
-        service_id: 'jinx-service-builder-test'
+        service_id: 'example-builder-test'
       })
       add('wallet-set-service', setsvc.ok)
     } else {
@@ -229,7 +229,7 @@ export async function runSelfTest(network: string): Promise<number> {
   }
 
   // 7. Every transaction as a dry run.
-  const cardPath = join(app.getAppPath(), 'fixtures', 'services', 'pretty-charts', 'card.json')
+  const cardPath = join(app.getAppPath(), 'fixtures', 'services', 'example-charts', 'card.json')
   const dryAdd = await signer.run('tx-add-service', {
     network: 'beta',
     service_id: 'psm-selftest-x',
@@ -245,14 +245,14 @@ export async function runSelfTest(network: string): Promise<number> {
   )
   const dryStake = await signer.run('tx-stake-app', {
     network: 'beta',
-    service_id: 'pretty-charts',
+    service_id: 'example-charts',
     stake_upokt: 1_000_000_000,
     from: created ? tmpName : undefined,
     dry: true
   })
   add(
     'tx-stake-app (dry)',
-    dryStake.ok && 'config' in dryStake && /pretty-charts/.test(dryStake.config),
+    dryStake.ok && 'config' in dryStake && /example-charts/.test(dryStake.config),
     'from' in dryStake ? `from=${dryStake.from}` : (dryStake as { error: string }).error
   )
   if (created) {
@@ -353,7 +353,7 @@ export async function runSelfTest(network: string): Promise<number> {
         owner_address: ws.address,
         operator_address: beta.operator,
         stake_upokt: 1,
-        services: [{ service_id: 'pretty-charts', url: beta.url, rpc_type: 'REST' }],
+        services: [{ service_id: 'example-charts', url: beta.url, rpc_type: 'REST' }],
         dry: true
       })
       add(

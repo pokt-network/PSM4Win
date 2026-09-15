@@ -194,12 +194,12 @@
         <div class="row">
           <div>
             <label>Service ID</label>
-            <input type="text" id="crId" placeholder="pretty-charts" maxlength="42" onkeyup="PSM.onCreateIdChange()" onchange="PSM.onCreateIdChange()">
+            <input type="text" id="crId" placeholder="example-charts" maxlength="42" onkeyup="PSM.onCreateIdChange()" onchange="PSM.onCreateIdChange()">
             <div class="hint" id="crIdHint">Permanent once registered. Also becomes the folder name. Lowercase letters, digits, hyphen, underscore.</div>
           </div>
           <div>
             <label>Display name</label>
-            <input type="text" id="crName" placeholder="Pretty Charts" maxlength="169">
+            <input type="text" id="crName" placeholder="Example Charts" maxlength="169">
             <div class="hint">Shown in the catalog. Letters, digits, spaces, hyphen, underscore.</div>
           </div>
           <div>
@@ -230,7 +230,7 @@
           <div>
             <label>Backend hint</label>
             <input type="text" id="crHint" maxlength="256" onkeyup="PSM.markManual('hint')">
-            <div class="hint">For supplier operators: what process listens behind their RelayMiner, on which port, and at which path prefix. "mount at /" means paths pass through unchanged. Example: "pretty-charts container on :8080; mount at /". Up to 256 characters.</div>
+            <div class="hint">For supplier operators: what process listens behind their RelayMiner, on which port, and at which path prefix. "mount at /" means paths pass through unchanged. Example: "example-charts container on :8080; mount at /". Up to 256 characters.</div>
           </div>
         </div>
         <label>Endpoints a caller can rely on</label>
@@ -239,7 +239,7 @@
         <div class="row">
           <div>
             <label>API contract names</label>
-            <input type="text" id="crApis" onkeyup="PSM.markManual('apis')" placeholder="pretty-charts-api">
+            <input type="text" id="crApis" onkeyup="PSM.markManual('apis')" placeholder="example-charts-api">
             <div class="hint">Comma-separated, lowercase kebab-case, <span class="mono">&lt;service&gt;-&lt;family&gt;</span>. Other cards claiming the same name promise the same contract.</div>
           </div>
           <div>
@@ -271,11 +271,11 @@
       <div class="panel">
         <h2>Serving (what a supplier runs)</h2>
         <label>Backend description</label>
-        <textarea id="crBackend" rows="3" maxlength="1024" placeholder="What a supplier deploys, e.g. the pretty-charts container behind a RelayMiner with the rest backend pointed at it. No auth toward the backend; callers cannot send headers."></textarea>
+        <textarea id="crBackend" rows="3" maxlength="1024" placeholder="What a supplier deploys, e.g. the example-charts container behind a RelayMiner with the rest backend pointed at it. No auth toward the backend; callers cannot send headers."></textarea>
         <div class="row">
           <div>
             <label>Implementations</label>
-            <input type="text" id="crImpl" onkeyup="PSM.markManual('impl')" placeholder="pretty-charts >= 1.0">
+            <input type="text" id="crImpl" onkeyup="PSM.markManual('impl')" placeholder="example-charts >= 1.0">
             <div class="hint">Comma-separated software and version constraints a supplier may run.</div>
           </div>
           <div>
@@ -305,7 +305,7 @@
         <div class="row">
           <div><label>Identity probe path</label><input type="text" id="crIdPath" value="/v1/version"></div>
           <div><label>JSON path</label><input type="text" id="crIdJson" value="$.service"></div>
-          <div><label>Must match</label><input type="text" id="crIdMatch" onkeyup="PSM.markManual('idMatch')" placeholder="^pretty-charts$"></div>
+          <div><label>Must match</label><input type="text" id="crIdMatch" onkeyup="PSM.markManual('idMatch')" placeholder="^example-charts$"></div>
         </div>
         <div class="row">
           <div><label>Readiness probe path</label><input type="text" id="crRdPath" value="/healthz"></div>
@@ -345,12 +345,12 @@
         <div class="row" style="margin-top:6px">
           <div>
             <label>Service ID</label>
-            <input type="text" id="svcId" placeholder="pretty-charts" maxlength="42" onkeyup="PSM.onIdChange()">
+            <input type="text" id="svcId" placeholder="example-charts" maxlength="42" onkeyup="PSM.onIdChange()">
             <div class="hint" id="svcIdHint">Permanent once registered. Lowercase, letters, digits, hyphen, underscore. Up to 42 characters.</div>
           </div>
           <div>
             <label>Display name</label>
-            <input type="text" id="svcName" placeholder="Pretty Charts" maxlength="169">
+            <input type="text" id="svcName" placeholder="Example Charts" maxlength="169">
             <div class="hint">Shown in the catalog. Letters, digits, spaces, hyphen, underscore. Can be changed later.</div>
           </div>
         </div>

@@ -1,0 +1,65 @@
+{
+  "schema": "pocket-service-card/v1",
+  "description": "This is a service builder regisration test. It is using the Windows PC based Service Builder package, and is not intended to actually be used for anthing other than demonstrating that the package works.",
+  "rpc_types": [
+    {
+      "type": "REST",
+      "intent": "expected",
+      "backend_hint": "example-builder-test HTTP server on :8080; mount at /",
+      "notes": "Everything under /v1/charts and /v1/datasets as documented in the OpenAPI spec is expected. Admin routes under /internal are not. Every response is a JSON object."
+    }
+  ],
+  "apis": [
+    "example-builder-test-api"
+  ],
+  "access": "public",
+  "results": "deterministic",
+  "serving": {
+    "backend": "Some software on a server behind a relay miner.",
+    "implementations": [
+      "example-builder-test >= 1.0"
+    ],
+    "min_disk_gb": 1,
+    "min_ram_gb": 1,
+    "healthcheck": [
+      {
+        "rpc_type": "REST",
+        "request": {
+          "path": "/v1/version",
+          "method": "GET"
+        },
+        "expect": {
+          "json_path": "$.service",
+          "matches": "^example-builder-test$"
+        },
+        "notes": "Identity probe: pins the backend to this service so a wrong backend cannot be staked under this id."
+      },
+      {
+        "rpc_type": "REST",
+        "request": {
+          "path": "/healthz",
+          "method": "GET"
+        },
+        "expect": {
+          "json_path": "$.status",
+          "matches": "^ok$"
+        },
+        "notes": "Readiness probe."
+      },
+      {
+        "rpc_type": "REST",
+        "request": {
+          "path": "/v/1/",
+          "method": "POST"
+        },
+        "expect": {
+          "json_path": "$.ok",
+          "matches": "^true$"
+        },
+        "notes": "Functional probe with a deterministic expected value."
+      }
+    ],
+    "notes": "Gateway operators: configure as type passthrough with rpc_types [\"rest\"]."
+  },
+  "updated": "2026-09-13"
+}

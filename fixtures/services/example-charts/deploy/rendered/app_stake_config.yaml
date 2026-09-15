@@ -1,0 +1,13 @@
+# Application stake config for testing example-charts on beta.
+# Stake with:
+#   pocketd tx application stake-application --config ./app_stake_config.yaml \
+#     --from service-manager --network=beta \
+#     --gas auto --gas-prices 1upokt --gas-adjustment 1.5
+#
+# An application stakes for EXACTLY ONE service. stake_amount must be at least the
+# live application min_stake:  pocketd query application params --network=beta
+# The stake is drawn down as relays settle; top it up to keep testing.
+
+stake_amount: 1000000000upokt
+service_ids:
+  - example-charts

@@ -1,9 +1,0 @@
-# Temporary alias: the Beta supplier was staked with this hostname before it became
-# the MainNet endpoint. Kept until the Beta restake with services-beta activates and
-# MainNet is provisioned; provisioning MainNet retires this file automatically.
-services.agentdata.network {
-	reverse_proxy pocket-supplier-relayer:8080
-	request_body {
-		max_size 20MB
-	}
-}

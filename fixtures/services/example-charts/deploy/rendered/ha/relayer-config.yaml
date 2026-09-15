@@ -1,0 +1,52 @@
+# HA RelayMiner relayer config for example-charts on beta.
+# The relayer is the stateless proxy; the miner (miner-config.yaml) submits claims.
+# Both share Redis. Use this instead of the single-process RelayMiner for production,
+# multiple replicas, failover, or streaming (SSE) responses.
+
+listen_addr: "0.0.0.0:8080"
+
+redis:
+  url: "redis://redis:6379"
+
+keys:
+  keys_file: "/keys/supplier-keys.yaml"
+
+pocket_node:
+  chain_id: "pocket-lego-testnet"
+  query_node_rpc_url: "https://sauron-rpc.beta.infra.pocket.network"
+  query_node_grpc_url: "sauron-grpc.beta.infra.pocket.network:443"
+  grpc_insecure: false
+
+services:
+  example-charts:
+    # Use "streaming" (600s, no header timeout) only for long or SSE responses.
+    timeout_profile: fast
+    max_body_size_bytes: 20971520
+    default_backend: rest
+    backends:
+      # key MUST be one of: jsonrpc | rest | websocket | grpc | cometbft
+      rest:
+        url: "http://example-charts-backend:8080"
+        health_check:
+          endpoint: "/healthz"
+          interval_seconds: 10
+          timeout_seconds: 5
+
+default_request_timeout_seconds: 30
+default_max_body_size_bytes: 20971520
+
+health_check:
+  enabled: true
+  addr: "0.0.0.0:8081"
+
+timeout_profiles:
+  fast:
+    request_timeout_seconds: 30
+    response_header_timeout_seconds: 30
+    dial_timeout_seconds: 5
+    tls_handshake_timeout_seconds: 10
+  streaming:
+    request_timeout_seconds: 600
+    response_header_timeout_seconds: 0
+    dial_timeout_seconds: 10
+    tls_handshake_timeout_seconds: 15

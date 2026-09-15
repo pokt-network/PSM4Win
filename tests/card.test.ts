@@ -6,15 +6,15 @@ import { validateCardText, readinessPath, formatCardValidation } from '@core/car
 const fixtures = join(process.cwd(), 'fixtures', 'services')
 
 describe('card validator (port of validate_card.py)', () => {
-  it('accepts the real pretty-charts card', () => {
-    const text = readFileSync(join(fixtures, 'pretty-charts', 'card.json'), 'utf8')
+  it('accepts the example-charts card', () => {
+    const text = readFileSync(join(fixtures, 'example-charts', 'card.json'), 'utf8')
     const v = validateCardText(text)
     expect(v.ok, v.schema_errors.join('; ')).toBe(true)
     expect(v.size_bytes).toBeLessThan(256 * 1024)
     expect(formatCardValidation(v)).toMatch(/card is valid$/)
   })
   it('accepts the beta test service card', () => {
-    const text = readFileSync(join(fixtures, 'jinx-service-builder-test', 'card.json'), 'utf8')
+    const text = readFileSync(join(fixtures, 'example-builder-test', 'card.json'), 'utf8')
     expect(validateCardText(text).ok).toBe(true)
   })
   it('rejects the forbidden required key and bad schema id', () => {
@@ -32,7 +32,7 @@ describe('card validator (port of validate_card.py)', () => {
     expect(validateCardText('"' + 'x'.repeat(300 * 1024) + '"').fatal).toMatch(/256 KiB/)
   })
   it('reads the readiness probe path from the card', () => {
-    const card = JSON.parse(readFileSync(join(fixtures, 'pretty-charts', 'card.json'), 'utf8'))
+    const card = JSON.parse(readFileSync(join(fixtures, 'example-charts', 'card.json'), 'utf8'))
     expect(readinessPath(card)).toMatch(/^\//)
     expect(readinessPath({})).toBe('/healthz')
   })

@@ -1,0 +1,27 @@
+# Supplier stake config for example-builder-test on beta.
+# Stake with:
+#   pocketd tx supplier stake-supplier --config ./supplier_stake_config.yaml \
+#     --from operator --network=beta \
+#     --gas auto --gas-prices 1upokt --gas-adjustment 1.5
+#
+# Before staking, send any tx from the operator account once so its public key is
+# on-chain, or gateways will reject its signed responses.
+#
+# stake_amount must be at least the live supplier min_stake. Re-check it:
+#   pocketd query supplier params --network=beta
+
+owner_address: pokt1qyqszqgpqyqszqgpqyqszqgpqyqszqgp04723y
+operator_address: pokt1qgpqyqszqgpqyqszqgpqyqszqgpqyqsz73c06j
+stake_amount: 59500000000upokt
+
+# Revenue split; addresses must sum to exactly 100. 100% to owner by default.
+default_rev_share_percent:
+  pokt1qyqszqgpqyqszqgpqyqszqgpqyqszqgp04723y: 100
+
+services:
+  - service_id: example-builder-test
+    endpoints:
+      # rpc_type MUST match the card's rpc_types[].type, or clients of that
+      # transport never see this endpoint.
+      - publicly_exposed_url: https://services.example.org
+        rpc_type: REST

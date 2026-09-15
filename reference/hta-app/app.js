@@ -2786,21 +2786,21 @@ var PSM = (function () {
             L("svcListRows", ($("svcList").innerHTML.match(/<tr/gi) || []).length + " tr; empty=" + ($("svcList").innerHTML.indexOf("empty") >= 0));
             renderWallets();
             L("walListRows", ($("walList").innerHTML.match(/<tr/gi) || []).length + " tr");
-            // Supplier preflight against the real Beta test service and the Cherry operator (dry run only; nothing is signed).
-            state.serversOverride = [{ name: "selftest-server", host: "203.0.113.10", port: 22, user: "REPLACE-user", keyPath: join(sh.ExpandEnvironmentStrings("%USERPROFILE%"), ".ssh", "id_supplier"), deployRoot: "/opt/pocket/services", suppliers: { beta: { dir: "/opt/pocket/supplier", project: "pocket-supplier", operator: "pokt1qgpqyqszqgpqyqszqgpqyqszqgpqyqsz73c06j", url: "https://services-beta.agentdata.network" } } }];
+            // Supplier preflight against the real Beta test service and the example-host operator (dry run only; nothing is signed).
+            state.serversOverride = [{ name: "selftest-server", host: "203.0.113.10", port: 22, user: "REPLACE-user", keyPath: join(sh.ExpandEnvironmentStrings("%USERPROFILE%"), ".ssh", "id_supplier"), deployRoot: "/opt/pocket/services", suppliers: { beta: { dir: "/opt/pocket/supplier", project: "pocket-supplier", operator: "pokt1qgpqyqszqgpqyqszqgpqyqszqgpqyqsz73c06j", url: "https://services-beta.example.org" } } }];
             renderSuppliers();
             L("supList", $("supList").innerText.replace(/\s+/g, " ").substring(0, 200));
-            openSupplier("selftest-server", "pretty-charts");
+            openSupplier("selftest-server", "example-charts");
             L("supRows", JSON.stringify(state.sup.rows.map(function (x) { return x.id + ":" + (x.checked ? "on" : "off") + ":" + (x.staked ? "staked" : "new"); })) + " amount=" + $("supAmount").value + " add=" + $("supAdd").options.length);
             $("supAmount").value = "59500";
             preflightSupply();
             renderDashboard();
             L("dashStats", $("dashStats").innerText.replace(/\s+/g, " ").substring(0, 200));
-            tab("test"); $("tstId").value = "pretty-charts"; onTestServiceChange();
-            L("test", "wallet=" + $("tstWallet").value + " | " + $("tstIdHint").innerText + " | " + $("tstWalletHint").innerText.substring(0, 80) + " | probes=" + JSON.stringify(testProbes("pretty-charts").steps.map(function (s) { return s.method + " " + s.path; })));
+            tab("test"); $("tstId").value = "example-charts"; onTestServiceChange();
+            L("test", "wallet=" + $("tstWallet").value + " | " + $("tstIdHint").innerText + " | " + $("tstWalletHint").innerText.substring(0, 80) + " | probes=" + JSON.stringify(testProbes("example-charts").steps.map(function (s) { return s.method + " " + s.path; })));
             L("jsonPath", jsonPathGet({ a: { b: [{ c: 5 }] }, service: "x" }, "$.a.b[0].c") + " " + jsonPathGet({ service: "x" }, "$.service"));
-            tab("deploy"); $("depId").value = "pretty-charts"; onDeployServiceChange();
-            L("deploy", "service=" + $("depId").value + " server=" + $("depServer").value + " | " + $("depIdHint").innerText.substring(0, 100) + " | readiness=" + readinessPath("pretty-charts") + " | deployable=" + deployableServices().length);
+            tab("deploy"); $("depId").value = "example-charts"; onDeployServiceChange();
+            L("deploy", "service=" + $("depId").value + " server=" + $("depServer").value + " | " + $("depIdHint").innerText.substring(0, 100) + " | readiness=" + readinessPath("example-charts") + " | deployable=" + deployableServices().length);
             openProvision("selftest-server");
             L("provision", "net=" + $("provNet").value + " host=" + $("provHost").value + " panel=" + $("provPanel").className);
             closeProvision();

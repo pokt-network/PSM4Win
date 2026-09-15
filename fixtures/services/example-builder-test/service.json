@@ -1,0 +1,22 @@
+{
+  "service_id": "example-builder-test",
+  "name": "Service Builder Test",
+  "compute_units_per_relay": 1000,
+  "card": "card.json",
+  "networks": {
+    "beta": {
+      "register_tx": "0000000000000000000000000000000000000000000000000000000000000001",
+      "app_stake_tx": "0000000000000000000000000000000000000000000000000000000000000008",
+      "supplier_operator": "pokt1qgpqyqszqgpqyqszqgpqyqszqgpqyqsz73c06j",
+      "supplier_url": "https://services-beta.example.org",
+      "deploy_host": "example-host",
+      "deploy_path": "/opt/pocket/supplier",
+      "supplier_stake_tx": "0000000000000000000000000000000000000000000000000000000000000006"
+    },
+    "main": {
+      "app_stake_tx": "0000000000000000000000000000000000000000000000000000000000000009",
+      "app_wallet": "app-example-charts",
+      "app_address": "pokt1qszqgpqyqszqgpqyqszqgpqyqszqgpqyl37th0"
+    }
+  }
+}

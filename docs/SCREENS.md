@@ -342,21 +342,21 @@ where `staked` counts servers whose supplier record exists, `withOp` counts serv
 | id | Label | Type / default | Notes |
 |---|---|---|---|
 | `#crFolder` | Load an existing folder (optional) | `select`, first option "Start from scratch"; options = subfolder names of the services root (`loadServiceFolders()`) | `onchange` → `loadCreateFromFolder()` |
-| `#crId` | Service ID | text, `maxlength=42`, placeholder "pretty-charts" | `onkeyup/onchange` → `onCreateIdChange()`; hint `#crIdHint` |
-| `#crName` | Display name | text, `maxlength=169`, placeholder "Pretty Charts" | |
+| `#crId` | Service ID | text, `maxlength=42`, placeholder "example-charts" | `onkeyup/onchange` → `onCreateIdChange()`; hint `#crIdHint` |
+| `#crName` | Display name | text, `maxlength=169`, placeholder "Example Charts" | |
 | `#crCupr` | Compute units per relay | number, min 1, max 1048576, value 100 | |
 | `#crDesc` | Description | textarea rows 4, `maxlength=2048` | hint restates the JSON envelope rule |
 | `#crRpc` | Protocol | select: `REST` (default, "REST (HTTP with JSON bodies)"), `JSON_RPC`, `WEBSOCKET`, `GRPC`, `COMET_BFT` | `onchange` → `onCreateIdChange()` |
 | `#crHint` | Backend hint | text, `maxlength=256` | auto-filled; `onkeyup` → `markManual('hint')` |
 | `#crEndpoints` | Endpoints a caller can rely on | text, `maxlength=512` | |
-| `#crApis` | API contract names | text, placeholder "pretty-charts-api" | auto-filled; `markManual('apis')`; comma-separated |
+| `#crApis` | API contract names | text, placeholder "example-charts-api" | auto-filled; `markManual('apis')`; comma-separated |
 | `#crAccess` | Access | select `public` (default) / `gated` | |
 | `#crResults` | Results | select `deterministic` (default) / `variable` | |
 | `#crSpecUrl` | API spec URL (optional) | text | |
 | `#crSpecKind` | Spec kind | select `openapi` (default), `openrpc`, `markdown`, `docs` | |
 | `#crDocs` | Public docs URL (optional) | text | |
 | `#crBackend` | Backend description | textarea rows 3, `maxlength=1024` | |
-| `#crImpl` | Implementations | text, placeholder "pretty-charts >= 1.0" | auto-filled; `markManual('impl')`; comma-separated |
+| `#crImpl` | Implementations | text, placeholder "example-charts >= 1.0" | auto-filled; `markManual('impl')`; comma-separated |
 | `#crDisk` | Minimum disk (GB) | number, min 0, value 1 | |
 | `#crRam` | Minimum RAM (GB) | number, min 0, value 1 | |
 | `#crOpDocs` | Operator docs URL (optional) | text | |

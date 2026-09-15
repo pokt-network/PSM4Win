@@ -455,7 +455,7 @@ export function RegisterScreen(): React.JSX.Element {
             <input
               type="text"
               id="svcId"
-              placeholder="pretty-charts"
+              placeholder="example-charts"
               maxLength={42}
               value={reg.id}
               onChange={(e) => set({ id: e.target.value })}
@@ -468,7 +468,7 @@ export function RegisterScreen(): React.JSX.Element {
             <label>Display name</label>
             <input
               type="text"
-              placeholder="Pretty Charts"
+              placeholder="Example Charts"
               maxLength={169}
               value={reg.name}
               onChange={(e) => set({ name: e.target.value })}
