@@ -26,6 +26,8 @@ import { readText, writeText, exists, isDir } from '../state/files'
 import { detectHta, importFromHta } from '../migration/importer'
 import { dataDir } from '../paths'
 import { log } from '../state/log'
+import { bridge } from '../bridge'
+import { resolveConfirmation } from '../bridge/confirm'
 
 function bad(msg: string): { ok: false; error: string; detail: string } {
   return { ok: false, error: msg, detail: '' }
@@ -246,6 +248,17 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       return { ok: false, error: (e as Error).message }
     }
   })
+
+  // Local MCP action bridge.
+  ipcMain.handle('bridge:status', () => bridge.status())
+  ipcMain.handle('bridge:set-enabled', async (_e, enabled: unknown, port: unknown) => {
+    const p = typeof port === 'number' && port >= 1024 && port <= 65535 ? port : undefined
+    return bridge.setEnabled(enabled === true, p)
+  })
+  ipcMain.handle('bridge:rotate-token', () => bridge.rotateToken())
+  ipcMain.handle('bridge:confirm-reply', (_e, id: unknown, approved: unknown) =>
+    resolveConfirmation(id, approved)
+  )
 
   // Migration.
   ipcMain.handle('migration:detect', () => detectHta())

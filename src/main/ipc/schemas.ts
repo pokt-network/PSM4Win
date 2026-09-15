@@ -153,7 +153,9 @@ export const settingsPatchSchema = z
         })
       )
       .optional(),
-    lcdOverrides: z.record(z.string().max(512)).optional()
+    lcdOverrides: z.record(z.string().max(512)).optional(),
+    bridgeEnabled: z.boolean().optional(),
+    bridgePort: z.number().int().min(1024).max(65535).optional()
   })
   .strict()
 

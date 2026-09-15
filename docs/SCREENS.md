@@ -640,6 +640,10 @@ Entry points: `openProvision(name, net)` (sets server and network, clears result
 7. `supplier-run step "start"` (300 s) → mark "Start the stack" with the last three lines; then `step "status"` (120 s) → mark "Status".
 8. `done()`: `setStack(server, net, {dir, project, url, operator, provisioned_at: ISO})`; log ok "Server <name> now has a <net> supplier stack at <dir>. Deploy a service to it next (Services, Deploy service)."; status ok "Provisioned. Operator <addr>."; `renderServers(); populateSupplyServers(); loadHistory()`.
 
+#### Claude Integration (Electron only)
+
+Not in the HTA. Two parts. The remote read-only MCP endpoint (`MCP_ENDPOINT` in `src/core/versions.ts`) with the `claude mcp add` command, the `.mcp.json` snippet, the Claude desktop connector steps, and the "Always allow" reminder. Below it the **Local action bridge** (`docs/ARCHITECTURE.md` section 7): a status badge (off, running on port N, stopped with the error), Port, Endpoint with Copy, Token (masked; Show, Copy, Rotate token with a confirm), "Turn on" / "Turn off", and while running the `claude mcp add ... --header "Authorization: Bearer <token>"` command and a `.mcp.json` with the header, plus the note that the desktop app's connectors cannot reach a loopback http server. A bridge request opens the "Assistant request" modal (dangerbox on MainNet, warnbox otherwise; a facts table; a typed token when required; Decline / Approve); Escape declines. After any bridge call the footer says which tool ran and the history, balance, wallets, and folders refresh.
+
 #### Welcome message
 
 Hint plus `.btn.small` "Show Welcome Message" → `showWelcome()`.

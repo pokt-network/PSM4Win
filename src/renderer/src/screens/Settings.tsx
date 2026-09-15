@@ -930,10 +930,162 @@ function ClaudeIntegrationPanel(): React.JSX.Element {
           </ol>
         </div>
       </div>
-      <div className="hint" style={{ marginTop: 10 }}>
-        The local action bridge, which lets an assistant drive this app's own operations with every
-        spend still confirmed in this window, is not part of this version.
-      </div>
+      <BridgePanel />
     </div>
   )
+}
+
+// ---- Local action bridge (docs/ARCHITECTURE.md section 8) ----
+
+function BridgePanel(): React.JSX.Element {
+  const bridge = useStore((s) => s.bridge)
+  const settings = useStore((s) => s.settings)
+  const [portEdit, setPort] = useState<string | null>(null)
+  const [busy, setBusyLocal] = useState(false)
+  const [showToken, setShowToken] = useState(false)
+  const st = bridge
+  const port = portEdit ?? String(settings?.bridgePort ?? st?.port ?? '')
+  const endpoint = st?.endpoint ?? ''
+  const token = st?.token ?? ''
+  const cli = `claude mcp add --transport http psm ${endpoint} --header "Authorization: Bearer ${token}"`
+  const mcpJson = JSON.stringify(
+    {
+      mcpServers: {
+        psm: { type: 'http', url: endpoint, headers: { Authorization: `Bearer ${token}` } }
+      }
+    },
+    null,
+    2
+  )
+  const toggle = async (): Promise<void> => {
+    if (!st) return
+    setBusyLocal(true)
+    const p = parseInt(port, 10)
+    const next = await psm().bridge.setEnabled(!st.running, p >= 1024 && p <= 65535 ? p : undefined)
+    useStore.setState({ bridge: next })
+    await loadSettingsIntoStore()
+    setBusyLocal(false)
+  }
+  const rotate = async (): Promise<void> => {
+    if (
+      !(await confirmDialog(
+        'Rotate the bridge token? Every client configured with the current token stops working until it is updated.',
+        'Rotate',
+        'Rotate token',
+        'danger solid'
+      ))
+    )
+      return
+    useStore.setState({ bridge: await psm().bridge.rotateToken() })
+  }
+  return (
+    <div style={{ marginTop: 14 }} id="bridgePanel">
+      <h2 style={{ fontSize: 14 }}>
+        Local action bridge{' '}
+        {st?.running ? (
+          <Badge cls="ok">running on port {st.port}</Badge>
+        ) : st?.error ? (
+          <Badge cls="bad">stopped</Badge>
+        ) : (
+          <Badge cls="muted">off</Badge>
+        )}
+      </h2>
+      <div className="hint">
+        Lets an assistant on this PC drive this app's own operations over MCP: read state, run dry
+        runs, deploy, and start transactions. Every spend or signature still opens a confirmation in
+        this window, and on MainNet you type the usual token. Keys and recovery phrases are never
+        available to it. It listens on this PC only, with the token below.
+      </div>
+      {st?.error ? <div className="dangerbox">{st.error}</div> : null}
+      <div className="row" style={{ marginTop: 8 }}>
+        <div>
+          <label>Port</label>
+          <input
+            type="number"
+            id="bridgePort"
+            min={1024}
+            max={65535}
+            value={port}
+            disabled={!!st?.running}
+            onChange={(e) => setPort(e.target.value)}
+          />
+        </div>
+        <div>
+          <label>Endpoint</label>
+          <div className="filerow">
+            <input type="text" readOnly value={endpoint} className="mono" />
+            <button className="btn small" onClick={() => copy(endpoint)}>
+              Copy
+            </button>
+          </div>
+        </div>
+      </div>
+      <label>Token</label>
+      <div className="filerow">
+        <input
+          type={showToken ? 'text' : 'password'}
+          readOnly
+          value={token}
+          className="mono"
+          id="bridgeToken"
+        />
+        <button className="btn small" onClick={() => setShowToken((v) => !v)}>
+          {showToken ? 'Hide' : 'Show'}
+        </button>
+        <button className="btn small" onClick={() => copy(token)}>
+          Copy
+        </button>
+        <button className="btn small" onClick={rotate}>
+          Rotate token
+        </button>
+      </div>
+      <div className="btnrow">
+        <button
+          className={'btn ' + (st?.running ? '' : 'primary')}
+          id="btnBridgeToggle"
+          disabled={busy || !st}
+          onClick={toggle}
+        >
+          {st?.running ? 'Turn off' : 'Turn on'}
+        </button>
+      </div>
+      {st?.running ? (
+        <>
+          <div className="hint" style={{ marginTop: 8 }}>
+            Claude Code: run once in any terminal (the token is part of the command).
+          </div>
+          <div className="filerow" style={{ marginTop: 6 }}>
+            <input type="text" readOnly value={cli} className="mono" />
+            <button className="btn small" onClick={() => copy(cli)}>
+              Copy command
+            </button>
+          </div>
+          <div className="hint" style={{ marginTop: 8 }}>
+            Or a project <span className="mono">.mcp.json</span> (it then holds the token: keep that
+            file out of version control):
+          </div>
+          <div className="plan">
+            <div className="lbl">.mcp.json</div>
+            <pre>{mcpJson}</pre>
+          </div>
+          <div className="btnrow">
+            <button className="btn small" onClick={() => copy(mcpJson)}>
+              Copy .mcp.json
+            </button>
+          </div>
+          <ul className="checks">
+            <li className="info">
+              The Claude desktop app's custom connectors need a public https URL, so they cannot
+              reach this bridge; use Claude Code.
+            </li>
+          </ul>
+        </>
+      ) : null}
+    </div>
+  )
+}
+
+async function loadSettingsIntoStore(): Promise<void> {
+  const s = await psm().settings.get()
+  useStore.setState({ settings: s })
 }

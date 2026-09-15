@@ -9,6 +9,7 @@ import { clearScratch } from './signer/work'
 import { registerIpc } from './ipc'
 import { createMainWindow } from './window'
 import { runSelfTest } from './selftest'
+import { bridge } from './bridge'
 
 configureAppPaths()
 
@@ -52,6 +53,8 @@ if (!gotLock) {
     mainWindow.on('closed', () => {
       mainWindow = null
     })
+    // The local MCP action bridge starts only when Settings enabled it.
+    await bridge.init(() => mainWindow)
 
     // `--smoke`: prove the window, preload, and renderer load without console errors, then exit.
     if (smokeMode) {
@@ -78,6 +81,7 @@ if (!gotLock) {
 
   app.on('window-all-closed', () => {
     // phase 3: macOS keeps the app alive until Cmd+Q
+    void bridge.stop()
     app.quit()
   })
 }

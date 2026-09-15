@@ -101,7 +101,23 @@ Decisions:
 
 Read JSON files with a BOM-tolerant parser: the HTA's PowerShell wrote UTF-8 with a byte-order mark, and the importer copies those files as they are.
 
-## 7. Versions
+## 7. Local MCP action bridge
+
+The bridge is the second half of phase 2: the app exposes its own operations to an assistant on the same PC, so that an assistant can drive it instead of narrating buttons. `reference/mcp/src/compat.json` records it under `electron-0.1.0` (`local_mcp_bridge`), and the remote read-only MCP server stays what it was.
+
+**Transport.** MCP over Streamable HTTP, JSON responses only (every tool call resolves to one result; no SSE stream and no session id). The server is `node:http` in the main process (`src/main/bridge/server.ts`), bound to `127.0.0.1` on `settings.bridgePort` (default `BRIDGE_DEFAULT_PORT` in `src/core/versions.ts`), one path `/mcp`, POST only. Requests need `Authorization: Bearer <token>`; a request with an `Origin` header that is not this machine is refused (DNS rebinding). Request timeouts are disabled because a deploy can run for minutes.
+
+**Token.** 32 random bytes as hex, stored in `bridge.token` in the app data folder, created on first start and rotated from Settings. It is compared in constant time. Settings shows it (masked) with the exact `claude mcp add` command and `.mcp.json` snippet; the Claude desktop app's custom connectors need a public https URL, so they cannot reach the bridge.
+
+**Off by default.** `settings.bridgeEnabled` starts false; the Settings "Claude Integration" panel turns it on and off, changes the port, and rotates the token. Status and a per-call activity event reach the renderer over `psm:bridge-status` and `psm:bridge-activity` so the screens refresh after an assistant acts.
+
+**Tools.** The table lives in `src/core/bridge.ts` (pure, unit-tested) as `psm_*` tools, one per named operation plus `psm_status` (network, owner address, Docker, services folder, servers and their stacks). The operations that carry a key or a phrase in either direction are not on the bridge at all: `wallet-import`, `wallet-import-app`, `wallet-create`, `wallet-recover`, `wallet-export`, `wallet-delete` (`BRIDGE_EXCLUDED_OPS`, asserted by a test). Server-scoped tools take `server` (a Settings entry name); main resolves host, port, user, and key path from Settings and defaults the stack directory, deploy root, owner address, and operator address, so no SSH key path or address needs to travel over the bridge. Arguments are validated with the same zod request schemas as IPC before the signer runs.
+
+**Confirmation.** `needsConfirmation(tool, args)` decides: every `tx-*` and `remote-stake-supplier` call unless `dry: true`; `wallet-remove` always; `supplier-run` only for the `publish` step, which signs a self-transfer on the server. The main process builds a plain-language summary and a facts table, sends `psm:bridge-confirm` to the window (restoring and focusing it), and waits up to five minutes for `bridge:confirm-reply` carrying the request nonce; anything else is a decline and nothing is signed. On MainNet, and for the destructive wallet removal, the dialog requires the same typed token as the screen would (service ID, wallet name, server name, `SEND`, `UNSTAKE`). A compromised renderer cannot approve on its own: the gate is main's, keyed by a nonce it generated.
+
+**What an assistant sees.** Results are the signer's result objects, verbatim, as both text and `structuredContent`; a failed operation is a tool result with `isError`, not a protocol error. `initialize` returns instructions that state the rules above, and every tool description says whether it confirms.
+
+## 8. Versions
 
 Keep in `src/core/versions.ts` and update here in the same commit:
 
@@ -114,3 +130,5 @@ Keep in `src/core/versions.ts` and update here in the same commit:
 | LCD | `https://sauron-api.infra.pocket.network`, `https://sauron-api.beta.infra.pocket.network` |
 | Explorer | `https://explorer.pocket.network`, `https://explorer.pocket.network/beta` |
 | HTA version string | `hta-2026-09-14` (in `reference/mcp/src/compat.json`) |
+| Electron version string | `electron-0.1.0` (`APP_VERSION_PREFIX` + `package.json` version) |
+| Bridge default port | `41777` (`BRIDGE_DEFAULT_PORT`) |

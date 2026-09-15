@@ -5,6 +5,7 @@ import { TitleBar, TopBar, OwnerWalletCard, Nav, Footer } from './components/She
 import { ModalHost } from './lib/modal'
 import { dockerCycle, loadSettings, loadServiceFolders, tab } from './lib/actions'
 import { showWelcome } from './lib/welcome'
+import { BridgeHost } from './lib/bridge'
 import { offerHtaImport } from './screens/ownerDialogs'
 import { selectRegisterFolder } from './screens/Services'
 import { DashboardScreen } from './screens/Dashboard'
@@ -85,6 +86,7 @@ export default function App(): React.JSX.Element {
       </div>
       <Footer />
       <ModalHost />
+      <BridgeHost />
     </div>
   )
 }

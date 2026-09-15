@@ -42,6 +42,9 @@ export interface Settings {
   window?: WindowBounds
   lcdOverrides?: Partial<Record<Network, string>>
   importedFrom?: { path: string; at: string }
+  /** The local MCP action bridge (docs/ARCHITECTURE.md section 8). Off until enabled. */
+  bridgeEnabled?: boolean
+  bridgePort?: number
 }
 
 export const DEFAULT_SETTINGS: Settings = {

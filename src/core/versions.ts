@@ -18,6 +18,9 @@ export const CHAIN_IDS = { beta: 'pocket-lego-testnet', main: 'pocket' } as cons
 /** The remote MCP server assistants connect to (Settings, Claude Integration). */
 export const MCP_ENDPOINT = 'https://mcp.pocketmcp.network/mcp'
 
+/** The local action bridge's default loopback port (Settings can change it). */
+export const BRIDGE_DEFAULT_PORT = 41777
+
 /** Compat version strings (reference/mcp/src/compat.json). */
 export const HTA_COMPAT_VERSION = 'hta-2026-09-14'
 export const APP_VERSION_PREFIX = 'electron-'

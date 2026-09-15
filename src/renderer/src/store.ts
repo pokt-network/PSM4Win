@@ -9,7 +9,7 @@ import type { ChainService } from '@core/lcd'
 import type { LiveParams } from '@core/chain'
 import type { CreateForm, CreateAuto } from '@core/card-form'
 import { EMPTY_CREATE_FORM } from '@core/card-form'
-import type { Settings, AppInfo } from '../../preload/index'
+import type { BridgeStatus, Settings, AppInfo } from '../../preload/index'
 
 export type Screen =
   | 'dashboard'
@@ -129,6 +129,7 @@ export interface State {
   supOpen: { server: string; preselect?: string } | null
   prov: { server: string; net: Network; dir: string; host: string; fund: string }
   deployed: { id: string; server: string } | null
+  bridge: BridgeStatus | null
   set: (patch: Partial<State> | ((s: State) => Partial<State>)) => void
 }
 
@@ -166,6 +167,7 @@ export const useStore = create<State>((set) => ({
   supOpen: null,
   prov: { server: '', net: 'beta', dir: '', host: '', fund: '10' },
   deployed: null,
+  bridge: null,
   set: (patch) => set(patch as never)
 }))
 

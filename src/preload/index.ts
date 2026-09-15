@@ -11,6 +11,8 @@ import {
 } from '../core/contract'
 import type { Settings } from '../main/state/settings'
 import type { HtaDetection, ImportResult } from '../main/migration/importer'
+import type { BridgeStatus } from '../main/bridge'
+import type { BridgeConfirmRequest } from '../main/bridge/confirm'
 
 type SignerApi = {
   [K in SignerOp]: (req: SignerRequests[K], runId?: string) => Promise<SignerResult<K>>
@@ -93,6 +95,34 @@ const api = {
     clearRelayTests: (): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke('files:clear-relay-tests')
   },
+  bridge: {
+    status: (): Promise<BridgeStatus> => ipcRenderer.invoke('bridge:status'),
+    setEnabled: (enabled: boolean, port?: number): Promise<BridgeStatus> =>
+      ipcRenderer.invoke('bridge:set-enabled', enabled, port),
+    rotateToken: (): Promise<BridgeStatus> => ipcRenderer.invoke('bridge:rotate-token'),
+    reply: (id: string, approved: boolean): Promise<boolean> =>
+      ipcRenderer.invoke('bridge:confirm-reply', id, approved),
+    onConfirm: (cb: (req: BridgeConfirmRequest) => void): (() => void) => {
+      const l = (_e: Electron.IpcRendererEvent, req: BridgeConfirmRequest): void => cb(req)
+      ipcRenderer.on('psm:bridge-confirm', l)
+      return () => ipcRenderer.removeListener('psm:bridge-confirm', l)
+    },
+    onConfirmExpired: (cb: (id: string) => void): (() => void) => {
+      const l = (_e: Electron.IpcRendererEvent, id: string): void => cb(id)
+      ipcRenderer.on('psm:bridge-confirm-expired', l)
+      return () => ipcRenderer.removeListener('psm:bridge-confirm-expired', l)
+    },
+    onStatus: (cb: (st: BridgeStatus) => void): (() => void) => {
+      const l = (_e: Electron.IpcRendererEvent, st: BridgeStatus): void => cb(st)
+      ipcRenderer.on('psm:bridge-status', l)
+      return () => ipcRenderer.removeListener('psm:bridge-status', l)
+    },
+    onActivity: (cb: (ev: { tool: string; ok: boolean }) => void): (() => void) => {
+      const l = (_e: Electron.IpcRendererEvent, ev: { tool: string; ok: boolean }): void => cb(ev)
+      ipcRenderer.on('psm:bridge-activity', l)
+      return () => ipcRenderer.removeListener('psm:bridge-activity', l)
+    }
+  },
   migration: {
     detect: (): Promise<HtaDetection> => ipcRenderer.invoke('migration:detect'),
     import: (opts: { servicesRoot?: string }): Promise<ImportResult> =>
@@ -100,7 +130,7 @@ const api = {
   }
 }
 
-export type { Settings, HtaDetection, ImportResult }
+export type { Settings, HtaDetection, ImportResult, BridgeStatus, BridgeConfirmRequest }
 export type PsmApi = typeof api
 
 contextBridge.exposeInMainWorld('psm', api)

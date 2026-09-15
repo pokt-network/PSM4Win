@@ -1,10 +1,37 @@
 {
   "app": "Pocket Service Manager",
-  "updated": "2026-09-14",
+  "updated": "2026-09-15",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "hta-2026-09-14",
+  "latest": "electron-0.1.0",
   "minimum_supported": "hta-2026-09-14",
   "versions": {
+    "electron-0.1.0": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "local_mcp_bridge": {
+        "transport": "MCP Streamable HTTP, JSON responses, POST http://127.0.0.1:<port>/mcp (default port 41777), Authorization: Bearer <per-install token>",
+        "enabled_by": "Settings, Claude Integration, Turn on (off by default); the same panel shows the token and the claude mcp add command",
+        "tools": [
+          "psm_status", "psm_docker_start", "psm_image_pull", "psm_pocketap_pull",
+          "psm_wallet_list", "psm_wallet_set_service", "psm_wallet_remove", "psm_history",
+          "psm_validate_card", "psm_register_service", "psm_stake_application",
+          "psm_delegate_gateway", "psm_undelegate_gateway", "psm_fund_wallet",
+          "psm_fund_operator", "psm_unstake_supplier", "psm_stake_supplier", "psm_ssh_test",
+          "psm_supplier_ship", "psm_supplier_run", "psm_deploy_ship", "psm_relay_call"
+        ],
+        "confirmation": "every spend or signature opens a confirmation in the app window and waits for the user (typed token on MainNet); dry: true previews the command without confirmation",
+        "never_available": "owner key import and revoke, application wallet create, recover, import, export: no key or phrase ever crosses the bridge",
+        "servers": "named by their Settings entry; SSH key paths never cross the bridge"
+      },
+      "capabilities": [
+        "everything in hta-2026-09-14, rebuilt in Electron with the same screens",
+        "one-time import of the HTA's settings, wallet records, activity, and keyring passphrase on the same PC",
+        "local MCP action bridge (see local_mcp_bridge)"
+      ],
+      "not_available": [
+        "no auto-update (Scoop updates it)",
+        "no macOS build yet (phase 3)"
+      ]
+    },
     "hta-2026-09-14": {
       "channel": "repository (tools/service-manager, Windows HTML Application)",
       "local_mcp_bridge": false,
@@ -30,9 +57,9 @@
     }
   },
   "planned": {
-    "electron": {
-      "status": "in design",
-      "local_mcp_bridge": "planned: the app exposes its own operations on loopback with a per-install token; every spend or signature still confirms in the app"
+    "electron-macos": {
+      "status": "phase 3, not started",
+      "notes": "DMG, signing, notarisation; encrypted keyring export/import between machines"
     }
   },
   "protocol_verified_against": {
