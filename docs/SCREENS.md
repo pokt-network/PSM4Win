@@ -814,7 +814,7 @@ Suggested order: Wallets → Settings → Services (My services, Create, Registe
 - [ ] Body class `net-beta|net-main` + `theme-dark`; layout top offset grows when the banner shows.
 - [ ] Docker state text and inline buttons for all four states; retry every 10 s while down; start poll; image pull with long timeout.
 - [ ] Owner card three states; address click copies; fees from live params; Refresh; Revoke flow with `REVOKE`, key shown once, refusal note when app wallets exist.
-- [ ] Import dialog: 64-hex validation, `0x` stripped, buttons disabled during import, secrets never in the payload.
+- [ ] Import dialog: 64-hex validation, `0x` stripped, buttons disabled during import, the key travels only through the typed `wallet-import` channel and never appears in a command line, log, request file, or activity entry.
 - [ ] Accordion: single sections are links, multi sections toggle, active section forced open on `tab()`.
 - [ ] Welcome shown once (`welcomeSeen`), reopenable from Settings.
 - [ ] Network switch: refused while busy, MainNet confirm, all invalidations in 4.1, current screen re-entered.

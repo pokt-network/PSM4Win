@@ -92,10 +92,19 @@ export async function createMainWindow(): Promise<BrowserWindow> {
       })
     }, 400)
   }
+  const tellRenderer = (): void => {
+    if (!win.isDestroyed()) win.webContents.send('psm:window-maximized', win.isMaximized())
+  }
   win.on('resize', persist)
   win.on('move', persist)
-  win.on('maximize', persist)
-  win.on('unmaximize', persist)
+  win.on('maximize', () => {
+    persist()
+    tellRenderer()
+  })
+  win.on('unmaximize', () => {
+    persist()
+    tellRenderer()
+  })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL'])
     await win.loadURL(process.env['ELECTRON_RENDERER_URL'])

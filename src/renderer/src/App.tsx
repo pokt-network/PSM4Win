@@ -43,7 +43,10 @@ export default function App(): React.JSX.Element {
       if (!settings.importedFrom) {
         const det = await window.psm.migration.detect()
         if (det.found && !det.alreadyImported) {
-          offerHtaImport(det)
+          await offerHtaImport(det)
+          // The import may have brought the HTA's welcomeSeen along.
+          const after = await loadSettings()
+          if (!after.welcomeSeen) showWelcome()
           return
         }
       }

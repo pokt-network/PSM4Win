@@ -30,12 +30,26 @@ export const useModal = create<ModalState>(() => ({
   locked: false
 }))
 
+/** Called once when the open dialog goes away without one of its buttons resolving it
+ *  (Escape, or another modal replacing it). Promise-backed dialogs use it so a caller that
+ *  awaits them is never left hanging (the HTA's native confirm()/alert() always return). */
+let dismiss: (() => void) | null = null
+function fireDismiss(): void {
+  const d = dismiss
+  dismiss = null
+  d?.()
+}
+export function onModalDismiss(fn: () => void): void {
+  dismiss = fn
+}
+
 export function openModal(
   title: ReactNode,
   body: ReactNode,
   buttons: ModalButton[],
   cls: string | boolean = ''
 ): void {
+  fireDismiss()
   useModal.setState({
     open: true,
     title,
@@ -56,6 +70,7 @@ export function lockModal(locked: boolean): void {
 }
 export function closeModal(): void {
   useModal.setState({ open: false, body: null, buttons: [], locked: false })
+  fireDismiss()
 }
 
 /** In-app replacement for native confirm(). */
@@ -70,19 +85,20 @@ export function confirmDialog(
       {
         label: 'Cancel',
         onClick: () => {
-          closeModal()
           resolve(false)
+          closeModal()
         }
       },
       {
         label: okLabel,
         cls: okCls,
         onClick: () => {
-          closeModal()
           resolve(true)
+          closeModal()
         }
       }
     ])
+    onModalDismiss(() => resolve(false))
   })
 }
 
@@ -94,11 +110,12 @@ export function alertDialog(text: ReactNode, title = 'Pocket Service Manager'): 
         label: 'OK',
         cls: 'primary',
         onClick: () => {
-          closeModal()
           resolve()
+          closeModal()
         }
       }
     ])
+    onModalDismiss(() => resolve())
   })
 }
 
@@ -116,8 +133,8 @@ export function typedConfirm(opts: {
     let value = ''
     const tryGo = (): void => {
       if (value.trim() !== opts.token) return
-      closeModal()
       resolve(true)
+      closeModal()
     }
     openModal(
       opts.title,
@@ -134,13 +151,14 @@ export function typedConfirm(opts: {
         {
           label: opts.cancelLabel ?? 'Cancel',
           onClick: () => {
-            closeModal()
             resolve(false)
+            closeModal()
           }
         },
         { label: opts.okLabel, cls: opts.okCls ?? 'danger solid', onClick: tryGo }
       ]
     )
+    onModalDismiss(() => resolve(false))
   })
 }
 

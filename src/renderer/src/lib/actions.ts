@@ -101,6 +101,10 @@ export async function dockerCycle(first: boolean): Promise<boolean> {
     }
     return false
   }
+  if (dockerRetry) {
+    clearTimeout(dockerRetry)
+    dockerRetry = null
+  }
   if (!r.image) {
     foot('Download the pocketd image once; it is about 100 MB.')
     void walletStatus()
@@ -153,7 +157,11 @@ export async function pullImage(): Promise<void> {
 
 export async function walletStatus(): Promise<void> {
   const r = await psm().signer['wallet-status']({})
-  if (!r.ok) return
+  if (!r.ok) {
+    // The HTA sets imported = !!r.imported unconditionally, so a failed read shows #walletNone.
+    useStore.setState({ imported: false, address: '', verified: false, partial: false })
+    return
+  }
   useStore.setState({
     imported: !!r.imported,
     address: r.address ?? '',
@@ -264,7 +272,7 @@ export async function setNetwork(n: Network): Promise<void> {
     )
       return
   }
-  if (n === s.net) return
+  // The HTA's setNetwork runs the full clear/refresh/re-enter even for the current network.
   useStore.setState({
     net: n,
     epoch: s.epoch + 1,
@@ -274,7 +282,8 @@ export async function setNetwork(n: Network): Promise<void> {
     deployed: null,
     balance: undefined
   })
-  void saveSettings({ network: n })
+  tab(S().screen)
+  if (n !== s.net) void saveSettings({ network: n })
   void refreshNetwork()
   void refreshBalance()
 }

@@ -57,6 +57,11 @@ const api = {
     minimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
     toggleMaximize: (): Promise<boolean> => ipcRenderer.invoke('window:toggle-maximize'),
     isMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:is-maximized'),
+    onMaximizedChange: (cb: (maximized: boolean) => void): (() => void) => {
+      const listener = (_e: Electron.IpcRendererEvent, max: boolean): void => cb(max)
+      ipcRenderer.on('psm:window-maximized', listener)
+      return () => ipcRenderer.removeListener('psm:window-maximized', listener)
+    },
     close: (): Promise<void> => ipcRenderer.invoke('window:close')
   },
   app: {

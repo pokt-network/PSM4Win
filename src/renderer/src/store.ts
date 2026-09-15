@@ -81,6 +81,9 @@ export interface StakeForm {
   from: string
   amount: string
   fund: string
+  /** Set by a wallet-row Stake/Restake: the Stake screen keeps this `from` once instead of
+   *  re-deriving it from the service (the HTA re-applies the wallet after tab("stake")). */
+  fromPinned?: boolean
 }
 export interface SupplyRow {
   id: string

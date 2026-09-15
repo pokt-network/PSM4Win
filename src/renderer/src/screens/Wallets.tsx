@@ -1,6 +1,6 @@
 // Wallets (docs/SCREENS.md 3.9): the owner row plus every application wallet,
 // live balances and stakes, and the create / recover / import / export / remove / fund dialogs.
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore, S } from '../store'
 import {
   Badge,
@@ -29,7 +29,7 @@ import {
   localServices,
   tab
 } from '../lib/actions'
-import { openModal, closeModal, setModalBody, lockModal } from '../lib/modal'
+import { openModal, closeModal, setModalBody, setModalButtons, lockModal } from '../lib/modal'
 import { fundWallet } from '../lib/flows'
 
 interface Row {
@@ -83,7 +83,7 @@ export function WalletsScreen(): React.JSX.Element {
   return (
     <div className="panel">
       <h2>
-        Wallets <NetBadge />
+        Wallets <NetBadge id="walNetBadge" />
       </h2>
       <p className="hint" style={{ margin: '0 0 6px 0' }}>
         On Pocket an account can be staked as an application for exactly one service, so each
@@ -215,7 +215,9 @@ export function WalletsScreen(): React.JSX.Element {
 }
 
 export function svcStakeAs(id: string, walletName: string): void {
-  useStore.setState((s) => ({ stk: { ...s.stk, id: id || s.stk.id, from: walletName } }))
+  useStore.setState((s) => ({
+    stk: { ...s.stk, id: id || s.stk.id, from: walletName, fromPinned: true }
+  }))
   tab('stake')
 }
 
@@ -275,7 +277,8 @@ interface WalletDialogProps {
 function WalletDialogBody({ kind, onDone }: WalletDialogProps): React.JSX.Element {
   const stkId = S().stk.id
   const [service, setService] = useState(serviceOptions(stkId).selected)
-  const [name, setName] = useState(service ? 'app-' + service : '')
+  const [name, setName] = useState(kind === 'new' && service ? 'app-' + service : '')
+  const pfx = kind === 'new' ? 'nw' : kind === 'recover' ? 'rw' : 'iw'
   const [manual, setManual] = useState(false)
   const [secret, setSecret] = useState('')
   const [hint, setHint] = useState<React.ReactNode>(
@@ -358,6 +361,22 @@ function WalletDialogBody({ kind, onDone }: WalletDialogProps): React.JSX.Elemen
     foot(`Wallet ${r.name} ${kind === 'recover' ? 'recovered' : 'imported'}: ${r.address}`)
     onDone()
   }
+  const goRef = useRef(go)
+  useEffect(() => {
+    goRef.current = go
+  })
+  useEffect(() => {
+    setModalButtons([
+      { label: 'Cancel', id: pfx + 'Cancel', disabled: busy, onClick: closeModal },
+      {
+        label: kind === 'new' ? 'Create wallet' : kind === 'recover' ? 'Recover' : 'Import',
+        cls: 'primary',
+        id: pfx + 'Go',
+        disabled: busy,
+        onClick: () => void goRef.current()
+      }
+    ])
+  }, [busy, kind, pfx])
 
   return (
     <>
@@ -369,14 +388,11 @@ function WalletDialogBody({ kind, onDone }: WalletDialogProps): React.JSX.Elemen
             : 'Adds an existing key to the keyring from its 64-character hex private key.'}
       </p>
       <label>Service</label>
-      <ServiceSelect
-        id={kind === 'new' ? 'nwService' : kind === 'recover' ? 'rwService' : 'iwService'}
-        value={service}
-        onChange={pickService}
-      />
+      <ServiceSelect id={pfx + 'Service'} value={service} onChange={pickService} />
       <label>Wallet name</label>
       <input
         type="text"
+        id={pfx + 'Name'}
         maxLength={40}
         value={name}
         disabled={busy}
@@ -385,11 +401,14 @@ function WalletDialogBody({ kind, onDone }: WalletDialogProps): React.JSX.Elemen
           setManual(true)
         }}
       />
-      <div className="hint">{hint}</div>
+      <div className="hint" id={pfx + 'Hint'}>
+        {hint}
+      </div>
       {kind === 'recover' ? (
         <>
           <label>Recovery phrase</label>
           <textarea
+            id="rwPhrase"
             rows={3}
             autoComplete="off"
             spellCheck={false}
@@ -407,6 +426,7 @@ function WalletDialogBody({ kind, onDone }: WalletDialogProps): React.JSX.Elemen
           <label>Private key (hex)</label>
           <input
             type="password"
+            id="iwKey"
             autoComplete="off"
             value={secret}
             disabled={busy}
@@ -424,14 +444,6 @@ function WalletDialogBody({ kind, onDone }: WalletDialogProps): React.JSX.Elemen
           anywhere. Have your password manager ready and close any screen sharing.
         </div>
       )}
-      <div id="modalButtons">
-        <button className="btn" disabled={busy} onClick={closeModal}>
-          Cancel
-        </button>
-        <button className="btn primary" disabled={busy} onClick={go}>
-          {kind === 'new' ? 'Create wallet' : kind === 'recover' ? 'Recover' : 'Import'}
-        </button>
-      </div>
     </>
   )
 }
@@ -467,6 +479,23 @@ function MnemonicBody({
   onDone: () => void
 }): React.JSX.Element {
   const [saved, setSaved] = useState(false)
+  useEffect(() => {
+    setModalButtons([
+      {
+        label: 'Done',
+        cls: 'primary',
+        id: 'nwDone',
+        disabled: !saved,
+        onClick: () => {
+          const msg = `Wallet ${r.name} created: ${r.address}`
+          r.mnemonic = '' // the HTA nulls its result object here
+          closeModal()
+          foot(msg)
+          onDone()
+        }
+      }
+    ])
+  }, [saved, r, onDone])
   const words = r.mnemonic.split(' ')
   const rowsOfWords: string[][] = []
   for (let i = 0; i < words.length; i += 4) rowsOfWords.push(words.slice(i, i + 4))
@@ -510,20 +539,6 @@ function MnemonicBody({
           I have written down all {words.length} words in order.
         </label>
       </p>
-      <div id="modalButtons">
-        <button
-          className="btn primary"
-          id="nwDone"
-          disabled={!saved}
-          onClick={() => {
-            closeModal()
-            foot(`Wallet ${r.name} created: ${r.address}`)
-            onDone()
-          }}
-        >
-          Done
-        </button>
-      </div>
     </>
   )
 }
@@ -533,6 +548,8 @@ function showMnemonic(
   onDone: () => void
 ): void {
   openModal('Write down the recovery phrase', <MnemonicBody r={r} onDone={onDone} />, [], true)
+  // The HTA's modal has no Escape or backdrop exit: only the checkbox-gated Done closes it.
+  lockModal(true)
 }
 
 export async function exportWalletDialog(name: string): Promise<void> {
@@ -686,6 +703,29 @@ function FundBody({
   const suggest = Math.max(0, min + 2 * POKT - bal)
   const [amount, setAmount] = useState(suggest ? String(Math.ceil(suggest / POKT)) : '')
   const [status, setStatus] = useStatus()
+  const amountRef = useRef(amount)
+  useEffect(() => {
+    amountRef.current = amount
+  })
+  useEffect(() => {
+    setModalButtons([
+      { label: 'Close', id: 'fwClose', onClick: closeModal },
+      {
+        label: 'Send',
+        cls: 'primary',
+        id: 'fwGo',
+        onClick: async () => {
+          const upokt = Math.round(parseFloat(amountRef.current) * POKT)
+          const ok = await fundWallet(name, upokt, setStatus)
+          if (ok)
+            setTimeout(() => {
+              closeModal()
+              onDone()
+            }, 1500)
+        }
+      }
+    ])
+  }, [name, onDone, setStatus])
   return (
     <>
       <p>
@@ -702,25 +742,6 @@ function FundBody({
         onChange={(e) => setAmount(e.target.value)}
       />
       <StatusLine status={status} id="fwStatus" />
-      <div id="modalButtons">
-        <button className="btn" id="fwClose" onClick={closeModal}>
-          Close
-        </button>
-        <button
-          className="btn primary"
-          id="fwGo"
-          onClick={async () => {
-            const ok = await fundWallet(name, Math.round(parseFloat(amount) * POKT), setStatus)
-            if (ok)
-              setTimeout(() => {
-                closeModal()
-                onDone()
-              }, 1500)
-          }}
-        >
-          Send
-        </button>
-      </div>
     </>
   )
 }

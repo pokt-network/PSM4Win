@@ -1,7 +1,14 @@
 // Owner wallet import (docs/SCREENS.md 3.13) and Revoke (3.12), plus the
 // first-run importer from the HTA.
-import { useEffect, useRef, useState } from 'react'
-import { openModal, closeModal, setModalBody, lockModal, alertDialog } from '../lib/modal'
+import { useEffect, useRef } from 'react'
+import {
+  openModal,
+  closeModal,
+  setModalBody,
+  lockModal,
+  alertDialog,
+  onModalDismiss
+} from '../lib/modal'
 import { S, useStore } from '../store'
 import {
   dockerReady,
@@ -17,30 +24,32 @@ import { normalizeHexKey } from '@core/validate'
 import type { HtaDetection } from '../../../preload/index'
 
 function KeyField({
+  value,
+  busy,
   onChange,
   onEnter
 }: {
+  value: string
+  busy: boolean
   onChange: (v: string) => void
   onEnter: () => void
 }): React.JSX.Element {
   const ref = useRef<HTMLInputElement>(null)
-  const [v, setV] = useState('')
   useEffect(() => {
     const t = setTimeout(() => ref.current?.focus(), 50)
     return () => clearTimeout(t)
   }, [])
+  // Controlled from the dialog so a cleared value (after every import attempt, as in the
+  // HTA's doImport) really empties the field.
   return (
     <input
       ref={ref}
       type="password"
       id="impKey"
       autoComplete="off"
-      value={v}
-      onChange={(e) => {
-        setV(e.target.value)
-        onChange(e.target.value)
-      }}
-      onKeyDown={(e) => e.key === 'Enter' && onEnter()}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => e.key === 'Enter' && !busy && onEnter()}
     />
   )
 }
@@ -68,7 +77,15 @@ export async function importDialog(): Promise<void> {
           command line. Close any screen-sharing before pasting.
         </div>
         <label>Private key (hex)</label>
-        <KeyField onChange={(v) => (raw = v)} onEnter={go} />
+        <KeyField
+          value={raw}
+          busy={busy}
+          onChange={(v) => {
+            raw = v
+            render(false)
+          }}
+          onEnter={go}
+        />
         <div className="hint" id="impHint">
           {hint}
         </div>
@@ -217,7 +234,15 @@ function showExported(hex: string): void {
 
 // ---- first run: import from the HTA (docs/MIGRATION.md section 3) ----
 
-export function offerHtaImport(det: HtaDetection): void {
+/** Resolves when the dialog closes (Skip, Close, or Escape). */
+export function offerHtaImport(det: HtaDetection): Promise<void> {
+  return new Promise((resolve) => {
+    offerHtaImportDialog(det)
+    onModalDismiss(resolve)
+  })
+}
+
+function offerHtaImportDialog(det: HtaDetection): void {
   let servicesRoot = det.servicesRoot ?? ''
   const lines: string[] = []
   const render = (busy: boolean, done: boolean): void => {

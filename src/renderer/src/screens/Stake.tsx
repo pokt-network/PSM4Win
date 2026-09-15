@@ -79,7 +79,8 @@ export function StakeScreen(): React.JSX.Element {
   useEffect(() => {
     const wf = walletForService(id)
     const patch: Partial<typeof stk> = {}
-    if (wf) patch.from = wf.name
+    if (stk.fromPinned) patch.fromPinned = false
+    else if (wf) patch.from = wf.name
     if (!stk.amount.trim() && params.appMinStake)
       patch.amount = String(suggestedAppStake(params) / POKT)
     if (Object.keys(patch).length) set(patch)

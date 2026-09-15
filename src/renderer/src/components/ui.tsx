@@ -13,17 +13,27 @@ export { NETWORK_INFO }
 
 export function Badge({
   cls,
+  id,
   children
 }: {
   cls: 'ok' | 'warn' | 'bad' | 'info' | 'blue' | 'muted'
+  id?: string
   children: ReactNode
 }): React.JSX.Element {
-  return <span className={'badge ' + cls}>{children}</span>
+  return (
+    <span className={'badge ' + cls} id={id}>
+      {children}
+    </span>
+  )
 }
 
-export function NetBadge(): React.JSX.Element {
+export function NetBadge({ id }: { id?: string } = {}): React.JSX.Element {
   const net = useStore((s) => s.net)
-  return <Badge cls={net === 'main' ? 'bad' : 'info'}>{netLabel(net)}</Badge>
+  return (
+    <Badge cls={net === 'main' ? 'bad' : 'info'} id={id}>
+      {netLabel(net)}
+    </Badge>
+  )
 }
 
 export interface Status {

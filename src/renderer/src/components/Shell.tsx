@@ -62,6 +62,8 @@ export function TitleBar(): React.JSX.Element {
   const [max, setMax] = useState(false)
   useEffect(() => {
     void window.psm.window.isMaximized().then(setMax)
+    // Win+Up, Aero snap, and OS-routed double-clicks change the state without our toggle.
+    return window.psm.window.onMaximizedChange(setMax)
   }, [])
   const toggle = async (): Promise<void> => setMax(await window.psm.window.toggleMaximize())
   return (
@@ -129,13 +131,14 @@ export function TitleBar(): React.JSX.Element {
 export function TopBar(): React.JSX.Element {
   const { net, theme, docker, dockerNote } = useStore()
   const main = net === 'main'
-  let dockerCls = ''
+  // The class reflects the Docker state even while a note ("Starting Docker Desktop") shows,
+  // as the HTA keeps #dockerState.className = "bad" during the start.
+  const dockerCls = !docker ? '' : !docker.ok ? 'bad' : docker.image ? 'ok' : ''
   let dockerText: React.ReactNode = 'Docker: checking'
   if (dockerNote)
     dockerText = dockerNote.startsWith('Download failed') ? dockerNote : <Busy>{dockerNote}</Busy>
   else if (docker) {
     if (!docker.ok) {
-      dockerCls = 'bad'
       dockerText = (
         <>
           Docker: {docker.error} <button onClick={() => startDocker()}>Start Docker Desktop</button>
@@ -151,7 +154,6 @@ export function TopBar(): React.JSX.Element {
         </>
       )
     } else {
-      dockerCls = 'ok'
       dockerText = `Docker ${docker.docker}, pocketd ${docker.pocketd}`
     }
   }
