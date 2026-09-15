@@ -31,6 +31,7 @@ import {
 import { lcdTxUrl } from '@core/chain'
 import type { Settings } from '../../../preload/index'
 import { alertDialog, confirmDialog } from './modal'
+import { isDemo } from './demo'
 
 export const PARENT = OWNER_KEY_NAME
 export const psm = (): Window['psm'] => window.psm
@@ -59,6 +60,7 @@ export function txUrl(net: Network, hash: string): string {
 // ---- settings ----
 
 export async function loadSettings(): Promise<Settings> {
+  if (isDemo()) return S().settings as Settings
   const s = await psm().settings.get()
   useStore.setState({ settings: s })
   return s
@@ -185,6 +187,7 @@ export async function refreshBalance(): Promise<number | null> {
 }
 
 export async function loadWallets(): Promise<AppWallet[]> {
+  if (isDemo()) return S().wallets
   const r = await psm().signer['wallet-list']({})
   const wallets = r.ok ? r.wallets : []
   useStore.setState({ wallets, walletsVerified: !!(r.ok && r.verified) })
@@ -233,11 +236,13 @@ export async function refreshNetwork(): Promise<void> {
 }
 
 export async function loadHistory(): Promise<void> {
+  if (isDemo()) return
   const r = await psm().signer.history({})
   useStore.setState({ history: r.ok ? r.entries : [] })
 }
 
 export async function loadServiceFolders(): Promise<LocalService[]> {
+  if (isDemo()) return S().local
   const r = await psm().files.readServiceFolders()
   const local: LocalService[] = r.folders.map((f) => {
     const m = (f.manifest && typeof f.manifest === 'object' ? f.manifest : {}) as Manifest
@@ -608,7 +613,11 @@ export async function supplierRows(): Promise<SupplierRow[]> {
       const [sr, gas, reach] = await Promise.all([
         supplierRecord(st!.operator),
         balanceOf(st!.operator),
-        st!.url ? psm().app.probeUrl(st!.url) : Promise.resolve(0)
+        st!.url
+          ? isDemo()
+            ? Promise.resolve(200)
+            : psm().app.probeUrl(st!.url)
+          : Promise.resolve(0)
       ])
       return {
         server: s,

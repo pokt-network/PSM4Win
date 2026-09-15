@@ -180,7 +180,11 @@ Scoop installs into `%USERPROFILE%\scoop\apps\pocket-service-manager\<version>\`
 
 The public README's install section is the Docker Desktop prerequisite, the Scoop sequence (execution policy, Scoop, git, bucket, install, update) as one command per block, a sentence saying Scoop is the only supported way to install and why, and one line saying the releases page holds the files Scoop installs and their checksums, not a manual install path. Nothing else.
 
-## 5. Versioning
+## 5. README screenshot
+
+`npm run screenshot` builds the app and runs it with `--screenshot=docs/images/dashboard.png`: the window opens on the Dashboard filled with example data (`src/renderer/src/lib/demo.ts`: placeholder addresses, an example server and stack, two example services, a short activity list; governance parameters and the block height still come from the live network), waits six seconds, captures itself, and exits. No settings, keyring, or history is read. Re-run it whenever the Dashboard changes and commit the PNG.
+
+## 6. Versioning
 
 - `package.json` `version` is the app version; the tag is `v<version>`; the compat string is `electron-<version>`.
 - Bump the version, update `reference/mcp/src/compat.json` (and the copy in the service-builder repository) when capabilities change, tag, push, and let the workflow build, publish, and commit the bucket manifest.

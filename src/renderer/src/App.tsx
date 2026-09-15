@@ -7,6 +7,7 @@ import { dockerCycle, loadSettings, loadServiceFolders, tab } from './lib/action
 import { showWelcome } from './lib/welcome'
 import { BridgeHost } from './lib/bridge'
 import { UpdateHost } from './lib/update'
+import { isDemo, installDemo } from './lib/demo'
 import { offerHtaImport } from './screens/ownerDialogs'
 import { selectRegisterFolder } from './screens/Services'
 import { DashboardScreen } from './screens/Dashboard'
@@ -32,6 +33,11 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     let cancelled = false
     ;(async () => {
+      if (isDemo()) {
+        // Screenshot mode: example data, no startup sequence (lib/demo.ts).
+        await installDemo()
+        return
+      }
       const info = await window.psm.app.info()
       const settings = await loadSettings()
       if (cancelled) return

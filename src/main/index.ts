@@ -16,8 +16,11 @@ configureAppPaths()
 
 const selftestArg = process.argv.find((a) => a.startsWith('--selftest'))
 const smokeMode = process.argv.includes('--smoke') || process.env.PSM_SMOKE === '1'
+// `--screenshot=<file.png>`: open the window on example data, capture it, and exit (README image).
+const screenshotArg = process.argv.find((a) => a.startsWith('--screenshot='))
+const screenshotPath = screenshotArg ? screenshotArg.slice('--screenshot='.length) : null
 // Headless checks may run beside a normal instance; only the interactive app takes the lock.
-const gotLock = selftestArg || smokeMode ? true : app.requestSingleInstanceLock()
+const gotLock = selftestArg || smokeMode || screenshotPath ? true : app.requestSingleInstanceLock()
 if (!gotLock) {
   app.quit()
 } else {
@@ -50,6 +53,29 @@ if (!gotLock) {
     electronApp.setAppUserModelId('network.pocket.servicemanager')
     app.on('browser-window-created', (_, window) => optimizer.watchWindowShortcuts(window))
     registerIpc(() => mainWindow)
+    if (screenshotPath) {
+      const win = await createMainWindow({ demo: true })
+      mainWindow = win
+      setTimeout(async () => {
+        try {
+          const image = await win.webContents.capturePage()
+          const { promises: fsp } = await import('node:fs')
+          const { dirname, resolve } = await import('node:path')
+          const out = resolve(screenshotPath)
+          await fsp.mkdir(dirname(out), { recursive: true })
+          await fsp.writeFile(out, image.toPNG())
+          console.log(
+            `screenshot: wrote ${out} (${image.getSize().width}x${image.getSize().height})`
+          )
+          await log.flush()
+          app.exit(0)
+        } catch (e) {
+          console.log('screenshot: failed: ' + (e as Error).message)
+          app.exit(1)
+        }
+      }, 6000)
+      return
+    }
     mainWindow = await createMainWindow()
     mainWindow.on('closed', () => {
       mainWindow = null

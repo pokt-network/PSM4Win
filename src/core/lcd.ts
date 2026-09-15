@@ -32,7 +32,22 @@ export function lcd(net: Network, path: string): string {
 const cache = new Map<string, { expires: number; value: Promise<unknown> }>()
 export const TTL = { params: 30_000, catalog: 60_000, state: 5_000 } as const
 
+/** Screenshot mode only (src/renderer/src/lib/demo.ts): answers some URLs from examples. */
+let lcdStub: ((url: string) => unknown | undefined) | null = null
+export function setLcdStub(fn: ((url: string) => unknown | undefined) | null): void {
+  lcdStub = fn
+}
+
 export async function getJson<T>(url: string, ttlMs = 0, timeoutMs = 20_000): Promise<T> {
+  if (lcdStub) {
+    const v = lcdStub(url)
+    if (v !== undefined) {
+      const o = v as { code?: number; message?: string }
+      if (o && typeof o === 'object' && o.code === 5)
+        throw new LcdError(`HTTP 404 for ${url}: ${o.message ?? 'not found'}`, 404)
+      return v as T
+    }
+  }
   const now = Date.now()
   const hit = cache.get(url)
   if (hit && hit.expires > now) return hit.value as Promise<T>

@@ -10,9 +10,14 @@ const LCD_HOSTS = [
   'https://sauron-api.beta.infra.pocket.network'
 ]
 
-export async function createMainWindow(): Promise<BrowserWindow> {
+export interface WindowOptions {
+  /** Screenshot mode: load the renderer with ?demo=1, fixed size, dark, no bounds persistence. */
+  demo?: boolean
+}
+
+export async function createMainWindow(opts: WindowOptions = {}): Promise<BrowserWindow> {
   const settings = await readSettings()
-  const saved = settings.window
+  const saved = opts.demo ? undefined : settings.window
   const bounds: WindowBounds =
     saved && saved.width >= 600 && saved.height >= 400 ? saved : { width: 1320, height: 900 }
   const win = new BrowserWindow({
@@ -24,7 +29,7 @@ export async function createMainWindow(): Promise<BrowserWindow> {
     minHeight: 700,
     frame: false, // phase 3: titleBarStyle 'hidden' with trafficLightPosition on macOS
     show: false,
-    backgroundColor: settings.theme === 'dark' ? '#101418' : '#f6f7f9',
+    backgroundColor: opts.demo || settings.theme === 'dark' ? '#101418' : '#f6f7f9',
     icon: join(resourcesDir(), 'pocket.ico'),
     autoHideMenuBar: true,
     webPreferences: {
@@ -95,8 +100,10 @@ export async function createMainWindow(): Promise<BrowserWindow> {
   const tellRenderer = (): void => {
     if (!win.isDestroyed()) win.webContents.send('psm:window-maximized', win.isMaximized())
   }
-  win.on('resize', persist)
-  win.on('move', persist)
+  if (!opts.demo) {
+    win.on('resize', persist)
+    win.on('move', persist)
+  }
   win.on('maximize', () => {
     persist()
     tellRenderer()
@@ -107,7 +114,11 @@ export async function createMainWindow(): Promise<BrowserWindow> {
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL'])
-    await win.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  else await win.loadFile(join(__dirname, '../renderer/index.html'))
+    await win.loadURL(process.env['ELECTRON_RENDERER_URL'] + (opts.demo ? '?demo=1' : ''))
+  else
+    await win.loadFile(
+      join(__dirname, '../renderer/index.html'),
+      opts.demo ? { query: { demo: '1' } } : undefined
+    )
   return win
 }
