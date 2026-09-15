@@ -610,6 +610,8 @@ There is no separate screen; the README's "Activity" is the "Recent activity" pa
 
 `#setRoot` (text; initial value `state.servicesRoot`), `.btn.small` "Use this folder" → `saveServicesRoot()` (folder must exist, else status err "That folder does not exist."; saves `settings.servicesRoot`, `loadServiceFolders()`, status ok "Using <path>."), `.btnrow`: "Open folder" (`openServicesFolder()` → `explorer.exe`), "Rescan" (`loadServiceFolders()`), "Back to default" (`resetServicesRoot()`: `servicesRoot = <repo>/services`, saves `servicesRoot: ""`, status ok "Back to the repository's services folder."). Status `#setRootStatus`. Default root: `<repo>/services` where repo = two levels above the app folder.
 
+**Electron deviation (product owner, 2026-09-15).** The Dashboard's services-directory note shows the path and the "Open folder" / "change it in Settings" links only; the HTA's "N service folders" count is dropped because the services are listed on the same screen. In the Settings file row, the button never wraps (`.filerow .btn`).
+
 **Electron deviation (by design).** The Electron app is installed on its own and has no repository two levels up, so there is no default services root. "Back to default" is therefore "Clear": it saves `servicesRoot: ""`, rescans (which yields no folders), and reports "No folder chosen. Pick one to see and create service folders." "Open folder" is disabled until a root is set, and a "Browse" button opens the native folder picker. The importer records the HTA's absolute default so imported installs keep their folders (`docs/MIGRATION.md`).
 
 #### Servers

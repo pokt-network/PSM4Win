@@ -37,7 +37,6 @@ export function DashboardScreen(): React.JSX.Element {
     catalog,
     settings,
     servicesRoot,
-    local,
     history,
     balance
   } = useStore()
@@ -150,7 +149,7 @@ export function DashboardScreen(): React.JSX.Element {
               <>
                 <span className="mono">{servicesRoot}</span>
                 <div className="hint">
-                  {local.length} service folder{local.length === 1 ? '' : 's'}.{' '}
+                  {/* Product owner (2026-09-15): no folder count here; the services are listed below. */}
                   <a onClick={() => psm().app.openPath(servicesRoot)}>Open folder</a> or{' '}
                   <a onClick={() => tab('settings')}>change it in Settings</a>.
                 </div>
