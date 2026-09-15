@@ -73,3 +73,6 @@ $RECYCLE.BIN/
 tmp/
 temp/
 *.tmp
+
+# Lint cache
+.eslintcache
