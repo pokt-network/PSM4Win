@@ -37,10 +37,11 @@ import {
   setNetwork,
   tab,
   psm,
+  pollTx,
   type ServerEntry
 } from '../lib/actions'
 import { confirmDialog } from '../lib/modal'
-import { fundOperator } from '../lib/flows'
+import { confirmTx } from '../lib/flows'
 import { showWelcome } from '../lib/welcome'
 import { account } from '@core/lcd'
 
@@ -76,7 +77,7 @@ function ServicesRootPanel(): React.JSX.Element {
   }, [servicesRoot, settings?.servicesRoot])
   const use = async (p: string): Promise<void> => {
     const t = p.trim()
-    if (!t || !(await psm().files.fileExists(t))) {
+    if (!t || !(await psm().files.dirExists(t))) {
       setStatus('That folder does not exist.', 'err')
       return
     }
@@ -159,12 +160,24 @@ const EMPTY_SERVER: ServerForm = {
   deployRoot: '/opt/pocket/services'
 }
 
-async function validateServer(f: ServerForm): Promise<string> {
+/** app.js serverForm(): trimmed fields, port coerced with a default of 22. */
+function serverForm(f: ServerForm): ServerEntry {
+  return {
+    name: f.name.trim(),
+    host: f.host.trim(),
+    port: parseInt(f.port, 10) || 22,
+    user: f.user.trim(),
+    keyPath: f.keyPath.trim(),
+    deployRoot: f.deployRoot.trim(),
+    suppliers: {}
+  }
+}
+
+async function validateServer(f: ServerEntry): Promise<string> {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/.test(f.name))
     return 'Name: letters, digits, dot, hyphen, underscore; up to 40 characters.'
   if (!/^[A-Za-z0-9.-]+$/.test(f.host)) return 'Host must be a hostname or IP address.'
-  const port = parseInt(f.port, 10)
-  if (!(port >= 1 && port <= 65535)) return 'Port must be 1 to 65535.'
+  if (!(f.port >= 1 && f.port <= 65535)) return 'Port must be 1 to 65535.'
   if (!/^[A-Za-z0-9._-]+$/.test(f.user)) return 'User is required.'
   if (!f.keyPath || !(await psm().files.fileExists(f.keyPath)))
     return 'SSH key file not found on this PC.'
@@ -183,19 +196,11 @@ function ServersPanel(): React.JSX.Element {
   const upd = (k: keyof ServerForm, v: string): void => setForm((f) => ({ ...f, [k]: v }))
 
   const save = async (): Promise<void> => {
-    const err = await validateServer(form)
+    const entry = serverForm(form)
+    const err = await validateServer(entry)
     if (err) {
       setStatus(err, 'err')
       return
-    }
-    const entry: ServerEntry = {
-      name: form.name.trim(),
-      host: form.host.trim(),
-      port: parseInt(form.port, 10) || 22,
-      user: form.user.trim(),
-      keyPath: form.keyPath.trim(),
-      deployRoot: form.deployRoot.trim(),
-      suppliers: {}
     }
     let found = false
     const next = servers().map((s) => {
@@ -240,18 +245,19 @@ function ServersPanel(): React.JSX.Element {
     setStatus(`Removed ${name}.`, 'ok')
   }
   const test = async (): Promise<void> => {
-    const err = await validateServer(form)
+    const f = serverForm(form)
+    const err = await validateServer(f)
     if (err) {
       setStatus(err, 'err')
       return
     }
-    const stDir = stackOf(serverByName(form.name.trim()), net)?.dir ?? ''
-    setStatus(`Connecting to ${form.user}@${form.host} on port ${form.port}`, 'busy')
+    const stDir = stackOf(serverByName(f.name), net)?.dir ?? ''
+    setStatus(`Connecting to ${f.user}@${f.host} on port ${f.port}`, 'busy')
     const r = await psm().signer['ssh-test']({
-      host: form.host.trim(),
-      port: parseInt(form.port, 10) || 22,
-      user: form.user.trim(),
-      key_path: form.keyPath.trim(),
+      host: f.host,
+      port: f.port,
+      user: f.user,
+      key_path: f.keyPath,
       path: stDir
     })
     if (!r.ok) {
@@ -485,7 +491,10 @@ function ProvisionPanel(): React.JSX.Element {
 
   // Default server and, when the directory is blank, the current network's defaults.
   useEffect(() => {
-    if (!list.length) return
+    if (!list.length) {
+      if (prov.server) setProv({ server: '', dir: '', host: '' })
+      return
+    }
     const server = serverByName(prov.server) ? prov.server : list[0].name
     if (server !== prov.server || !prov.dir) {
       const st = stackOf(serverByName(server), prov.net || appNet)
@@ -518,8 +527,9 @@ function ProvisionPanel(): React.JSX.Element {
     const st2 = s ? stackOf(s, n) : null
     setProv({ net: n, dir: st2?.dir || stackDirDefault(n), host: st2 ? hostOfUrl(st2.url) : '' })
   }
-  const dirHint =
-    ss === 'ready'
+  const dirHint = !list.length
+    ? "Holds this network's RelayMiner, operator keyring, and relayer config."
+    : ss === 'ready'
       ? `This server already has a ${netLabel(prov.net)} stack there; its operator key and relayer config are kept.`
       : ss === 'pending'
         ? 'Provisioning of this stack was interrupted after its operator key was created. Start provisioning resumes it; finished steps are not repeated.'
@@ -709,19 +719,37 @@ function ProvisionPanel(): React.JSX.Element {
     }
     const upokt = Math.round(topup * POKT)
     log(`Sending ${fmtPokt(upokt)} POKT from the owner wallet to the operator for gas.`)
-    setBusy(false) // fundOperator manages busy itself
-    let cancelled = false
-    const f = await fundOperator(operator, upokt, () => undefined, {
-      newOperator: true,
-      onCancel: () => (cancelled = true)
+    const okToSend = await confirmTx({
+      mainTitle: 'Confirm MainNet transfer',
+      mainBody: (
+        <div className="dangerbox">
+          This sends <b>{fmtPokt(upokt)} POKT</b> of real funds from the owner wallet to the new
+          operator <b>{operator}</b>.
+        </div>
+      ),
+      token: 'SEND',
+      mainOkLabel: 'Send on MainNet',
+      betaText: `Send ${fmtPokt(upokt)} POKT from the owner wallet to the operator ${operator} on Beta TestNet?`,
+      betaOkLabel: 'Send'
     })
-    setBusy(true)
-    if (!f.ok) {
-      mark('Operator gas', false, cancelled ? 'Funding cancelled.' : 'Funding failed.')
-      return fail(cancelled ? 'Funding cancelled.' : 'Funding failed.')
+    if (!okToSend) return fail('Funding cancelled.')
+    const rf = await sg['tx-fund-operator']({ network: net, to: operator, amount_upokt: upokt })
+    if (!rf.ok || !('txhash' in rf)) {
+      mark(
+        'Operator gas',
+        false,
+        `${(rf as { error?: string }).error ?? ''} ${(rf as { detail?: string }).detail ?? ''}`
+      )
+      return fail('Funding failed.')
     }
-    mark('Operator gas', true, `Sent ${fmtPokt(upokt)} POKT in block ${fmtInt(f.height)}`)
+    const t = await pollTx(rf.txhash)
+    if (!t.ok) {
+      mark('Operator gas', false, t.error ?? '')
+      return fail('Funding transaction failed.')
+    }
+    mark('Operator gas', true, `Sent ${fmtPokt(upokt)} POKT in block ${fmtInt(t.height)}`)
     void refreshBalance()
+    void loadHistory()
     await afterFunding()
   }
 

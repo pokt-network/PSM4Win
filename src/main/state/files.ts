@@ -1,6 +1,6 @@
 // File helpers for the app data folder. JSON is read BOM-tolerant (the HTA's
 // PowerShell wrote a BOM) and written without one, UTF-8, LF.
-import { promises as fs, existsSync, mkdirSync } from 'node:fs'
+import { promises as fs, existsSync, mkdirSync, statSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { stripBom } from '@core/text'
 
@@ -14,6 +14,14 @@ export async function ensureDir(dir: string): Promise<void> {
 
 export function exists(p: string): boolean {
   return existsSync(p)
+}
+
+export function isDir(p: string): boolean {
+  try {
+    return statSync(p).isDirectory()
+  } catch {
+    return false
+  }
 }
 
 export async function readText(p: string): Promise<string | null> {

@@ -21,7 +21,7 @@ import {
 } from './schemas'
 import { signer } from '../signer'
 import { readSettings, writeSettings } from '../state/settings'
-import { readText, writeText, exists } from '../state/files'
+import { readText, writeText, exists, isDir } from '../state/files'
 import { detectHta, importFromHta } from '../migration/importer'
 import { dataDir } from '../paths'
 import { log } from '../state/log'
@@ -129,6 +129,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   })
   ipcMain.handle('files:exists', async (_e, p: unknown) =>
     typeof p === 'string' && p.length < 2048 ? exists(p) : false
+  )
+  ipcMain.handle('files:is-dir', async (_e, p: unknown) =>
+    typeof p === 'string' && p.length < 2048 ? isDir(p) : false
   )
   ipcMain.handle('files:clear-relay-tests', async () => {
     await fs.rm(join(dataDir(), 'relay-tests.log'), { force: true })

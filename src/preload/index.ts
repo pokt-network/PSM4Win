@@ -86,6 +86,7 @@ const api = {
     writeServiceFile: (id: string, name: ServiceFileName, text: string): Promise<boolean> =>
       ipcRenderer.invoke('files:write-service-file', { id, name }, text),
     fileExists: (p: string): Promise<boolean> => ipcRenderer.invoke('files:exists', p),
+    dirExists: (p: string): Promise<boolean> => ipcRenderer.invoke('files:is-dir', p),
     readRelayTests: (): Promise<string> => ipcRenderer.invoke('files:read-relay-tests'),
     appendRelayTest: (line: string): Promise<boolean> =>
       ipcRenderer.invoke('files:append-relay-test', line),

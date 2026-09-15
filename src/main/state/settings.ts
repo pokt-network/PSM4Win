@@ -53,14 +53,45 @@ export const DEFAULT_SETTINGS: Settings = {
 
 let cached: Settings | null = null
 
+/** Port of the HTA's migrateServer: entries written by the first layout carried one stack's
+ *  fields (supplierDir, operator, url, network, provisioned_at) at the top level. They move
+ *  under suppliers[<network>] with the compose project "pocket-supplier" so the running
+ *  containers and volumes are reused. Returns true when the entry changed. */
+export function migrateServer(entry: ServerEntry): boolean {
+  const s = entry as unknown as Record<string, unknown>
+  if (s.suppliers && typeof s.suppliers === 'object') return false
+  const suppliers: Partial<Record<Network, SupplierStack>> = {}
+  if (s.supplierDir || s.operator || s.url) {
+    const net: Network = s.network === 'main' ? 'main' : 'beta'
+    suppliers[net] = {
+      dir: String(s.supplierDir ?? ''),
+      project: 'pocket-supplier',
+      url: String(s.url ?? ''),
+      operator: String(s.operator ?? ''),
+      provisioned_at: String(s.provisioned_at ?? '')
+    }
+  }
+  s.suppliers = suppliers
+  delete s.supplierDir
+  delete s.operator
+  delete s.url
+  delete s.network
+  delete s.provisioned_at
+  return true
+}
+
 export async function readSettings(): Promise<Settings> {
   if (cached) return cached
   const s = await readJson<Partial<Settings>>(dataFiles.settings())
+  const servers = Array.isArray(s?.servers) ? s!.servers : []
+  let migrated = false
+  for (const e of servers) if (migrateServer(e)) migrated = true
   cached = {
     ...DEFAULT_SETTINGS,
     ...(s ?? {}),
-    servers: Array.isArray(s?.servers) ? s!.servers : []
+    servers
   }
+  if (migrated) await writeJson(dataFiles.settings(), cached)
   return cached
 }
 
