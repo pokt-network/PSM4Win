@@ -1067,3 +1067,27 @@ table.services .svcid {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ---- Help (Electron only; docs/SCREENS.md 3.14) ---- */
+.help .help-body {
+  max-width: 780px;
+}
+.help .help-body h3 {
+  font-size: 14px;
+  margin: 18px 0 6px 0;
+}
+.help .help-body p {
+  line-height: 1.55;
+  margin: 8px 0;
+}
+.help .help-body ul.checks li,
+.help .help-body ol.help-steps li {
+  line-height: 1.5;
+}
+.help .help-body ol.help-steps li {
+  margin-bottom: 8px;
+}
+.help .help-body .warnbox,
+.help .help-body .kv {
+  margin-top: 8px;
+}

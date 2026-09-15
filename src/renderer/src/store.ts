@@ -12,6 +12,7 @@ import { EMPTY_CREATE_FORM } from '@core/card-form'
 import type { BridgeStatus, Settings, AppInfo } from '../../preload/index'
 
 export type Screen =
+  | 'help'
   | 'dashboard'
   | 'services'
   | 'create'

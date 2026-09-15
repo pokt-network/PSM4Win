@@ -293,7 +293,13 @@ export function toggleTheme(): void {
   void saveSettings({ theme: t })
 }
 
-export const NAV = [
+export interface NavSection {
+  id: string
+  label: string
+  screens: readonly (readonly [Screen, string])[]
+}
+
+export const NAV: readonly NavSection[] = [
   { id: 'dashboard', label: 'Dashboard', screens: [['dashboard', 'Dashboard']] },
   {
     id: 'services',
@@ -309,10 +315,17 @@ export const NAV = [
   },
   { id: 'suppliers', label: 'Suppliers', screens: [['supply', 'Supply service']] },
   { id: 'wallets', label: 'Wallets', screens: [['wallets', 'Wallets']] },
-  { id: 'settings', label: 'Settings', screens: [['settings', 'Settings']] }
-] as const
+  {
+    id: 'settings',
+    label: 'Settings',
+    screens: [
+      ['settings', 'Settings'],
+      ['help', 'Help']
+    ]
+  }
+]
 
-export function sectionOf(screen: Screen): (typeof NAV)[number] {
+export function sectionOf(screen: Screen): NavSection {
   for (const s of NAV) for (const [id] of s.screens) if (id === screen) return s
   return NAV[0]
 }

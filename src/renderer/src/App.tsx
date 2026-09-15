@@ -18,6 +18,7 @@ import { DeployScreen } from './screens/Deploy'
 import { TestScreen } from './screens/Test'
 import { WalletsScreen } from './screens/Wallets'
 import { SettingsScreen } from './screens/Settings'
+import { HelpScreen } from './screens/Help'
 
 export default function App(): React.JSX.Element {
   const { net, theme, screen, epoch } = useStore()
@@ -81,6 +82,7 @@ export default function App(): React.JSX.Element {
             {screen === 'test' && <TestScreen />}
             {screen === 'wallets' && <WalletsScreen />}
             {screen === 'settings' && <SettingsScreen />}
+            {screen === 'help' && <HelpScreen />}
           </div>
         </div>
       </div>
