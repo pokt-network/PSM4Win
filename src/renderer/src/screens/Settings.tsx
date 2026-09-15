@@ -1,6 +1,6 @@
 // Settings (docs/SCREENS.md 3.11): services folder, servers, Provision, welcome.
 import { useEffect, useRef, useState } from 'react'
-import { useStore, S } from '../store'
+import { useStore, S, type SettingsTab } from '../store'
 import { copy } from '../lib/actions'
 import type { Network } from '@core/networks'
 import type { RemoteClaudeStatus } from '../../../preload/index'
@@ -46,25 +46,52 @@ import { confirmTx } from '../lib/flows'
 import { showWelcome } from '../lib/welcome'
 import { account } from '@core/lcd'
 
+const SETTINGS_TABS: Array<[SettingsTab, string]> = [
+  ['start', 'Start here'],
+  ['servers', 'Servers'],
+  ['suppliers', 'Suppliers'],
+  ['claude', 'Claude Integration']
+]
+
 export function SettingsScreen(): React.JSX.Element {
+  const cur = useStore((s) => s.settingsTab)
   return (
     <>
-      <ServicesRootPanel />
-      <ServersPanel />
-      <ProvisionPanel />
-      <ClaudeIntegrationPanel />
-      <div className="panel">
-        <h2>Welcome message</h2>
-        <div className="hint">
-          The introduction shown on first run: what the app does, what to have ready, and the order
-          of the steps.
-        </div>
-        <div className="btnrow">
-          <button className="btn small" onClick={showWelcome}>
-            Show Welcome Message
+      <div className="subtabs settings-tabs" role="tablist">
+        {SETTINGS_TABS.map(([id, label]) => (
+          <button
+            key={id}
+            className={cur === id ? 'on' : ''}
+            role="tab"
+            onClick={() => useStore.setState({ settingsTab: id })}
+          >
+            {label}
           </button>
-        </div>
+        ))}
       </div>
+      {cur === 'start' ? (
+        <>
+          <ServicesRootPanel />
+          <div className="panel">
+            <h2>Welcome message</h2>
+            <div className="hint">
+              The introduction shown on first run: what the app does, what to have ready, and the
+              order of the steps.
+            </div>
+            <div className="btnrow">
+              <button className="btn small" onClick={showWelcome}>
+                Show Welcome Message
+              </button>
+            </div>
+          </div>
+        </>
+      ) : cur === 'servers' ? (
+        <ServersPanel />
+      ) : cur === 'suppliers' ? (
+        <ProvisionPanel />
+      ) : (
+        <ClaudeIntegrationPanel />
+      )}
     </>
   )
 }
@@ -466,7 +493,8 @@ export function openProvision(name: string, net: Network): void {
           dir: st?.dir || stackDirDefault(net),
           host: st ? hostOfUrl(st.url) : ''
         },
-        provOpenAt: Date.now()
+        provOpenAt: Date.now(),
+        settingsTab: 'suppliers'
       }) as never
   )
 }

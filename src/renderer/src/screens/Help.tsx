@@ -3,7 +3,7 @@
 // Claude Code helps through the local bridge, and where to go next. No commands,
 // no typed-in chain values: the numbers come from the network.
 import { useState } from 'react'
-import { useStore } from '../store'
+import { useStore, type SettingsTab } from '../store'
 import { fmtPokt } from '@core/format'
 import { NETWORK_INFO } from '@core/networks'
 import { DOCKER_DESKTOP_URL } from '@core/versions'
@@ -26,12 +26,23 @@ function Link({ href, children }: { href: string; children: React.ReactNode }): 
 
 function Go({
   screen,
+  settingsTab,
   children
 }: {
   screen: Parameters<typeof tab>[0]
+  settingsTab?: SettingsTab
   children: React.ReactNode
 }): React.JSX.Element {
-  return <a onClick={() => tab(screen)}>{children}</a>
+  return (
+    <a
+      onClick={() => {
+        if (settingsTab) useStore.setState({ settingsTab })
+        tab(screen)
+      }}
+    >
+      {children}
+    </a>
+  )
 }
 
 // ---- chapters ----
@@ -167,9 +178,12 @@ function TheSteps(): React.JSX.Element {
           service and fund it. Then <Go screen="stake">Stake application</Go>.
         </li>
         <li>
-          <b>Add and provision your server.</b> In <Go screen="settings">Settings</Go>, add the
-          server and test the connection, then Start provisioning. This installs the RelayMiner,
-          creates the operator wallet on the server, and starts it.
+          <b>Add and provision your server.</b> In{' '}
+          <Go screen="settings" settingsTab="servers">
+            Settings
+          </Go>
+          , add the server and test the connection, then Start provisioning. This installs the
+          RelayMiner, creates the operator wallet on the server, and starts it.
         </li>
         <li>
           <b>Deploy.</b> <Go screen="deploy">Deploy service</Go> builds your app on the server and
@@ -201,8 +215,11 @@ function WithClaude(): React.JSX.Element {
       </p>
       <p>
         Turn on the <b>local action bridge</b> under{' '}
-        <Go screen="settings">Settings, Claude Integration</Go>, press <b>Add to Claude Code</b>,
-        and start a new Claude Code session in the Claude desktop app or a terminal. Status now:{' '}
+        <Go screen="settings" settingsTab="claude">
+          Settings, Claude Integration
+        </Go>
+        , press <b>Add to Claude Code</b>, and start a new Claude Code session in the Claude desktop
+        app or a terminal. Status now:{' '}
         {bridge?.running ? (
           <Badge cls="ok">on, port {bridge.port}</Badge>
         ) : (

@@ -131,8 +131,12 @@ export interface State {
   prov: { server: string; net: Network; dir: string; host: string; fund: string }
   deployed: { id: string; server: string } | null
   bridge: BridgeStatus | null
+  /** Which Settings tab is showing (docs/SCREENS.md 3.11). */
+  settingsTab: SettingsTab
   set: (patch: Partial<State> | ((s: State) => Partial<State>)) => void
 }
+
+export type SettingsTab = 'start' | 'servers' | 'suppliers' | 'claude'
 
 export const useStore = create<State>((set) => ({
   net: 'beta',
@@ -169,6 +173,7 @@ export const useStore = create<State>((set) => ({
   prov: { server: '', net: 'beta', dir: '', host: '', fund: '10' },
   deployed: null,
   bridge: null,
+  settingsTab: 'start',
   set: (patch) => set(patch as never)
 }))
 

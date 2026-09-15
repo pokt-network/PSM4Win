@@ -602,6 +602,8 @@ There is no separate screen; the README's "Activity" is the "Recent activity" pa
 
 ### 3.11 Settings
 
+**Electron layout (product owner, 2026-09-15).** The screen is split into four sub-tabs (`.subtabs.settings-tabs`, store `settingsTab`), "Start here" open by default: Start here (Services folder, Welcome message), Servers (the servers table and editor with Test connection), Suppliers (Provision a supplier), Claude Integration. `openProvision` switches to Suppliers; the Help guide's links open the Servers and Claude Integration tabs directly.
+
 **Purpose.** Services folder, server list with add/edit, Provision panel, connection test, welcome message. README: "Settings" and "Provision".
 
 **Panel.** `#tab-settings.tabpane` with four `.panel`s.
