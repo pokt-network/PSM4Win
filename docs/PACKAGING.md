@@ -2,6 +2,8 @@
 
 Windows only. The macOS app is a separate effort outside this repository; nothing here should pre-empt it beyond the existing `# phase 3` markers.
 
+> The in-app updater (docs/ARCHITECTURE.md section 8) reads the latest GitHub release and depends on three asset names staying exactly as the workflow produces them: `PocketServiceManager-Setup-<version>.exe`, `PocketServiceManager-<version>-win-x64.zip`, and `SHA256SUMS`. Tags are `v<version>` and must match `package.json`.
+
 ## 1. electron-builder
 
 Config in `electron-builder.yml` at the repo root:

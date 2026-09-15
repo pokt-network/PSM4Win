@@ -14,6 +14,7 @@ import type { HtaDetection, ImportResult } from '../main/migration/importer'
 import type { BridgeStatus } from '../main/bridge'
 import type { BridgeConfirmRequest } from '../main/bridge/confirm'
 import type { ClaudeCodeStatus } from '../main/bridge/claudeConfig'
+import type { UpdateStatus } from '../core/update'
 
 export type RemoteClaudeStatus = ClaudeCodeStatus & { error: string | null }
 
@@ -97,6 +98,16 @@ const api = {
       ipcRenderer.invoke('files:append-relay-test', line),
     clearRelayTests: (): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke('files:clear-relay-tests')
+  },
+  update: {
+    status: (): Promise<UpdateStatus> => ipcRenderer.invoke('update:status'),
+    check: (): Promise<UpdateStatus> => ipcRenderer.invoke('update:check'),
+    install: (): Promise<UpdateStatus> => ipcRenderer.invoke('update:install'),
+    onStatus: (cb: (u: UpdateStatus) => void): (() => void) => {
+      const l = (_e: Electron.IpcRendererEvent, u: UpdateStatus): void => cb(u)
+      ipcRenderer.on('psm:update-status', l)
+      return () => ipcRenderer.removeListener('psm:update-status', l)
+    }
   },
   claudeCode: {
     remoteStatus: (): Promise<RemoteClaudeStatus> => ipcRenderer.invoke('claude:remote-status'),

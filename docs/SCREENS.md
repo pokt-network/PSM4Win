@@ -602,6 +602,8 @@ There is no separate screen; the README's "Activity" is the "Recent activity" pa
 
 ### 3.11 Settings
 
+**Updates (Electron only, Start here tab).** `.panel#updatesPanel`: heading with a badge (up to date / version N available), a `kv` table (this app, latest release, last checked), "Check for updates", and "Install version N" when one is available; the header shows `#updateLink` "Update available: N. Click to install." left of the Docker status. Both open the update dialog: versions, plain-text release notes, an install note by install kind, and Later / Release notes / the install button (Update with Scoop, Download and install, or Download). See docs/ARCHITECTURE.md section 8.
+
 **Electron layout (product owner, 2026-09-15).** The screen is split into four sub-tabs (`.subtabs.settings-tabs`, store `settingsTab`), "Start here" open by default: Start here (Services folder, Welcome message), Servers (the servers table and editor with Test connection), Suppliers (Provision a supplier), Claude Integration. `openProvision` switches to Suppliers; the Help guide's links open the Servers and Claude Integration tabs directly.
 
 **Purpose.** Services folder, server list with add/edit, Provision panel, connection test, welcome message. README: "Settings" and "Provision".

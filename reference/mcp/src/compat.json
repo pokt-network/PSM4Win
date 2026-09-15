@@ -28,7 +28,7 @@
         "local MCP action bridge (see local_mcp_bridge)"
       ],
       "not_available": [
-        "no auto-update (Scoop updates it)",
+        "no silent auto-update: the app checks the latest release, shows a header link, and installs on click (Scoop, verified installer, or verified portable download)",
         "Windows only; the macOS app is a separate product"
       ]
     },

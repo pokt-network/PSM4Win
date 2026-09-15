@@ -1121,3 +1121,24 @@ table.services .svcid {
 .subtab-body {
   padding-top: 10px;
 }
+
+/* ---- Updater ---- */
+#updateLink {
+  margin-left: auto;
+  margin-right: 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--brand-gold);
+  cursor: pointer;
+  white-space: nowrap;
+}
+#updateLink + #dockerState {
+  margin-left: 0;
+}
+.update-notes {
+  white-space: pre-wrap;
+  font-size: 12px;
+  max-height: 200px;
+  overflow: auto;
+  margin: 8px 0;
+}

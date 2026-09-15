@@ -1,5 +1,6 @@
 // Title bar, top bar, sidebar (owner wallet card and accordion nav), footer.
 import { useEffect, useState } from 'react'
+import { showUpdateDialog } from '../lib/update'
 import mark from '../assets/pocket-mark-40.png'
 import { useStore } from '../store'
 import { fmtPokt } from '@core/format'
@@ -129,7 +130,7 @@ export function TitleBar(): React.JSX.Element {
 }
 
 export function TopBar(): React.JSX.Element {
-  const { net, theme, docker, dockerNote } = useStore()
+  const { net, theme, docker, dockerNote, update } = useStore()
   const main = net === 'main'
   // The class reflects the Docker state even while a note ("Starting Docker Desktop") shows,
   // as the HTA keeps #dockerState.className = "bad" during the start.
@@ -183,6 +184,15 @@ export function TopBar(): React.JSX.Element {
         >
           {theme === 'dark' ? ICON_SUN : ICON_MOON}
         </button>
+        {update?.available ? (
+          <a
+            id="updateLink"
+            onClick={showUpdateDialog}
+            title="A newer version is on the releases page"
+          >
+            Update available: {update.latest}. Click to install.
+          </a>
+        ) : null}
         <div id="dockerState" className={dockerCls}>
           <span className="dot" />
           <span id="dockerText">{dockerText}</span>

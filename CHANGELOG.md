@@ -18,4 +18,5 @@ One line per user-visible change. Versions are tags `v<version>`; compat strings
 - One-click "Add to Claude Code" for both the read-only Pocket tools and the bridge; Settings shows no JSON and no commands by default.
 - Help screen under Settings: a five-chapter guide for a first-time service owner.
 - Settings split into Start here, Servers, Suppliers, and Claude Integration tabs.
+- In-app updater: checks the latest GitHub release on start and every six hours, shows a header link and a Start here panel, and installs the way the copy was installed (Scoop, installer with checksum verification, or a verified portable download).
 - Fixtures and reference material carry example values only; no live service, host, or wallet detail is in the repository.

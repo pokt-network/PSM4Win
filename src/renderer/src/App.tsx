@@ -6,6 +6,7 @@ import { ModalHost } from './lib/modal'
 import { dockerCycle, loadSettings, loadServiceFolders, tab } from './lib/actions'
 import { showWelcome } from './lib/welcome'
 import { BridgeHost } from './lib/bridge'
+import { UpdateHost } from './lib/update'
 import { offerHtaImport } from './screens/ownerDialogs'
 import { selectRegisterFolder } from './screens/Services'
 import { DashboardScreen } from './screens/Dashboard'
@@ -89,6 +90,7 @@ export default function App(): React.JSX.Element {
       <Footer />
       <ModalHost />
       <BridgeHost />
+      <UpdateHost />
     </div>
   )
 }

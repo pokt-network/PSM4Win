@@ -10,6 +10,7 @@ import { registerIpc } from './ipc'
 import { createMainWindow } from './window'
 import { runSelfTest } from './selftest'
 import { bridge } from './bridge'
+import { updater } from './update'
 
 configureAppPaths()
 
@@ -55,6 +56,8 @@ if (!gotLock) {
     })
     // The local MCP action bridge starts only when Settings enabled it.
     await bridge.init(() => mainWindow)
+    // Release checks: 20 s after start, then every six hours, and on demand from Settings.
+    if (!smokeMode) updater.init(() => mainWindow)
 
     // `--smoke`: prove the window, preload, and renderer load without console errors, then exit.
     if (smokeMode) {
@@ -82,6 +85,7 @@ if (!gotLock) {
   app.on('window-all-closed', () => {
     // phase 3: macOS keeps the app alive until Cmd+Q
     void bridge.stop()
+    updater.stop()
     app.quit()
   })
 }

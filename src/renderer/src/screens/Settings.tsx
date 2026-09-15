@@ -44,6 +44,7 @@ import {
 import { confirmDialog } from '../lib/modal'
 import { confirmTx } from '../lib/flows'
 import { showWelcome } from '../lib/welcome'
+import { showUpdateDialog } from '../lib/update'
 import { account } from '@core/lcd'
 
 const SETTINGS_TABS: Array<[SettingsTab, string]> = [
@@ -72,6 +73,7 @@ export function SettingsScreen(): React.JSX.Element {
       {cur === 'start' ? (
         <>
           <ServicesRootPanel />
+          <UpdatesPanel />
           <div className="panel">
             <h2>Welcome message</h2>
             <div className="hint">
@@ -1203,6 +1205,67 @@ function BridgePanel(): React.JSX.Element {
           </div>
         </>
       ) : null}
+    </div>
+  )
+}
+
+// ---- Updates (Start here) ----
+
+function UpdatesPanel(): React.JSX.Element {
+  const u = useStore((s) => s.update)
+  const [busy, setBusyLocal] = useState(false)
+  const check = async (): Promise<void> => {
+    setBusyLocal(true)
+    useStore.setState({ update: await psm().update.check() })
+    setBusyLocal(false)
+  }
+  const when = u?.checkedAt ? new Date(u.checkedAt).toLocaleString() : 'not yet'
+  return (
+    <div className="panel" id="updatesPanel">
+      <h2>
+        Updates{' '}
+        {u?.available ? (
+          <Badge cls="warn">version {u.latest} available</Badge>
+        ) : u?.latest ? (
+          <Badge cls="ok">up to date</Badge>
+        ) : null}
+      </h2>
+      <table className="kv" style={{ maxWidth: 480 }}>
+        <tbody>
+          <tr>
+            <td>This app</td>
+            <td>{u?.current ?? '?'}</td>
+          </tr>
+          <tr>
+            <td>Latest release</td>
+            <td>{u?.latest ?? (u?.checkedAt ? 'none published yet' : '?')}</td>
+          </tr>
+          <tr>
+            <td>Last checked</td>
+            <td>{when}</td>
+          </tr>
+        </tbody>
+      </table>
+      {u?.state === 'error' && u.error ? <div className="dangerbox">{u.error}</div> : null}
+      <div className="btnrow">
+        <button
+          className="btn small"
+          id="btnCheckUpdates"
+          disabled={busy || u?.state === 'checking'}
+          onClick={check}
+        >
+          {u?.state === 'checking' ? 'Checking' : 'Check for updates'}
+        </button>
+        {u?.available ? (
+          <button className="btn small primary" onClick={showUpdateDialog}>
+            Install version {u.latest}
+          </button>
+        ) : null}
+      </div>
+      <div className="hint">
+        The app checks the releases page on start and every six hours. The header shows a link when
+        a newer version is there.
+      </div>
     </div>
   )
 }

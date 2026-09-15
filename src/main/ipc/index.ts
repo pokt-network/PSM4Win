@@ -27,6 +27,7 @@ import { detectHta, importFromHta } from '../migration/importer'
 import { dataDir } from '../paths'
 import { log } from '../state/log'
 import { bridge } from '../bridge'
+import { updater } from '../update'
 import { resolveConfirmation } from '../bridge/confirm'
 import { serverStatus, addServer, removeServer } from '../bridge/claudeConfig'
 
@@ -249,6 +250,11 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       return { ok: false, error: (e as Error).message }
     }
   })
+
+  // Updater.
+  ipcMain.handle('update:status', () => updater.status())
+  ipcMain.handle('update:check', () => updater.check())
+  ipcMain.handle('update:install', () => updater.install())
 
   // Local MCP action bridge.
   ipcMain.handle('bridge:status', () => bridge.status())

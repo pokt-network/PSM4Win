@@ -117,7 +117,11 @@ The bridge is the second half of phase 2: the app exposes its own operations to 
 
 **What an assistant sees.** Results are the signer's result objects, verbatim, as both text and `structuredContent`; a failed operation is a tool result with `isError`, not a protocol error. `initialize` returns instructions that state the rules above, and every tool description says whether it confirms.
 
-## 8. Versions
+## 8. Updater
+
+`src/main/update/index.ts` asks the repository's latest-release endpoint (`RELEASES_API` in `src/core/update.ts`) 20 s after start, every six hours, and when Settings, Start here, "Check for updates" is pressed. The tag is compared with `app.getVersion()` numerically (`compareVersions`); a newer release puts a link in the header, left of the Docker status, and an "Install" button on the Updates panel. "Install" depends on how the copy was installed (`detectInstallKind`): a Scoop copy (`...\scoop\apps\...`) opens a console running `scoop update pocket-service-manager` and quits so the files can be replaced (this is the second and last place the app relies on the user's PowerShell, through Scoop's own shim); an installer copy (an uninstaller beside the executable) downloads `PocketServiceManager-Setup-<version>.exe`, verifies its SHA-256 against the release's `SHA256SUMS`, starts it, and quits; a portable copy downloads the zip to Downloads, verifies it, and shows it; a development build reports only. Downloads are accepted only from `https://github.com/pokt-network/PSM4Win/releases/download/`, and a file whose hash does not match is deleted. The release workflow must therefore keep publishing the installer, the zip, and `SHA256SUMS` under those exact names (docs/PACKAGING.md).
+
+## 9. Versions
 
 Keep in `src/core/versions.ts` and update here in the same commit:
 

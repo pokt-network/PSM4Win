@@ -8,6 +8,7 @@ import type { DockerCheckResult, HistoryEntry, WalletListResult } from '@core/co
 import type { ChainService } from '@core/lcd'
 import type { LiveParams } from '@core/chain'
 import type { CreateForm, CreateAuto } from '@core/card-form'
+import type { UpdateStatus } from '@core/update'
 import { EMPTY_CREATE_FORM } from '@core/card-form'
 import type { BridgeStatus, Settings, AppInfo } from '../../preload/index'
 
@@ -133,6 +134,7 @@ export interface State {
   bridge: BridgeStatus | null
   /** Which Settings tab is showing (docs/SCREENS.md 3.11). */
   settingsTab: SettingsTab
+  update: UpdateStatus | null
   set: (patch: Partial<State> | ((s: State) => Partial<State>)) => void
 }
 
@@ -174,6 +176,7 @@ export const useStore = create<State>((set) => ({
   deployed: null,
   bridge: null,
   settingsTab: 'start',
+  update: null,
   set: (patch) => set(patch as never)
 }))
 
