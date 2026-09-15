@@ -8,7 +8,7 @@ Docker Desktop is required: [download](https://www.docker.com/products/docker-de
 
 ```powershell
 irm get.scoop.sh | iex                                        # once, if Scoop is not installed
-scoop bucket add pocket https://github.com/<org>/<repo>       # once
+scoop bucket add pocket https://github.com/pokt-network/PSM4Win       # once
 scoop install pocket-service-manager
 scoop update pocket-service-manager                           # every later version
 ```

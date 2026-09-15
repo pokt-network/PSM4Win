@@ -121,7 +121,7 @@ Four lines in the README, in this order. No administrator rights.
 
 ```powershell
 irm get.scoop.sh | iex                                        # once, if Scoop is not installed
-scoop bucket add pocket https://github.com/<org>/<repo>       # once
+scoop bucket add pocket https://github.com/pokt-network/PSM4Win       # once
 scoop install pocket-service-manager
 scoop update pocket-service-manager                           # every later version
 ```
@@ -136,11 +136,11 @@ A Scoop bucket is a git repository with a `bucket/` folder of JSON manifests. Sc
 {
   "version": "0.1.0",
   "description": "Register, stake, supply, deploy, and test services on Pocket Network.",
-  "homepage": "https://github.com/<org>/<repo>",
+  "homepage": "https://github.com/pokt-network/PSM4Win",
   "license": "MIT",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/<org>/<repo>/releases/download/v0.1.0/PocketServiceManager-0.1.0-win-x64.zip",
+      "url": "https://github.com/pokt-network/PSM4Win/releases/download/v0.1.0/PocketServiceManager-0.1.0-win-x64.zip",
       "hash": "sha256:<hash of that zip>"
     }
   },
@@ -149,7 +149,7 @@ A Scoop bucket is a git repository with a `bucket/` folder of JSON manifests. Sc
   "autoupdate": {
     "architecture": {
       "64bit": {
-        "url": "https://github.com/<org>/<repo>/releases/download/v$version/PocketServiceManager-$version-win-x64.zip",
+        "url": "https://github.com/pokt-network/PSM4Win/releases/download/v$version/PocketServiceManager-$version-win-x64.zip",
         "hash": { "url": "$baseurl/SHA256SUMS" }
       }
     }
