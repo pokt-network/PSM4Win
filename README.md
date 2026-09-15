@@ -46,8 +46,6 @@ The [releases page](https://github.com/pokt-network/PSM4Win/releases) holds the 
 2. Open **Settings, Help** and read the five short chapters. They explain how a service works, what to have ready, and the steps in order. With your service app and server ready, the whole cycle takes about twenty minutes.
 3. Do everything on **Beta TestNet** first. Test POKT is free from the faucet linked under Help, Resources.
 
-If you used the earlier Windows HTML Application, the app offers to import its settings, wallet records, activity, and keyring passphrase on first start. Nothing is retyped.
-
 ## Claude Code
 
 Under **Settings, Claude Integration**:
