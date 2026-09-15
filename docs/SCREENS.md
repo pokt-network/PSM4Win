@@ -719,6 +719,8 @@ Used by Register, Stake application, and Supplier stake:
 
 Provision, Deploy, and Test use `mark(label, ok, note)` (appends to a results array and re-renders `ul.checks`) plus `logTo()` narration and a terminal `fail(msg)` that logs in red, sets an `err` status, and re-enables the start button. Steps are sequential nested callbacks; each `run()` has its own timeout. Test additionally shows per-probe timing in the checklist.
 
+**Electron deviation (by design).** A screen's last status line, checklist, log, and plan live in the screen component and are cleared when the user leaves the screen; the HTA kept them in the DOM until the next run.
+
 ### 4.9 `run()` result surfacing
 
 Every result is `{ok, ...}`; failures carry `error` and often `detail` (and `raw_log` for transactions, `err`/`lines` for `supplier-run`). The UI shows `esc(r.error) + " " + esc(r.detail || "")` in the relevant status or checklist item; transaction results carry `txhash` and `gas`. A missing/unparseable result becomes `{ok:false, error:"The signer did not return a result.", detail: <stderr/stdout up to 3000 chars>}`; a timeout becomes `"Timed out waiting for the signer (Ns)."`. Sensitive calls pass `{shred:true}` so the request/result files are overwritten before deletion, and secrets travel only through `opts.env` (`PSM_IMPORT_KEY`, `PSM_IMPORT_MNEMONIC`), never in the payload.
@@ -896,7 +898,7 @@ Suggested order: Wallets → Settings → Services (My services, Create, Registe
 
 **Dashboard**
 - [ ] Three clickable stats with the exact labels and sub-lines.
-- [ ] Chain panel values and formats; next session maths with the grid anchor; services directory note in three variants.
+- [ ] Chain panel values and formats; next session maths with the grid anchor; services directory note (two variants in Electron: there is no built-in default root, see 3.11).
 - [ ] Services table with supply, stakes, margin badges (5% threshold), relays estimate, alerts dangerbox text.
 - [ ] Suppliers table rows clickable to Manage or Suppliers.
 - [ ] Refresh re-reads params and balance.

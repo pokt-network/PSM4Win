@@ -12,8 +12,6 @@ export interface NetworkInfo {
   grpc: string
   explorer: string
   faucet: string | null
-  /** Used only when the measured block time is unavailable. */
-  blockTimeFallbackSeconds: number
   /** Defaults the UI proposes for a supplier stack on this network. */
   stack: {
     dir: string
@@ -32,7 +30,6 @@ export const NETWORK_INFO: Record<Network, NetworkInfo> = {
     grpc: 'sauron-grpc.beta.infra.pocket.network:443',
     explorer: 'https://explorer.pocket.network/beta',
     faucet: 'https://faucet.beta.pocket.network/',
-    blockTimeFallbackSeconds: 30,
     stack: {
       dir: '/opt/pocket/supplier-beta',
       project: 'pocket-supplier-beta',
@@ -48,7 +45,6 @@ export const NETWORK_INFO: Record<Network, NetworkInfo> = {
     grpc: 'sauron-grpc.infra.pocket.network:443',
     explorer: 'https://explorer.pocket.network',
     faucet: null,
-    blockTimeFallbackSeconds: 60,
     stack: {
       dir: '/opt/pocket/supplier-main',
       project: 'pocket-supplier-main',

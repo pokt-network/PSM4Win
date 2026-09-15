@@ -28,9 +28,10 @@ import {
   dockerReady,
   loadHistory,
   setBusy,
-  psm
+  psm,
+  loadServiceFolders
 } from '../lib/actions'
-import { confirmDialog } from '../lib/modal'
+import { confirmDialog, alertDialog } from '../lib/modal'
 
 interface WalletOpt {
   name: string
@@ -56,6 +57,9 @@ export function TestScreen(): React.JSX.Element {
   const [logNote, setLogNote] = useState<string | null>(null)
   const { lines, log, clear } = useLog()
   const label = netLabel(net)
+  useEffect(() => {
+    void loadServiceFolders()
+  }, [])
 
   const ids: [string, string][] = []
   const seen = new Set<string>()
@@ -152,6 +156,7 @@ export function TestScreen(): React.JSX.Element {
     const results: TestLogEntry['steps'] = []
     setBusy(true)
     setLogRows(null)
+    setLogNote(null)
     clear()
     setChecks([])
     setStatus(`Running ${steps.length} probes`, 'busy')
@@ -240,7 +245,7 @@ export function TestScreen(): React.JSX.Element {
       steps: results
     }
     const wrote = await psm().files.appendRelayTest(JSON.stringify(entry))
-    if (!wrote) log('Could not write the log file.', 'err')
+    if (!wrote.ok) log(`Could not write the log file: ${wrote.error ?? ''}`, 'err')
     log(
       `${passed} of ${results.length} probes passed in ${fmtDuration((Date.now() - t0) / 1000)}. Logged.`,
       passed === results.length ? 'ok' : 'err'
@@ -279,7 +284,11 @@ export function TestScreen(): React.JSX.Element {
       ))
     )
       return
-    await psm().files.clearRelayTests()
+    const cleared = await psm().files.clearRelayTests()
+    if (!cleared.ok) {
+      await alertDialog('Could not delete the log: ' + (cleared.error ?? ''))
+      return
+    }
     setLogRows([])
     setLogNote('Log cleared.')
   }

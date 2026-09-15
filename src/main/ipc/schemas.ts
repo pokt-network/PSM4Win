@@ -161,5 +161,11 @@ export const serviceFileSchema = z.object({
   id: z.string().regex(/^[A-Za-z0-9_-]{1,42}$/),
   name: z.enum(['service.json', 'card.json', 'deploy/docker-compose.yaml', 'deploy/answers.json'])
 })
+/** Reads may name any relative file inside the service folder (a custom card path from
+ *  service.json); the handler still refuses paths that resolve outside the folder. */
+export const serviceReadFileSchema = z.object({
+  id: z.string().regex(/^[A-Za-z0-9_-]{1,42}$/),
+  name: z.string().regex(/^(?![A-Za-z]:|[\\/])[A-Za-z0-9_.\\/ -]{1,200}$/)
+})
 
 export const importSchema = z.object({ servicesRoot: z.string().max(1024).optional() })

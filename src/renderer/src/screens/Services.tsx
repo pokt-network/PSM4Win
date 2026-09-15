@@ -376,6 +376,6 @@ export function openSupplier(name: string, preselect?: string): void {
     tab('supply')
     return
   }
-  useStore.setState({ supOpen: { server: name, preselect } })
   tab('supply')
+  useStore.setState({ supOpen: { server: name, preselect } })
 }

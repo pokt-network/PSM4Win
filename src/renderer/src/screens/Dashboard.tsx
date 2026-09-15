@@ -8,7 +8,7 @@ import {
   supplierServiceIds,
   type SupplyState
 } from '@core/chain'
-import { NETWORK_INFO } from '@core/networks'
+import { clearLcdCache } from '@core/lcd'
 import { Badge, NetBadge, Busy, netLabel } from '../components/ui'
 import {
   ownedServices,
@@ -21,7 +21,8 @@ import {
   tab,
   psm,
   type SupplierRow,
-  type AppStakeHolder
+  type AppStakeHolder,
+  txUrl
 } from '../lib/actions'
 import { supplierStatusCell } from './Supply'
 import { openSupplier, svcStake } from './Services'
@@ -57,13 +58,12 @@ export function DashboardScreen(): React.JSX.Element {
   }, [load, net, imported, wallets, address, catalog, settings?.servers])
 
   const owned = ownedServices()
-  let appStaked = 0
-  for (const list of Object.values(stakes)) for (const h of list) appStaked += h.stake
-  // Count each wallet once, like app.js (a wallet stakes for exactly one service).
-  appStaked = [
+  // app.js sums appRecordOf(wallet) over state.wallets: each app wallet once, never the owner.
+  const appStaked = [
     ...new Map(
       Object.values(stakes)
         .flat()
+        .filter((h) => h.address !== address)
         .map((h) => [h.address, h.stake])
     ).values()
   ].reduce((a, b) => a + b, 0)
@@ -430,11 +430,7 @@ export function DashboardScreen(): React.JSX.Element {
                         {e.txhash ? (
                           <a
                             className="mono"
-                            onClick={() =>
-                              psm().app.openExternal(
-                                `${NETWORK_INFO[enet].lcd}/cosmos/tx/v1beta1/txs/${e.txhash}`
-                              )
-                            }
+                            onClick={() => psm().app.openExternal(txUrl(enet, String(e.txhash)))}
                           >
                             {String(e.txhash).substring(0, 12)}&hellip;
                           </a>
@@ -453,9 +449,9 @@ export function DashboardScreen(): React.JSX.Element {
           <button
             className="btn small"
             onClick={async () => {
-              await refreshNetwork()
+              clearLcdCache() // the HTA's lcd() has no cache: Refresh re-reads everything
+              await refreshNetwork() // stores a new catalog, which re-runs load() once
               void refreshBalance()
-              void load()
             }}
           >
             Refresh

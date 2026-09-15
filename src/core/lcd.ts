@@ -145,6 +145,23 @@ export interface ChainSupplier {
   unstake_session_end_height?: string
 }
 
+/** The raw lookup the Suppliers screens grade: status is the HTTP status (0 on transport
+ *  failure), rec is null for a 404 and for a 200 whose body lacks `supplier`. */
+export async function supplierLookup(
+  net: Network,
+  operator: string
+): Promise<{ status: number; rec: ChainSupplier | null }> {
+  try {
+    const d = await getJson<{ supplier?: ChainSupplier }>(
+      lcd(net, `/pokt-network/poktroll/supplier/supplier/${operator}`),
+      TTL.state
+    )
+    return { status: 200, rec: d.supplier ?? null }
+  } catch (e) {
+    return { status: (e as LcdError).status ?? 0, rec: null }
+  }
+}
+
 export async function supplier(net: Network, operator: string): Promise<ChainSupplier | null> {
   try {
     const d = await getJson<{ supplier: ChainSupplier }>(
@@ -252,10 +269,8 @@ export async function measureBlockTime(
   const older = await blockAt(net, from)
   const dt = (Date.parse(latest.time) - Date.parse(older.time)) / 1000
   const n = latest.height - from
-  return {
-    seconds: n > 0 ? dt / n : NETWORK_INFO[net].blockTimeFallbackSeconds,
-    height: latest.height
-  }
+  if (n <= 0) throw new LcdError('Not enough blocks to measure the block time.', 0)
+  return { seconds: dt / n, height: latest.height }
 }
 
 export async function balanceUpokt(net: Network, address: string): Promise<number> {

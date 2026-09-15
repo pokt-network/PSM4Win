@@ -29,7 +29,8 @@ import {
   loadHistory,
   setBusy,
   psm,
-  tab
+  tab,
+  loadServiceFolders
 } from '../lib/actions'
 import { openSupplier, svcTest } from './Services'
 
@@ -42,6 +43,10 @@ export function DeployScreen(): React.JSX.Element {
   const [served, setServed] = useState<boolean | null>(null)
   const { lines, log, clear } = useLog()
   const label = netLabel(net)
+  useEffect(() => {
+    useStore.setState({ deployed: null })
+    void loadServiceFolders()
+  }, [])
   const deployable = local.filter((l) => l.hasDockerfile)
   const provisioned = servers().filter(
     (s) => stackState(stackOf(s, net)) === 'ready' && stackOf(s, net)?.dir
@@ -230,12 +235,7 @@ export function DeployScreen(): React.JSX.Element {
             ))}
           </select>
           <div className="hint" id="depIdHint">
-            {idHint || (
-              <>
-                Service folders on this machine that contain{' '}
-                <span className="mono">backend/Dockerfile</span>.
-              </>
-            )}
+            {idHint}
           </div>
         </div>
         <div>

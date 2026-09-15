@@ -219,7 +219,7 @@ function SupplierEditor({
   server: string
   preselect?: string
 }): React.JSX.Element {
-  const { net, params, busy, catalog, address } = useStore()
+  const { net, params, busy, catalog } = useStore()
   const s = serverByName(server)
   const st = stackOf(s, net)
   const label = netLabel(net)
@@ -250,60 +250,73 @@ function SupplierEditor({
     void saveSettings({ supplierServer: server })
   }, [server])
 
-  // loadSupplierServices(preselect)
-  const loadRows = useCallback(async (): Promise<ChainSupplier | null> => {
-    const sr = await supplierRecord(st?.operator)
-    setRec(sr.rec)
-    setRecStatus(sr.status)
-    const out: SupplyRow[] = []
-    const rpcFor = async (id: string): Promise<string> => {
-      const c = (await readCardFor(id)) as { rpc_types?: { type?: string }[] } | null
-      return c?.rpc_types?.[0]?.type || 'REST'
-    }
-    for (const sc of sr.rec?.services ?? []) {
-      const ep = sc.endpoints?.[0] ?? {}
-      out.push({
-        id: sc.service_id,
-        name: catalogEntry(sc.service_id)?.name ?? '',
-        url: ep.url || st?.url || '',
-        rpc: ep.rpc_type || 'REST',
-        checked: true,
-        staked: true
-      })
-    }
-    for (const o of ownedServices())
-      if (!out.some((r) => r.id === o.id))
+  // loadSupplierServices(preselect). The HTA runs it at open and after a successful execute
+  // only; row edits and the amount persist until then (the amount is set by openSupplier).
+  const loadRows = useCallback(
+    async (
+      opts: { seedAmount?: boolean; usePreselect?: boolean } = {}
+    ): Promise<ChainSupplier | null> => {
+      const seedAmount = opts.seedAmount ?? true
+      const pre = (opts.usePreselect ?? true) ? preselect : undefined
+      const sr = await supplierRecord(st?.operator)
+      setRec(sr.rec)
+      setRecStatus(sr.status)
+      const out: SupplyRow[] = []
+      const rpcFor = async (id: string): Promise<string> => {
+        const c = (await readCardFor(id)) as { rpc_types?: { type?: string }[] } | null
+        return c?.rpc_types?.[0]?.type || 'REST'
+      }
+      for (const sc of sr.rec?.services ?? []) {
+        const ep = sc.endpoints?.[0] ?? {}
         out.push({
-          id: o.id,
-          name: o.name,
-          url: st?.url ?? '',
-          rpc: await rpcFor(o.id),
-          checked: false,
-          staked: false
-        })
-    if (preselect) {
-      const pr = out.find((r) => r.id === preselect)
-      if (pr) pr.checked = true
-      else
-        out.push({
-          id: preselect,
-          name: catalogEntry(preselect)?.name ?? '',
-          url: st?.url ?? '',
-          rpc: await rpcFor(preselect),
+          id: sc.service_id,
+          name: catalogEntry(sc.service_id)?.name ?? '',
+          url: ep.url || st?.url || '',
+          rpc: ep.rpc_type || 'REST',
           checked: true,
-          staked: false
+          staked: true
         })
-    }
-    setRows(out)
-    const current = sr.rec ? Number(sr.rec.stake.amount) : 0
-    setAmount(String(Math.max(current, S().params.supMinStake || 0) / POKT))
-    return sr.rec
+      }
+      for (const o of ownedServices())
+        if (!out.some((r) => r.id === o.id))
+          out.push({
+            id: o.id,
+            name: o.name,
+            url: st?.url ?? '',
+            rpc: await rpcFor(o.id),
+            checked: false,
+            staked: false
+          })
+      if (pre) {
+        const pr = out.find((r) => r.id === pre)
+        if (pr) pr.checked = true
+        else
+          out.push({
+            id: pre,
+            name: catalogEntry(pre)?.name ?? '',
+            url: st?.url ?? '',
+            rpc: await rpcFor(pre),
+            checked: true,
+            staked: false
+          })
+      }
+      setRows(out)
+      if (seedAmount) {
+        const current = sr.rec ? Number(sr.rec.stake.amount) : 0
+        setAmount(String(Math.max(current, S().params.supMinStake || 0) / POKT))
+      }
+      return sr.rec
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [server, net, preselect, st?.operator, st?.url])
+    [server, net, preselect, st?.operator, st?.url]
+  )
 
+  // Seed once the catalog has loaded (the HTA's reads are synchronous, so it always has it);
+  // a later catalog refresh must not re-seed and discard the user's ticks.
+  const catalogLoaded = catalog !== null
   useEffect(() => {
-    void loadRows()
-  }, [loadRows, catalog, address])
+    if (catalogLoaded) void loadRows()
+  }, [loadRows, catalogLoaded])
 
   // refreshOperatorBalance()
   const refreshOp = useCallback(async () => {
@@ -334,7 +347,9 @@ function SupplierEditor({
   }, [operator, amount])
   useEffect(() => {
     void refreshOp()
-  }, [refreshOp])
+    // The HTA refreshes on open, server change, after fund, and after execute; not while typing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [server, net])
 
   const invalidate = (): void => setPlanOk(false)
   const setRow = (i: number, patch: Partial<SupplyRow>): void => {
@@ -612,11 +627,15 @@ function SupplierEditor({
         </div>
       ),
       token: f.server,
-      prompt: undefined,
+      prompt: (
+        <p>
+          Type the server name (<b>{f.server}</b>) to confirm.
+        </p>
+      ),
       mainOkLabel: 'Stake supplier on MainNet',
       betaText: `Stake ${fmtPokt(f.upokt)} POKT as the supplier on '${f.server}' for ${ids.join(', ')} on Beta TestNet now?`,
       betaOkLabel: 'Stake supplier'
-    } as Parameters<typeof confirmTx>[0])
+    })
     if (!ok) return
     setBusy(true)
     setPlanOk(false)
@@ -699,7 +718,7 @@ function SupplierEditor({
     void refreshBalance()
     void refreshOp()
     void loadHistory()
-    void loadRows()
+    void loadRows({ seedAmount: false, usePreselect: false })
   }
 
   const doFund = async (): Promise<void> => {
@@ -709,8 +728,8 @@ function SupplierEditor({
       setFundStatus
     )
     if (r.ok) {
+      await refreshOp()
       setFund('')
-      void refreshOp()
     }
   }
 
@@ -782,7 +801,7 @@ function SupplierEditor({
     if (!t.ok) return setUnstakeStatus(t.error ?? '', 'err')
     const v = await supplierRecord(op)
     setRec(v.rec)
-    void refreshNetwork()
+    await refreshNetwork()
     void loadHistory()
     void refreshBalance()
     const u = unbondingOf(S().params, v.rec)
@@ -823,7 +842,7 @@ function SupplierEditor({
               placeholder="pokt1..."
               maxLength={43}
               value={operator}
-              onChange={(e) => (setOperator(e.target.value), invalidate())}
+              onChange={(e) => setOperator(e.target.value)}
             />
             <div className="hint" id="supServerHint">
               Signs on {`${s.user}@${s.host}`} with the {label} operator keyring in{' '}
@@ -973,7 +992,7 @@ function SupplierEditor({
               min={0}
               step={1}
               value={amount}
-              onChange={(e) => (setAmount(e.target.value), invalidate())}
+              onChange={(e) => setAmount(e.target.value)}
             />
             <div className="hint" id="supHint">
               {params.supMinStake !== undefined

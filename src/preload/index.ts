@@ -81,16 +81,17 @@ const api = {
   files: {
     readServiceFolders: (): Promise<{ root: string | null; folders: ServiceFolder[] }> =>
       ipcRenderer.invoke('files:read-service-folders'),
-    readServiceFile: (id: string, name: ServiceFileName): Promise<string | null> =>
+    readServiceFile: (id: string, name: string): Promise<string | null> =>
       ipcRenderer.invoke('files:read-service-file', { id, name }),
     writeServiceFile: (id: string, name: ServiceFileName, text: string): Promise<boolean> =>
       ipcRenderer.invoke('files:write-service-file', { id, name }, text),
     fileExists: (p: string): Promise<boolean> => ipcRenderer.invoke('files:exists', p),
     dirExists: (p: string): Promise<boolean> => ipcRenderer.invoke('files:is-dir', p),
     readRelayTests: (): Promise<string> => ipcRenderer.invoke('files:read-relay-tests'),
-    appendRelayTest: (line: string): Promise<boolean> =>
+    appendRelayTest: (line: string): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke('files:append-relay-test', line),
-    clearRelayTests: (): Promise<boolean> => ipcRenderer.invoke('files:clear-relay-tests')
+    clearRelayTests: (): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('files:clear-relay-tests')
   },
   migration: {
     detect: (): Promise<HtaDetection> => ipcRenderer.invoke('migration:detect'),

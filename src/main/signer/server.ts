@@ -3,7 +3,8 @@
 import { join } from 'node:path'
 import { promises as fs } from 'node:fs'
 import { fail } from '@core/errors'
-import { NETWORK_INFO, CADDY_DIR } from '@core/networks'
+import { CADDY_DIR } from '@core/networks'
+import { measureBlockTime } from '@core/lcd'
 import {
   RE,
   requireNetwork,
@@ -99,7 +100,15 @@ export async function supplierShip(
   const rmp = num(req.relayer_metrics_port, 9090)
   const mmp = num(req.miner_metrics_port, 9092)
   let bt = Number.isFinite(toInt64(req.block_time)) ? toInt64(req.block_time) : 0
-  if (!(bt > 0)) bt = NETWORK_INFO[net].blockTimeFallbackSeconds
+  if (!(bt > 0)) {
+    // signer.ps1 fell back to a per-network constant here; live-data discipline (CLAUDE.md rule 1)
+    // means measuring it from the LCD instead, over the last 1,000 blocks as the UI does.
+    try {
+      bt = Math.max(1, Math.round((await measureBlockTime(net)).seconds))
+    } catch (e) {
+      fail(`Could not measure the block time from the network: ${(e as Error).message}`)
+    }
+  }
 
   const rendered = renderStack(await loadTemplates(), {
     network: net,

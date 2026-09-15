@@ -17,7 +17,8 @@ import {
   windowBoundsSchema,
   settingsPatchSchema,
   serviceFileSchema,
-  importSchema
+  importSchema,
+  serviceReadFileSchema
 } from './schemas'
 import { signer } from '../signer'
 import { readSettings, writeSettings } from '../state/settings'
@@ -134,8 +135,12 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     typeof p === 'string' && p.length < 2048 ? isDir(p) : false
   )
   ipcMain.handle('files:clear-relay-tests', async () => {
-    await fs.rm(join(dataDir(), 'relay-tests.log'), { force: true })
-    return true
+    try {
+      await fs.rm(join(dataDir(), 'relay-tests.log'), { force: true })
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
   })
 
   // Settings.
@@ -206,10 +211,14 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return { root, folders }
   })
   ipcMain.handle('files:read-service-file', async (_e, req: unknown) => {
-    const parsed = serviceFileSchema.safeParse(req)
+    const parsed = serviceReadFileSchema.safeParse(req)
     const root = await servicesRoot()
     if (!parsed.success || !root) return null
-    return readText(servicePath(root, parsed.data.id, parsed.data.name))
+    try {
+      return await readText(servicePath(root, parsed.data.id, parsed.data.name.replace(/\\/g, '/')))
+    } catch {
+      return null
+    }
   })
   ipcMain.handle('files:write-service-file', async (_e, req: unknown, text: unknown) => {
     const parsed = serviceFileSchema.safeParse(req)
@@ -224,13 +233,18 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     async () => (await readText(join(dataDir(), 'relay-tests.log'))) ?? ''
   )
   ipcMain.handle('files:append-relay-test', async (_e, line: unknown) => {
-    if (typeof line !== 'string' || line.length > 200_000) return false
-    await fs.appendFile(
-      join(dataDir(), 'relay-tests.log'),
-      line.replace(/\r?\n/g, ' ') + '\n',
-      'utf8'
-    )
-    return true
+    if (typeof line !== 'string' || line.length > 200_000)
+      return { ok: false, error: 'Invalid log line.' }
+    try {
+      await fs.appendFile(
+        join(dataDir(), 'relay-tests.log'),
+        line.replace(/\r?\n/g, ' ') + '\n',
+        'utf8'
+      )
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
   })
 
   // Migration.

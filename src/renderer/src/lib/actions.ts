@@ -22,12 +22,11 @@ import {
 import {
   balanceUpokt,
   application,
-  supplier,
   waitForTx,
   type ChainApplication,
   type ChainSupplier,
   type ChainService,
-  type LcdError
+  supplierLookup
 } from '@core/lcd'
 import { lcdTxUrl } from '@core/chain'
 import type { Settings } from '../../../preload/index'
@@ -322,7 +321,9 @@ export function tab(name: Screen): void {
   const sec = sectionOf(name)
   useStore.setState((s) => ({
     screen: name,
-    navOpen: sec.screens.length > 1 ? { ...s.navOpen, [sec.id]: true } : s.navOpen
+    navOpen: sec.screens.length > 1 ? { ...s.navOpen, [sec.id]: true } : s.navOpen,
+    // tab("supply") always resets to the suppliers list; openSupplier sets supOpen afterwards.
+    supOpen: name === 'supply' ? null : s.supOpen
   }))
   const c = document.getElementById('content')
   if (c) c.scrollTop = 0
@@ -374,7 +375,8 @@ export async function readManifestFor(id: string): Promise<Manifest | null> {
 export async function readCardFor(id: string): Promise<unknown | null> {
   const l = localById(id)
   if (!l) return null
-  const t = await psm().files.readServiceFile(l.folder, 'card.json')
+  // app.js testProbes: join(root, folder, m.card || "card.json")
+  const t = await psm().files.readServiceFile(l.folder, l.manifest?.card || 'card.json')
   if (t === null) return null
   try {
     return JSON.parse(t)
@@ -441,12 +443,7 @@ export interface SupplierLookup {
 
 export async function supplierRecord(op: string | undefined): Promise<SupplierLookup> {
   if (!/^pokt1[0-9a-z]{38}$/.test(op ?? '')) return { status: 0, rec: null }
-  try {
-    const rec = await supplier(S().net, op!)
-    return { status: rec ? 200 : 404, rec }
-  } catch (e) {
-    return { status: (e as LcdError).status ?? 0, rec: null }
-  }
+  return supplierLookup(S().net, op!)
 }
 
 export interface AppStakeHolder {

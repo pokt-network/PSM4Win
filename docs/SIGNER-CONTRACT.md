@@ -560,7 +560,7 @@ Request:
 | `health_port` | int | no | Default 8081. `app.js`: beta 8081, main 8082. |
 | `relayer_metrics_port` | int | no | Default 9090. `app.js`: beta 9090, main 9091. |
 | `miner_metrics_port` | int | no | Default 9092. `app.js`: beta 9092, main 9093. |
-| `block_time` | int | no | Seconds; when 0 or missing, 60 for main and 30 for beta. `app.js` sends `Math.round(state.params.blockTime || 0)` (measured over the last 1,000 blocks). |
+| `block_time` | int | no | Seconds. `app.js` sends `Math.round(state.params.blockTime || 0)` (measured over the last 1,000 blocks). `signer.ps1` fell back to 60 for main and 30 for beta when 0 or missing; the Electron signer measures it from the LCD over the last 1,000 blocks instead and fails the step when the network cannot be read (no chain value is typed in, CLAUDE.md rule 1). |
 
 Network-specific values hardcoded in the signer:
 
@@ -869,7 +869,7 @@ Windows argument quoting (`Quote-Arg`) for the docker/ssh/scp/robocopy/tar/pytho
 
 ### 6.8 Waiting for inclusion
 
-The signer returns at mempool acceptance. `app.js` `pollTx(hash, cb)` queries `<lcd>/cosmos/tx/v1beta1/txs/<hash>` every 3 s for up to 180 s; `tx_response.code === 0` -> `{ ok: true, height }`; non-zero -> `{ ok: false, error: "Failed in block <h> with code <c>: <raw_log>" }`; timeout -> "Not seen in a block after 3 minutes. Check the Activity tab later; the tx hash is <hash>." `supplier.sh publish` does its own inclusion wait on the server (5 s x 60). Beta blocks are about 30 s apart, MainNet about 60 s (these are the `block_time` fallbacks; the UI measures the real value over 1,000 blocks).
+The signer returns at mempool acceptance. `app.js` `pollTx(hash, cb)` queries `<lcd>/cosmos/tx/v1beta1/txs/<hash>` every 3 s for up to 180 s; `tx_response.code === 0` -> `{ ok: true, height }`; non-zero -> `{ ok: false, error: "Failed in block <h> with code <c>: <raw_log>" }`; timeout -> "Not seen in a block after 3 minutes. Check the Activity tab later; the tx hash is <hash>." `supplier.sh publish` does its own inclusion wait on the server (5 s x 60). The UI and the Electron signer measure the block time over the last 1,000 blocks; nothing assumes a fixed interval.
 
 ### 6.9 Timeouts (all in the UI today; none in the signer)
 
