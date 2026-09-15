@@ -87,7 +87,8 @@ class UpdateService {
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
       })
       if (res.status === 404) {
-        // No release published yet: nothing to offer.
+        // No release published yet (or the repository is not public yet): nothing to offer.
+        log.info('update check', { current: this.st.current, latest: null, available: false })
         this.release = null
         this.set({
           state: 'idle',
