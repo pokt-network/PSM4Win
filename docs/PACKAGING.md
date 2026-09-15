@@ -120,7 +120,9 @@ Rejected on the way here: a downloadable `.cmd` launcher that fetches the packag
 Four lines in the README, in this order. No administrator rights.
 
 ```powershell
-irm get.scoop.sh | iex                                        # once, if Scoop is not installed
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser   # once; Windows ships with scripts disabled
+irm get.scoop.sh | iex                                        # once, if Scoop is not installed (not as administrator)
+scoop install git                                             # once; buckets are git clones
 scoop bucket add pocket https://github.com/pokt-network/PSM4Win       # once
 scoop install pocket-service-manager
 scoop update pocket-service-manager                           # every later version

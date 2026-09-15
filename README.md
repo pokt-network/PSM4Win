@@ -8,10 +8,18 @@ It works with Claude Code: one click in Settings gives Claude the read-only Pock
 
 **Requirements:** Windows 10 or 11, 64-bit, and [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running. The Pocket tools run in containers; the app downloads them once.
 
-**With Scoop** (recommended: updates in place, and Windows raises no SmartScreen warning because nothing is downloaded through a browser):
+**With Scoop** (recommended: updates in place, and Windows raises no SmartScreen warning because nothing is downloaded through a browser). Open a normal PowerShell window, not one run as administrator, and run these one at a time:
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
 
 ```powershell
 irm get.scoop.sh | iex
+```
+
+```powershell
+scoop install git
 ```
 
 ```powershell
@@ -21,6 +29,8 @@ scoop bucket add pocket https://github.com/pokt-network/PSM4Win
 ```powershell
 scoop install pocket-service-manager
 ```
+
+The first line lets your own account run installers; Windows ships with that switched off. The third installs Git, which Scoop needs to add a bucket. Both are skipped on a machine that already has them.
 
 Later versions:
 
