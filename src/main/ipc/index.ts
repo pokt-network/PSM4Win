@@ -28,6 +28,7 @@ import { dataDir } from '../paths'
 import { log } from '../state/log'
 import { bridge } from '../bridge'
 import { resolveConfirmation } from '../bridge/confirm'
+import { serverStatus, addServer, removeServer } from '../bridge/claudeConfig'
 
 function bad(msg: string): { ok: false; error: string; detail: string } {
   return { ok: false, error: msg, detail: '' }
@@ -257,6 +258,22 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   })
   ipcMain.handle('bridge:rotate-token', () => bridge.rotateToken())
   ipcMain.handle('bridge:claude-add', () => bridge.addToClaudeCode())
+  // The remote read-only MCP server gets the same one-click registration, under the name "pocket".
+  const REMOTE_NAME = 'pocket'
+  const remoteEntry = { type: 'http' as const, url: MCP_ENDPOINT }
+  const remoteStatus = (error: string | null = null): Record<string, unknown> => ({
+    ...serverStatus(REMOTE_NAME, remoteEntry),
+    error
+  })
+  ipcMain.handle('claude:remote-status', () => remoteStatus())
+  ipcMain.handle('claude:remote-add', async () => {
+    const r = await addServer(REMOTE_NAME, remoteEntry)
+    return remoteStatus(r.ok ? null : r.error)
+  })
+  ipcMain.handle('claude:remote-remove', async () => {
+    const r = await removeServer(REMOTE_NAME)
+    return remoteStatus(r.ok ? null : r.error)
+  })
   ipcMain.handle('bridge:claude-remove', () => bridge.removeFromClaudeCode())
   ipcMain.handle('bridge:confirm-reply', (_e, id: unknown, approved: unknown) =>
     resolveConfirmation(id, approved)

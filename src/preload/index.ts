@@ -13,6 +13,9 @@ import type { Settings } from '../main/state/settings'
 import type { HtaDetection, ImportResult } from '../main/migration/importer'
 import type { BridgeStatus } from '../main/bridge'
 import type { BridgeConfirmRequest } from '../main/bridge/confirm'
+import type { ClaudeCodeStatus } from '../main/bridge/claudeConfig'
+
+export type RemoteClaudeStatus = ClaudeCodeStatus & { error: string | null }
 
 type SignerApi = {
   [K in SignerOp]: (req: SignerRequests[K], runId?: string) => Promise<SignerResult<K>>
@@ -95,6 +98,11 @@ const api = {
     clearRelayTests: (): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke('files:clear-relay-tests')
   },
+  claudeCode: {
+    remoteStatus: (): Promise<RemoteClaudeStatus> => ipcRenderer.invoke('claude:remote-status'),
+    addRemote: (): Promise<RemoteClaudeStatus> => ipcRenderer.invoke('claude:remote-add'),
+    removeRemote: (): Promise<RemoteClaudeStatus> => ipcRenderer.invoke('claude:remote-remove')
+  },
   bridge: {
     status: (): Promise<BridgeStatus> => ipcRenderer.invoke('bridge:status'),
     setEnabled: (enabled: boolean, port?: number): Promise<BridgeStatus> =>
@@ -134,7 +142,14 @@ const api = {
   }
 }
 
-export type { Settings, HtaDetection, ImportResult, BridgeStatus, BridgeConfirmRequest }
+export type {
+  Settings,
+  HtaDetection,
+  ImportResult,
+  BridgeStatus,
+  BridgeConfirmRequest,
+  ClaudeCodeStatus
+}
 export type PsmApi = typeof api
 
 contextBridge.exposeInMainWorld('psm', api)

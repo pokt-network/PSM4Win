@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useStore, S } from '../store'
 import { copy } from '../lib/actions'
 import type { Network } from '@core/networks'
+import type { RemoteClaudeStatus } from '../../../preload/index'
 import { RE } from '@core/validate'
 import { fmtPokt, fmtInt, shortAddr, POKT } from '@core/format'
 import {
@@ -863,11 +864,31 @@ function ClaudeIntegrationPanel(): React.JSX.Element {
   const appInfo = useStore((s) => s.appInfo)
   const endpoint = appInfo?.mcpEndpoint ?? ''
   const cli = `claude mcp add --transport http pocket ${endpoint}`
-  const mcpJson = JSON.stringify(
-    { mcpServers: { pocket: { type: 'http', url: endpoint } } },
-    null,
-    2
-  )
+  const [tabSel, setTabSel] = useState<'desktop' | 'terminal'>('desktop')
+  const [remote, setRemote] = useState<RemoteClaudeStatus | null>(null)
+  const [busy, setBusyLocal] = useState(false)
+  useEffect(() => {
+    void psm().claudeCode.remoteStatus().then(setRemote)
+  }, [])
+  const addRemote = async (): Promise<void> => {
+    setBusyLocal(true)
+    setRemote(await psm().claudeCode.addRemote())
+    setBusyLocal(false)
+  }
+  const removeRemote = async (): Promise<void> => {
+    if (
+      !(await confirmDialog(
+        'Remove the Pocket tools from Claude Code? They disappear from new sessions.',
+        'Remove',
+        'Remove from Claude Code',
+        'danger solid'
+      ))
+    )
+      return
+    setBusyLocal(true)
+    setRemote(await psm().claudeCode.removeRemote())
+    setBusyLocal(false)
+  }
   return (
     <div className="panel" id="claudePanel">
       <h2>Claude Integration</h2>
@@ -883,28 +904,86 @@ function ClaudeIntegrationPanel(): React.JSX.Element {
           Copy
         </button>
       </div>
-      <div className="row" style={{ marginTop: 10 }}>
-        <div>
-          <h2 style={{ fontSize: 14, marginTop: 6 }}>Claude Code (terminal)</h2>
+      <h2 style={{ fontSize: 14, marginTop: 14 }}>
+        Claude Code{' '}
+        {remote?.installed && remote.upToDate ? (
+          <Badge cls="ok">added</Badge>
+        ) : remote?.installed ? (
+          <Badge cls="warn">needs updating</Badge>
+        ) : (
+          <Badge cls="muted">not added</Badge>
+        )}
+      </h2>
+      <div className="subtabs" role="tablist">
+        <button
+          className={tabSel === 'desktop' ? 'on' : ''}
+          onClick={() => setTabSel('desktop')}
+          role="tab"
+        >
+          Desktop
+        </button>
+        <button
+          className={tabSel === 'terminal' ? 'on' : ''}
+          onClick={() => setTabSel('terminal')}
+          role="tab"
+        >
+          Terminal
+        </button>
+      </div>
+      {tabSel === 'desktop' ? (
+        <div className="subtab-body">
           <div className="hint">
-            Run once in any terminal, or add the project file below to the repository you work in.
+            One click gives Claude Code the Pocket tools on this PC, in the Claude desktop app's
+            Code tab and in a terminal alike. Then start a new session; when Claude asks about the
+            tools, choose <b>Always allow</b>: every one of them is read-only.
           </div>
+          {remote?.error ? <div className="dangerbox">{remote.error}</div> : null}
+          {remote?.unreadable ? (
+            <div className="dangerbox">
+              Claude Code's settings file could not be read, so the app will not change it (
+              {remote.path}).
+            </div>
+          ) : null}
+          <div className="btnrow">
+            {!remote?.installed || !remote.upToDate ? (
+              <button
+                className="btn small primary"
+                id="btnRemoteAdd"
+                disabled={busy || !remote || !!remote.unreadable}
+                onClick={addRemote}
+              >
+                {remote?.installed ? 'Update in Claude Code' : 'Add to Claude Code'}
+              </button>
+            ) : null}
+            {remote?.installed ? (
+              <button className="btn small" disabled={busy} onClick={removeRemote}>
+                Remove from Claude Code
+              </button>
+            ) : null}
+          </div>
+          <h2 style={{ fontSize: 13, marginTop: 14 }}>Also in Claude chat</h2>
+          <div className="hint">
+            The same tools work in the chat side of the Claude desktop app, as a connector:
+          </div>
+          <ol className="welcome-steps">
+            <li>Open Settings, then Connectors.</li>
+            <li>Choose Add custom connector.</li>
+            <li>Paste the endpoint above as the URL. No OAuth is needed.</li>
+            <li>
+              Open the connector's tool permissions and set them to <b>Always allow</b>.
+              <span className="sub">
+                The connector groups the read-only tools and its default differs from Claude Code.
+              </span>
+            </li>
+          </ol>
+        </div>
+      ) : (
+        <div className="subtab-body">
+          <div className="hint">Run once in any terminal; it applies to every folder.</div>
           <div className="filerow" style={{ marginTop: 6 }}>
             <input type="text" readOnly value={cli} className="mono" />
             <button className="btn small" onClick={() => copy(cli)}>
               Copy command
-            </button>
-          </div>
-          <div className="hint" style={{ marginTop: 8 }}>
-            Project file <span className="mono">.mcp.json</span>:
-          </div>
-          <div className="plan">
-            <div className="lbl">.mcp.json</div>
-            <pre>{mcpJson}</pre>
-          </div>
-          <div className="btnrow">
-            <button className="btn small" onClick={() => copy(mcpJson)}>
-              Copy .mcp.json
             </button>
           </div>
           <ul className="checks">
@@ -914,22 +993,7 @@ function ClaudeIntegrationPanel(): React.JSX.Element {
             </li>
           </ul>
         </div>
-        <div>
-          <h2 style={{ fontSize: 14, marginTop: 6 }}>Claude desktop app</h2>
-          <ol className="welcome-steps">
-            <li>Open Settings, then Connectors.</li>
-            <li>Choose Add custom connector.</li>
-            <li>Paste the endpoint above as the URL. No OAuth is needed.</li>
-            <li>
-              Open the connector's tool permissions and set them to <b>Always allow</b>.
-              <span className="sub">
-                The desktop connector groups the read-only tools and its default differs from Claude
-                Code.
-              </span>
-            </li>
-          </ol>
-        </div>
-      </div>
+      )}
       <BridgePanel />
     </div>
   )

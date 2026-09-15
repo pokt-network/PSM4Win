@@ -1091,3 +1091,33 @@ table.services .svcid {
 .help .help-body .kv {
   margin-top: 8px;
 }
+
+/* ---- Sub-tabs inside a panel (Settings, Claude Integration) ---- */
+.subtabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin: 8px 0 0 0;
+}
+.subtabs button {
+  background: none;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  padding: 6px 14px;
+  font-weight: 500;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.subtabs button:hover {
+  color: var(--fg);
+}
+.subtabs button.on {
+  color: var(--fg);
+  border-color: var(--border);
+  background: var(--surface);
+  margin-bottom: -1px;
+}
+.subtab-body {
+  padding-top: 10px;
+}

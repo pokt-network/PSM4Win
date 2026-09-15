@@ -22,10 +22,10 @@ export interface ClaudeCodeStatus {
   unreadable: boolean
 }
 
-interface ServerEntry {
+export interface ServerEntry {
   type: 'http'
   url: string
-  headers: { Authorization: string }
+  headers?: { Authorization: string }
 }
 
 export function claudeConfigPath(): string {
@@ -53,18 +53,22 @@ function readConfig(): {
   }
 }
 
-export function claudeCodeStatus(endpoint: string, token: string): ClaudeCodeStatus {
+/** Status of any named entry against what we would write for it. */
+export function serverStatus(name: string, want: ServerEntry): ClaudeCodeStatus {
   const { data, found, unreadable } = readConfig()
   const servers = (data?.mcpServers ?? {}) as Record<string, Partial<ServerEntry> | undefined>
-  const e = servers[CLAUDE_SERVER_NAME]
-  const want = entryFor(endpoint, token)
+  const e = servers[name]
   const installed = !!e
   const upToDate =
     installed &&
     e?.type === want.type &&
     e?.url === want.url &&
-    e?.headers?.Authorization === want.headers.Authorization
+    (e?.headers?.Authorization ?? undefined) === (want.headers?.Authorization ?? undefined)
   return { path: claudeConfigPath(), configFound: found, installed, upToDate, unreadable }
+}
+
+export function claudeCodeStatus(endpoint: string, token: string): ClaudeCodeStatus {
+  return serverStatus(CLAUDE_SERVER_NAME, entryFor(endpoint, token))
 }
 
 async function writeConfig(data: Record<string, unknown>): Promise<void> {
@@ -74,36 +78,46 @@ async function writeConfig(data: Record<string, unknown>): Promise<void> {
   await fs.rename(tmp, p)
 }
 
-/** Adds or refreshes our entry. Creates the file when Claude Code has never run here. */
-export async function addToClaudeCode(
-  endpoint: string,
-  token: string
+const UNREADABLE = (): { ok: false; error: string } => ({
+  ok: false,
+  error: `Claude Code's settings file could not be read as JSON; nothing was changed (${claudeConfigPath()}).`
+})
+
+/** Adds or refreshes one named entry. Creates the file when Claude Code has never run here. */
+export async function addServer(
+  name: string,
+  entry: ServerEntry
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { data, unreadable } = readConfig()
-  if (unreadable)
-    return {
-      ok: false,
-      error: `Claude Code's settings file could not be read as JSON; nothing was changed (${claudeConfigPath()}).`
-    }
+  if (unreadable) return UNREADABLE()
   const cfg = data ?? {}
   const servers = { ...((cfg.mcpServers as Record<string, unknown> | undefined) ?? {}) }
-  servers[CLAUDE_SERVER_NAME] = entryFor(endpoint, token)
+  servers[name] = entry
   await writeConfig({ ...cfg, mcpServers: servers })
   return { ok: true }
 }
 
-/** Removes our entry and nothing else. */
-export async function removeFromClaudeCode(): Promise<{ ok: true } | { ok: false; error: string }> {
+/** Removes one named entry and nothing else. */
+export async function removeServer(
+  name: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const { data, unreadable, found } = readConfig()
   if (!found || !data) return { ok: true }
-  if (unreadable)
-    return {
-      ok: false,
-      error: `Claude Code's settings file could not be read as JSON; nothing was changed (${claudeConfigPath()}).`
-    }
+  if (unreadable) return UNREADABLE()
   const servers = { ...((data.mcpServers as Record<string, unknown> | undefined) ?? {}) }
-  if (!(CLAUDE_SERVER_NAME in servers)) return { ok: true }
-  delete servers[CLAUDE_SERVER_NAME]
+  if (!(name in servers)) return { ok: true }
+  delete servers[name]
   await writeConfig({ ...data, mcpServers: servers })
   return { ok: true }
+}
+
+export function addToClaudeCode(
+  endpoint: string,
+  token: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  return addServer(CLAUDE_SERVER_NAME, entryFor(endpoint, token))
+}
+
+export function removeFromClaudeCode(): Promise<{ ok: true } | { ok: false; error: string }> {
+  return removeServer(CLAUDE_SERVER_NAME)
 }
