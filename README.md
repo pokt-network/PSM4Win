@@ -2,19 +2,19 @@
 
 ![The Dashboard on Beta TestNet, showing example data](docs/images/dashboard.png)
 
-A desktop app that takes an HTTP API from a folder on your PC to a live, paid service on [Pocket Network](https://pocket.network). It writes the service card, registers the service on chain, turns a server of yours into a supplier that serves it, stakes the supplier and an application wallet, and tests real relays through the protocol. Every step is a button. You never type a `pocketd` command.
+A desktop app that takes API enabled app code from a folder on your PC to a live, paid service on [Pocket Network](https://pocket.network). It writes the service card, registers the service on chain, turns a server of yours into a supplier that serves it, stakes the supplier and an application wallet, and tests real relays through the protocol. Every step is a button. You never type a `pocketd` command.
 
 It works with Claude Code: one click in Settings gives Claude the read-only Pocket tools, and one more lets Claude drive this app's own operations through a local bridge, with every spend still confirmed in the app window.
 
 **A note from Jinx:**
 
-One of the most common requests we get is an easier way for community members to interact with the protocol from a Windows desktop without needing to understand CLI and advanced server management. This app, paired with Claude Code, makes the entire process easy and painless. 
+*One of the most common requests we get is an easier way for community members to interact with the protocol from a Windows desktop without needing to understand CLI and advanced server management. This app, paired with Claude Code, makes the entire process easy and painless.* 
 
-But Windows, unfortunately, does not. Their current process to get a code signing certificate involves jumping through a lot of hoops, asking for things we don't have (like a publicly listed phone number), and paying for services we don't need. Because of this, we're opting to release this app through Scoop, which allows you to download it from a script instead of from a browser. That bypasses the need for a signing certificate. Setting up Scoop the first time on your machine is three cut and paste commands in Powershell, and downloading the app is two more. Five lines in CLI, and you never have to use it again.
+*But Windows, unfortunately, does not. Their current process to get a code signing certificate involves jumping through a lot of hoops, asking for things we don't have (like a publicly listed phone number), and paying for services we don't need. Because of this, we're opting to release this app through Scoop, which allows you to download it from a script instead of from a browser. That bypasses the need for a signing certificate. Setting up Scoop the first time on your machine is three cut and paste commands in Powershell, and downloading the app is two more. Five lines in CLI, and you never have to use it again.*
 
-We've worked hard to make this setup easy to use so that you can deploy your own data services on the network without being a sysadmin, but I'm sure you'll run into problems here and there. If you do, use the Issues tab up top to open a request, and we'll get to it as soon as we can. 
+*We've worked hard to make this setup easy to use so that you can deploy your own data services on the network without being a sysadmin, but I'm sure you'll run into problems here and there. If you do, use the Issues tab up top to open a request, and we'll get to it as soon as we can.* 
 
-Thanks. 
+*Thanks.* 
 
 ## Install
 
