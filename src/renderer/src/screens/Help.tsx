@@ -201,8 +201,8 @@ function WithClaude(): React.JSX.Element {
       </p>
       <p>
         Turn on the <b>local action bridge</b> under{' '}
-        <Go screen="settings">Settings, Claude Integration</Go> and follow the instructions there
-        for the Claude desktop app, or for a terminal. Status now:{' '}
+        <Go screen="settings">Settings, Claude Integration</Go>, press <b>Add to Claude Code</b>,
+        and start a new Claude Code session in the Claude desktop app or a terminal. Status now:{' '}
         {bridge?.running ? (
           <Badge cls="ok">on, port {bridge.port}</Badge>
         ) : (

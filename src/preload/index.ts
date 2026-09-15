@@ -100,6 +100,10 @@ const api = {
     setEnabled: (enabled: boolean, port?: number): Promise<BridgeStatus> =>
       ipcRenderer.invoke('bridge:set-enabled', enabled, port),
     rotateToken: (): Promise<BridgeStatus> => ipcRenderer.invoke('bridge:rotate-token'),
+    addToClaudeCode: (): Promise<BridgeStatus & { error: string | null }> =>
+      ipcRenderer.invoke('bridge:claude-add'),
+    removeFromClaudeCode: (): Promise<BridgeStatus & { error: string | null }> =>
+      ipcRenderer.invoke('bridge:claude-remove'),
     reply: (id: string, approved: boolean): Promise<boolean> =>
       ipcRenderer.invoke('bridge:confirm-reply', id, approved),
     onConfirm: (cb: (req: BridgeConfirmRequest) => void): (() => void) => {

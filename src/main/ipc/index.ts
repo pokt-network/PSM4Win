@@ -256,6 +256,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return bridge.setEnabled(enabled === true, p)
   })
   ipcMain.handle('bridge:rotate-token', () => bridge.rotateToken())
+  ipcMain.handle('bridge:claude-add', () => bridge.addToClaudeCode())
+  ipcMain.handle('bridge:claude-remove', () => bridge.removeFromClaudeCode())
   ipcMain.handle('bridge:confirm-reply', (_e, id: unknown, approved: unknown) =>
     resolveConfirmation(id, approved)
   )

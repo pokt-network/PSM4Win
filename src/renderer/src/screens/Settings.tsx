@@ -947,16 +947,31 @@ function BridgePanel(): React.JSX.Element {
   const port = portEdit ?? String(settings?.bridgePort ?? st?.port ?? '')
   const endpoint = st?.endpoint ?? ''
   const token = st?.token ?? ''
-  const cli = `claude mcp add --transport http psm ${endpoint} --header "Authorization: Bearer ${token}"`
-  const mcpJson = JSON.stringify(
-    {
-      mcpServers: {
-        psm: { type: 'http', url: endpoint, headers: { Authorization: `Bearer ${token}` } }
-      }
-    },
-    null,
-    2
-  )
+  const cc = st?.claudeCode
+  const [ccError, setCcError] = useState<string | null>(null)
+  const addToClaude = async (): Promise<void> => {
+    setBusyLocal(true)
+    const next = await psm().bridge.addToClaudeCode()
+    setCcError(next.error)
+    useStore.setState({ bridge: next })
+    setBusyLocal(false)
+  }
+  const removeFromClaude = async (): Promise<void> => {
+    if (
+      !(await confirmDialog(
+        'Remove the bridge from Claude Code? Its psm tools disappear from new sessions.',
+        'Remove',
+        'Remove from Claude Code',
+        'danger solid'
+      ))
+    )
+      return
+    setBusyLocal(true)
+    const next = await psm().bridge.removeFromClaudeCode()
+    setCcError(next.error)
+    useStore.setState({ bridge: next })
+    setBusyLocal(false)
+  }
   const toggle = async (): Promise<void> => {
     if (!st) return
     setBusyLocal(true)
@@ -1051,37 +1066,49 @@ function BridgePanel(): React.JSX.Element {
       </div>
       {st?.running ? (
         <>
-          <div className="hint" style={{ marginTop: 8 }}>
-            <b>Claude desktop app.</b> Open the Code tab on the folder you work in and save this as{' '}
-            <span className="mono">.mcp.json</span> in that folder. Claude Code finds it when the
-            session starts and asks you once to allow the server. The file holds the token, so keep
-            it out of version control.
+          <h2 style={{ fontSize: 14, marginTop: 14 }}>
+            Claude Code{' '}
+            {cc?.installed && cc.upToDate ? (
+              <Badge cls="ok">added</Badge>
+            ) : cc?.installed ? (
+              <Badge cls="warn">needs updating</Badge>
+            ) : (
+              <Badge cls="muted">not added</Badge>
+            )}
+          </h2>
+          <div className="hint">
+            One click registers the bridge with Claude Code on this PC, for the Claude desktop app's
+            Code tab and for a terminal alike. Then start a new Claude Code session: the psm tools
+            are there, and Claude may ask you once to allow them.
           </div>
-          <div className="plan">
-            <div className="lbl">.mcp.json</div>
-            <pre>{mcpJson}</pre>
-          </div>
+          {ccError ? <div className="dangerbox">{ccError}</div> : null}
+          {cc?.unreadable ? (
+            <div className="dangerbox">
+              Claude Code's settings file could not be read, so the app will not change it (
+              {cc.path}).
+            </div>
+          ) : null}
           <div className="btnrow">
-            <button className="btn small" onClick={() => copy(mcpJson)}>
-              Copy .mcp.json
-            </button>
+            {!cc?.installed || !cc.upToDate ? (
+              <button
+                className="btn small primary"
+                id="btnClaudeAdd"
+                disabled={busy || !!cc?.unreadable}
+                onClick={addToClaude}
+              >
+                {cc?.installed ? 'Update in Claude Code' : 'Add to Claude Code'}
+              </button>
+            ) : null}
+            {cc?.installed ? (
+              <button className="btn small" disabled={busy} onClick={removeFromClaude}>
+                Remove from Claude Code
+              </button>
+            ) : null}
           </div>
-          <div className="hint" style={{ marginTop: 8 }}>
-            <b>Terminal.</b> If you run Claude Code from a terminal instead, this one command
-            registers the bridge for every folder:
+          <div className="hint">
+            Writes one entry into Claude Code's own settings file in your user folder and changes
+            nothing else there. Rotating the token updates it.
           </div>
-          <div className="filerow" style={{ marginTop: 6 }}>
-            <input type="text" readOnly value={cli} className="mono" />
-            <button className="btn small" onClick={() => copy(cli)}>
-              Copy command
-            </button>
-          </div>
-          <ul className="checks">
-            <li className="info">
-              The bridge works with Claude Code only, in the Claude desktop app's Code tab or in a
-              terminal.
-            </li>
-          </ul>
         </>
       ) : null}
     </div>

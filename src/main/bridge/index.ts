@@ -28,6 +28,12 @@ import { dataDir } from '../paths'
 import { log } from '../state/log'
 import { createBridgeHttpServer, BRIDGE_HOST, BRIDGE_PATH } from './server'
 import { confirmInWindow } from './confirm'
+import {
+  claudeCodeStatus,
+  addToClaudeCode,
+  removeFromClaudeCode,
+  type ClaudeCodeStatus
+} from './claudeConfig'
 
 export interface BridgeStatus {
   enabled: boolean
@@ -37,6 +43,8 @@ export interface BridgeStatus {
   /** The bearer token; shown in Settings so the user can paste it into a client config. */
   token: string
   error: string | null
+  /** Whether Claude Code's user settings carry our entry, and whether it is current. */
+  claudeCode: ClaudeCodeStatus
 }
 
 function tokenPath(): string {
@@ -69,8 +77,38 @@ class BridgeService {
     this.token = randomBytes(32).toString('hex')
     await writeText(tokenPath(), this.token + '\n')
     log.info('bridge token rotated')
+    await this.refreshClaudeCode()
     this.notify()
     return this.status()
+  }
+
+  /** Claude Code keeps a copy of the endpoint and token; when ours changes, update it. */
+  private async refreshClaudeCode(): Promise<void> {
+    const c = claudeCodeStatus(this.endpoint(), this.token)
+    if (c.installed && !c.upToDate) {
+      const r = await addToClaudeCode(this.endpoint(), this.token)
+      if (!r.ok) log.error('claude code entry refresh failed', { error: r.error })
+    }
+  }
+
+  private endpoint(): string {
+    return `http://${BRIDGE_HOST}:${this.port}${BRIDGE_PATH}`
+  }
+
+  async addToClaudeCode(): Promise<BridgeStatus & { error: string | null }> {
+    const r = await addToClaudeCode(this.endpoint(), this.token)
+    if (!r.ok) log.error('claude code add failed', { error: r.error })
+    else log.info('claude code entry written')
+    this.notify()
+    return { ...this.status(), error: r.ok ? this.error : r.error }
+  }
+
+  async removeFromClaudeCode(): Promise<BridgeStatus & { error: string | null }> {
+    const r = await removeFromClaudeCode()
+    if (!r.ok) log.error('claude code remove failed', { error: r.error })
+    else log.info('claude code entry removed')
+    this.notify()
+    return { ...this.status(), error: r.ok ? this.error : r.error }
   }
 
   status(): BridgeStatus {
@@ -78,9 +116,10 @@ class BridgeService {
       enabled: this.server !== null || this.error !== null ? this.server !== null : false,
       running: this.server !== null,
       port: this.port,
-      endpoint: `http://${BRIDGE_HOST}:${this.port}${BRIDGE_PATH}`,
+      endpoint: this.endpoint(),
       token: this.token,
-      error: this.error
+      error: this.error,
+      claudeCode: claudeCodeStatus(this.endpoint(), this.token)
     }
   }
 
@@ -89,6 +128,7 @@ class BridgeService {
     await writeSettings({ bridgeEnabled: enabled, bridgePort: this.port })
     if (enabled) await this.start()
     else await this.stop()
+    if (enabled) await this.refreshClaudeCode()
     return this.status()
   }
 
