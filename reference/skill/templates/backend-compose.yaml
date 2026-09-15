@@ -1,0 +1,21 @@
+# {{SERVICE_ID}} backend on the supplier host. Starts only the backend container and
+# joins the supplier stack's network (templates/ha/docker-compose.yaml), where the
+# relayer reaches it as http://{{SERVICE_ID}}-backend:8080. Nothing is exposed to the
+# internet. Put it in /opt/pocket/services/{{SERVICE_ID}}/deploy/ next to backend/.
+#
+#   docker compose -p {{SERVICE_ID}} up -d --build
+
+services:
+  backend:
+    build: ../backend
+    image: {{SERVICE_ID}}-backend:latest
+    container_name: {{SERVICE_ID}}-backend
+    restart: unless-stopped
+    expose:
+      - "8080"
+    networks: [supplier]
+
+networks:
+  supplier:
+    external: true
+    name: pocket-supplier

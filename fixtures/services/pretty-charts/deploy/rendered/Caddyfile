@@ -1,0 +1,12 @@
+# TLS termination in front of the RelayMiner for pretty-charts.
+# Caddy fetches and renews a publicly trusted certificate automatically.
+# The public https URL below is what you stake as the supplier's endpoint.
+# Do NOT add auth here; every relay is already signed.
+
+services.agentdata.network {
+	reverse_proxy 127.0.0.1:8080
+	# Relay bodies can be large; do not buffer or cap below the RelayMiner's limit.
+	request_body {
+		max_size 20MB
+	}
+}

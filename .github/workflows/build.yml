@@ -1,0 +1,52 @@
+name: build
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npx electron-builder --win --publish never
+        env:
+          # Signing credentials go here when they exist; see docs/PACKAGING.md section 3.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - run: node scripts/checksums.mjs release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: |
+            release/*.exe
+            release/*.zip
+            release/SHA256SUMS
+      - name: Attach to the GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/*.exe
+            release/*.zip
+            release/SHA256SUMS
+      - name: Update the Scoop bucket
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          node scripts/update-bucket.mjs "$VERSION" release/SHA256SUMS "${{ github.repository }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout main
+          git add bucket/pocket-service-manager.json
+          git commit -m "Bucket: $VERSION" || echo "no bucket change"
+          git push origin main
+  # macos:  # phase 3: runs-on macos-latest, DMG, notarisation

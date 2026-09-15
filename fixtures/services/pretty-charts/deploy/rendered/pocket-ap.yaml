@@ -1,0 +1,19 @@
+# pocket-ap client config for testing pretty-charts on beta.
+# Install:  go install github.com/pokt-network/pocket-ap/cmd/pocket-ap@latest
+#           (or: brew install pokt-network/tap/pocket-ap)
+# Run a one-shot relay (key comes from the environment, not this file):
+#   POCKET_APP_PRIVATE_KEY=<64-hex app key> pocket-ap call \
+#     --config ./pocket-ap.yaml --service pretty-charts --rpc-type rest \
+#     -X POST --path /v1/REPLACE-resource -d '{"...":"..."}' -v
+#
+# --compare <backend-url> sends the same request straight to your backend and diffs
+# the two answers: the fastest way to catch a path-prefix or content-type mistake.
+#
+# No gateway and no delegation are needed; an application signs for its own ring.
+
+network: beta
+listeners:
+  - addr: 127.0.0.1:8550
+    service_id: pretty-charts
+    rpc_type: rest
+apps: []          # empty: the key is read from POCKET_APP_PRIVATE_KEY

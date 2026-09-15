@@ -1,0 +1,32 @@
+# SAGE gateway configuration for {{SERVICE_ID}}. Publish this with the service docs.
+# Gateways do NOT read the service card, so an operator must add this by hand or
+# SAGE refuses {{RPC_TYPE_LOWER}} requests for the service with a 400 before any
+# session lookup. Keep the health checks in sync with the card's serving.healthcheck.
+gateway_config:
+  services:
+    - id: {{SERVICE_ID}}
+      type: passthrough            # relays and scores; understands no payload semantics
+      rpc_types: ["{{RPC_TYPE_LOWER}}"]
+      timeout_config:
+        relay_timeout: {{RELAY_TIMEOUT}}
+  active_health_checks:
+    local:
+      - service_id: {{SERVICE_ID}}
+        enabled: true
+        checks:
+          - name: version
+            type: {{RPC_TYPE_LOWER}}
+            method: GET
+            path: {{VERSION_PATH}}
+            expected_status_code: 200
+            reputation_signal: critical_error
+            timeout: 5s
+          - name: health
+            type: {{RPC_TYPE_LOWER}}
+            method: GET
+            path: {{HEALTH_PATH}}
+            expected_status_code: 200
+            reputation_signal: major_error
+            timeout: 5s
+        # Do NOT add sync_check or sync_allowance to a non-blockchain service:
+        # they assume a block height and mark every healthy supplier as failing.

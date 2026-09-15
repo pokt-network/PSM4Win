@@ -1,0 +1,67 @@
+# Supplier stack for {{NETWORK}}, written by the Pocket Service Manager: one HA
+# RelayMiner (redis + miner + relayer) serving every service this stack's supplier is
+# staked for. A server holds one stack per network, each in its own directory with
+# its own operator key; TLS is the server's shared Caddy (see the caddy directory),
+# which reaches the relayer by container name on the shared "pocket-supplier"
+# network. Service backends run from their own compose files under the deploy root
+# and join that same network, so one backend container serves both networks.
+# Redis and the miner stay on this stack's private network. Nothing here is exposed
+# to the internet. The relayer starts once the first service is added (it refuses an
+# empty list).
+
+name: {{PROJECT}}
+
+services:
+  redis:
+    image: redis:8.4-alpine
+    container_name: {{PROJECT}}-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks: [internal]
+
+  miner:
+    image: ghcr.io/pokt-network/pocket-relay-miner:rc
+    container_name: {{PROJECT}}-miner
+    restart: unless-stopped
+    command: ["miner", "--config", "/config/config.yaml"]
+    volumes:
+      - ./miner-config.yaml:/config/config.yaml:ro
+      - ./supplier-keys.yaml:/keys/supplier-keys.yaml:ro
+    ports:
+      - "127.0.0.1:{{MINER_METRICS_PORT}}:9092"
+    depends_on:
+      redis: { condition: service_healthy }
+    networks: [internal]
+
+  relayer:
+    image: ghcr.io/pokt-network/pocket-relay-miner:rc
+    container_name: {{PROJECT}}-relayer
+    restart: unless-stopped
+    command: ["relayer", "--config", "/config/config.yaml"]
+    volumes:
+      - ./relayer-config.yaml:/config/config.yaml:ro
+      - ./supplier-keys.yaml:/keys/supplier-keys.yaml:ro
+    expose:
+      - "8080"
+    ports:
+      - "127.0.0.1:{{HEALTH_PORT}}:8081"
+      - "127.0.0.1:{{RELAYER_METRICS_PORT}}:9090"
+    depends_on:
+      redis: { condition: service_healthy }
+    networks: [internal, supplier]
+
+networks:
+  internal: {}
+  supplier:
+    name: pocket-supplier
+    external: true
+
+volumes:
+  redis-data:

@@ -1,0 +1,73 @@
+openapi: 3.1.0
+info:
+  title: {{SERVICE_NAME}} API
+  version: 1.0.0
+  description: >
+    {{SERVICE_ID}} on Pocket Network. Every response is a JSON object; any non-JSON
+    output is carried as a string field. All inputs arrive in the request body.
+    Callers cannot send request headers through a gateway, and errors are 4xx with
+    a JSON body. Publish this document at a version-addressed URL and reference it
+    from the service card's specs[].
+servers:
+  - url: /
+paths:
+  {{VERSION_PATH}}:
+    get:
+      summary: Service identity (health-check identity probe)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [service, version]
+                properties:
+                  service: { type: string, example: "{{SERVICE_ID}}" }
+                  version: { type: string, example: "1.0.0" }
+  {{HEALTH_PATH}}:
+    get:
+      summary: Readiness (health-check readiness probe)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, example: "ok" }
+  /v1/REPLACE-resource:
+    post:
+      summary: REPLACE the primary operation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: All inputs go here; do not rely on query params or headers.
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                description: >
+                  A JSON object. If the payload is not itself JSON (HTML, CSV, an
+                  image), carry it as a string field, e.g. {content_type, body}.
+        "400":
+          description: Bad input (return 4xx with a JSON error, never 5xx or HTML)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string }
+                      message: { type: string }

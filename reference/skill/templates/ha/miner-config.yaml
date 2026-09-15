@@ -1,0 +1,45 @@
+# HA RelayMiner miner config for the supplier on {{NETWORK}} (one per server; it
+# claims for every service the supplier serves, {{SERVICE_ID}} included).
+# The miner consumes served relays from Redis, builds claims/proofs, and submits
+# them on-chain. One elected leader submits; standbys wait. Keep the operator
+# account funded: claims and proofs are on-chain transactions.
+
+redis:
+  url: "redis://redis:6379"
+  claim_idle_timeout_ms: 60000
+
+pocket_node:
+  chain_id: "{{CHAIN_ID}}"
+  query_node_rpc_url: "{{RPC_URL}}"
+  query_node_grpc_url: "{{GRPC_URL}}"
+  grpc_insecure: false
+  query_timeout_seconds: 5
+
+keys:
+  keys_file: "/keys/supplier-keys.yaml"
+
+# Beta blocks are ~60s in this example config's origin; set to your network's block time.
+block_time_seconds: 60
+
+balance_monitor:
+  enabled: true
+  check_interval_seconds: 300
+  balance_threshold_upokt: 10000
+
+transaction:
+  gas_limit: 0                 # 0 = auto-estimate
+  gas_price: "0.000001upokt"
+  gas_adjustment: 1.7
+
+leader_election:
+  leader_ttl_seconds: 30
+  heartbeat_rate_seconds: 10
+
+metrics:
+  enabled: true
+  addr: "0.0.0.0:9092"
+
+logging:
+  level: "info"
+  format: "json"
+  output: "stdout"

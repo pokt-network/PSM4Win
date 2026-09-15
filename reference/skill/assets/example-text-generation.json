@@ -1,0 +1,53 @@
+{
+  "schema": "pocket-service-card/v1",
+  "description": "OpenAI-API-compatible text generation. The expected endpoints are POST /v1/chat/completions and GET /v1/models; suppliers MAY expose more of the OpenAI surface but consumers MUST NOT depend on it. Address the model as \"pocket_network\". Each supplier brings its own model and weights, so response quality varies and is not guaranteed by the protocol.",
+  "rpc_types": [
+    {
+      "type": "REST",
+      "intent": "expected",
+      "backend_hint": "OpenAI-compatible server on :8000 (vLLM); mount at /",
+      "notes": "Only POST /v1/chat/completions and GET /v1/models are expected. Token streaming is SSE over the same POST (\"stream\": true), not a separate transport."
+    }
+  ],
+  "apis": [
+    "openai-chat-completions",
+    "openai-models"
+  ],
+  "specs": [
+    {
+      "kind": "markdown",
+      "url": "https://raw.githubusercontent.com/pnyxai/pocket-network-services/88b583cbfc60f44edc8adaee2bae59f62a4e5f94/mainnet/docs_text-generation.md",
+      "sha256": "d83f2b125a38d68b3274d996718bcdea42c78bea0939206d8993f86b35490f52"
+    }
+  ],
+  "access": "public",
+  "results": "variable",
+  "serving": {
+    "backend": "Any OpenAI-compatible inference server exposing POST /v1/chat/completions and GET /v1/models. Bring your own model; no specific weights are mandated. The served model MUST answer to the name \"pocket_network\".",
+    "healthcheck": [
+      {
+        "rpc_type": "REST",
+        "request": {
+          "path": "/v1/chat/completions",
+          "method": "POST",
+          "body": {
+            "model": "pocket_network",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Reply with the single word: pong"
+              }
+            ],
+            "max_tokens": 8,
+            "temperature": 0
+          }
+        },
+        "expect": {
+          "json_path": "$.choices[0].message.content",
+          "matches": "(?i)pong"
+        }
+      }
+    ],
+    "notes": "Use a server with continuous batching so one backend serves many concurrent generations. Alias the served model as \"pocket_network\". It is recommended to isolate the model behind pokt-ml-sidecar and serve SSE streaming through the HA RelayMiner. See the CONNECTION.md in specs[0] for the full runbook."
+  }
+}

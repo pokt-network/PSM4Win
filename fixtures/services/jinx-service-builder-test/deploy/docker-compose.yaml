@@ -1,0 +1,20 @@
+# jinx-service-builder-test backend on the supplier host. Joins the supplier stack's
+# network (see servers/cherry/); the relayer reaches it as
+# http://jinx-service-builder-test-backend:8080. Nothing here is exposed publicly.
+#
+#   docker compose -p jinx-service-builder-test -f docker-compose.yaml up -d --build
+
+services:
+  backend:
+    build: ../backend
+    image: jinx-service-builder-test-backend:latest
+    container_name: jinx-service-builder-test-backend
+    restart: unless-stopped
+    expose:
+      - "8080"
+    networks: [supplier]
+
+networks:
+  supplier:
+    external: true
+    name: pocket-supplier

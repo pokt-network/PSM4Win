@@ -1,0 +1,13 @@
+# Application stake config for testing {{SERVICE_ID}} on {{NETWORK}}.
+# Stake with:
+#   pocketd tx application stake-application --config ./app_stake_config.yaml \
+#     --from {{APP_KEY_NAME}} --network={{NETWORK}} \
+#     --gas auto --gas-prices 1upokt --gas-adjustment 1.5
+#
+# An application stakes for EXACTLY ONE service. stake_amount must be at least the
+# live application min_stake:  pocketd query application params --network={{NETWORK}}
+# The stake is drawn down as relays settle; top it up to keep testing.
+
+stake_amount: {{APP_STAKE_AMOUNT_UPOKT}}upokt
+service_ids:
+  - {{SERVICE_ID}}

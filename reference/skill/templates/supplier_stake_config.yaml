@@ -1,0 +1,27 @@
+# Supplier stake config for {{SERVICE_ID}} on {{NETWORK}}.
+# Stake with:
+#   pocketd tx supplier stake-supplier --config ./supplier_stake_config.yaml \
+#     --from {{OPERATOR_KEY_NAME}} --network={{NETWORK}} \
+#     --gas auto --gas-prices 1upokt --gas-adjustment 1.5
+#
+# Before staking, send any tx from the operator account once so its public key is
+# on-chain, or gateways will reject its signed responses.
+#
+# stake_amount must be at least the live supplier min_stake. Re-check it:
+#   pocketd query supplier params --network={{NETWORK}}
+
+owner_address: {{OWNER_ADDRESS}}
+operator_address: {{OPERATOR_ADDRESS}}
+stake_amount: {{STAKE_AMOUNT_UPOKT}}upokt
+
+# Revenue split; addresses must sum to exactly 100. 100% to owner by default.
+default_rev_share_percent:
+  {{OWNER_ADDRESS}}: 100
+
+services:
+  - service_id: {{SERVICE_ID}}
+    endpoints:
+      # rpc_type MUST match the card's rpc_types[].type, or clients of that
+      # transport never see this endpoint.
+      - publicly_exposed_url: {{PUBLIC_URL}}
+        rpc_type: {{RPC_TYPE}}

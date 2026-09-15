@@ -1,0 +1,26 @@
+# Entry for the PNF public gateway's probe file, pocket-health-checks.yaml in
+# pokt-network/pocket-network-resources. Open a PR adding this block so the public
+# gateway at api.pocket.network probes and routes pretty-charts correctly. This is
+# PATH-era format; SAGE uses sage-service.yaml instead. There is no other documented
+# path for a non-PNF service to be probed by the public gateway.
+- service_id: pretty-charts
+  check_interval: 30s
+  enabled: true
+  # No sync_allowance / sync_check: this is not a blockchain service and has no height.
+  checks:
+    - name: version
+      type: rest
+      method: GET
+      path: /v1/version
+      expected_status_code: 200
+      expected_response_contains: '"service"'
+      timeout: 5s
+      reputation_signal: critical_error
+    - name: health
+      type: rest
+      method: GET
+      path: /healthz
+      expected_status_code: 200
+      expected_response_contains: '"status"'
+      timeout: 5s
+      reputation_signal: major_error

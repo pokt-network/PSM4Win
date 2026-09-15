@@ -1,0 +1,66 @@
+# The supplier stack: one HA RelayMiner (redis + miner + relayer) per SERVER, serving
+# every service the supplier is staked for. Do not run one stack per service. Put
+# this in a server-level folder (e.g. /opt/pocket/supplier) with relayer-config.yaml,
+# miner-config.yaml, and supplier-keys.yaml; run each service's backend from its own
+# compose file (templates/backend-compose.yaml) joined to the "pocket-supplier"
+# network, and give it one `services:` entry in relayer-config.yaml.
+#
+#   docker compose -p pocket-supplier up -d
+#
+# Put a TLS reverse proxy in front of the relayer's :8080 (templates/Caddyfile) and
+# stake that https URL for every service. Health and metrics stay on loopback.
+
+name: pocket-supplier
+
+services:
+  redis:
+    image: redis:8.4-alpine
+    container_name: pocket-supplier-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data                 # session trees live here; losing it forfeits unclaimed relays
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks: [supplier]
+
+  miner:
+    image: ghcr.io/pokt-network/pocket-relay-miner:rc
+    container_name: pocket-supplier-miner
+    restart: unless-stopped
+    command: ["miner", "--config", "/config/config.yaml"]
+    volumes:
+      - ./miner-config.yaml:/config/config.yaml:ro
+      - ./supplier-keys.yaml:/keys/supplier-keys.yaml:ro
+    ports:
+      - "127.0.0.1:9092:9092"            # metrics, loopback only
+    depends_on:
+      redis: { condition: service_healthy }
+    networks: [supplier]
+
+  relayer:
+    image: ghcr.io/pokt-network/pocket-relay-miner:rc
+    container_name: pocket-supplier-relayer
+    restart: unless-stopped
+    command: ["relayer", "--config", "/config/config.yaml"]
+    volumes:
+      - ./relayer-config.yaml:/config/config.yaml:ro
+      - ./supplier-keys.yaml:/keys/supplier-keys.yaml:ro
+    expose:
+      - "8080"
+    ports:
+      - "127.0.0.1:8081:8081"            # health, loopback only
+      - "127.0.0.1:9090:9090"            # metrics, loopback only
+    depends_on:
+      redis: { condition: service_healthy }
+    networks: [supplier]
+
+networks:
+  supplier:
+    name: pocket-supplier
+
+volumes:
+  redis-data:

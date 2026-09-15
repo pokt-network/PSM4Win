@@ -1,0 +1,12 @@
+# {{NETWORK}} supplier stack "{{PROJECT}}", written by the Pocket Service Manager.
+# Imported by the server's shared Caddy. The supplier stakes https://{{HOSTNAME}} for
+# every service it serves on {{NETWORK}}; the relayer routes by the service id inside
+# each relay. Caddy fetches and renews the certificate; the DNS record must already
+# point at this server.
+
+{{HOSTNAME}} {
+	reverse_proxy {{PROJECT}}-relayer:8080
+	request_body {
+		max_size 20MB
+	}
+}

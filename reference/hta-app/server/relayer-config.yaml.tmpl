@@ -1,0 +1,38 @@
+# HA RelayMiner relayer config, written by the Pocket Service Manager for {{NETWORK}}.
+# One entry under `services:` per service this supplier serves; the app adds them
+# when a service is deployed (supplier.sh add-service).
+
+listen_addr: "0.0.0.0:8080"
+
+redis:
+  url: "redis://{{PROJECT}}-redis:6379"
+
+keys:
+  keys_file: "/keys/supplier-keys.yaml"
+
+pocket_node:
+  chain_id: "{{CHAIN_ID}}"
+  query_node_rpc_url: "{{RPC_URL}}"
+  query_node_grpc_url: "{{GRPC_URL}}"
+  grpc_insecure: false
+
+services: {}
+
+default_request_timeout_seconds: 30
+default_max_body_size_bytes: 20971520
+
+health_check:
+  enabled: true
+  addr: "0.0.0.0:8081"
+
+timeout_profiles:
+  fast:
+    request_timeout_seconds: 30
+    response_header_timeout_seconds: 30
+    dial_timeout_seconds: 5
+    tls_handshake_timeout_seconds: 10
+  streaming:
+    request_timeout_seconds: 600
+    response_header_timeout_seconds: 0
+    dial_timeout_seconds: 10
+    tls_handshake_timeout_seconds: 15

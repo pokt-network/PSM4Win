@@ -1,0 +1,37 @@
+# The server's shared Caddy, written by the Pocket Service Manager. One Caddy per
+# server terminates TLS for every supplier stack on it: each network's stack drops a
+# site file into sites/ that maps its public hostname to its relayer container on the
+# shared "pocket-supplier" network. Only this container is exposed to the internet.
+
+name: pocket-caddy
+
+services:
+  caddy:
+    image: caddy:2
+    container_name: pocket-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./sites:/etc/caddy/sites:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [supplier]
+
+networks:
+  supplier:
+    name: pocket-supplier
+    external: true
+
+# Created by supplier.sh before the first start, so certificates carried over from
+# an older per-stack Caddy land in the same volume Compose mounts.
+volumes:
+  caddy_data:
+    name: pocket-caddy_data
+    external: true
+  caddy_config:
+    name: pocket-caddy_config
+    external: true

@@ -1,0 +1,26 @@
+# pocket-ap client config for testing {{SERVICE_ID}} on {{NETWORK}}.
+# Run it as a container (works on any OS with Docker; the key travels only in the
+# container's environment):
+#   docker run --rm -e POCKET_APP_PRIVATE_KEY -v "$PWD:/work:ro" ghcr.io/pokt-network/pocket-ap:latest \
+#     call --config /work/pocket-ap.yaml --service {{SERVICE_ID}} --rpc-type {{RPC_TYPE_LOWER}} \
+#     -X POST --path /v1/REPLACE-resource --data @/work/body.json -v
+# Or install it:  go install github.com/pokt-network/pocket-ap/cmd/pocket-ap@latest
+#                 (or: brew install pokt-network/tap/pocket-ap)
+#   POCKET_APP_PRIVATE_KEY=<64-hex app key> pocket-ap call \
+#     --config ./pocket-ap.yaml --service {{SERVICE_ID}} --rpc-type {{RPC_TYPE_LOWER}} \
+#     -X POST --path /v1/REPLACE-resource -d '{"...":"..."}' -v
+# Output: response body on stdout verbatim; diagnostics (session, supplier, latency,
+# "upstream returned HTTP <code>" for a backend 4xx/5xx) on stderr with -v.
+# The application account must be staked for exactly this one service.
+#
+# --compare <backend-url> sends the same request straight to your backend and diffs
+# the two answers: the fastest way to catch a path-prefix or content-type mistake.
+#
+# No gateway and no delegation are needed; an application signs for its own ring.
+
+network: {{NETWORK}}
+listeners:
+  - addr: 127.0.0.1:8550
+    service_id: {{SERVICE_ID}}
+    rpc_type: {{RPC_TYPE_LOWER}}
+apps: []          # empty: the key is read from POCKET_APP_PRIVATE_KEY

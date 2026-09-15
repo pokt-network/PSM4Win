@@ -1,0 +1,15 @@
+# edit-service batch file for {{SERVICE_ID}}. Publish (create or update) with:
+#   pocketd tx service edit-service --config ./services.yaml \
+#     --from {{OWNER_KEY_NAME}} --network={{NETWORK}} \
+#     --gas auto --gas-prices 1upokt --gas-adjustment 1.5
+#
+# A service is skipped when both its price and its card already match on-chain, so
+# this is safe to run repeatedly and to keep in version control.
+#
+# WARNING: the compute_units_per_relay below reprices the service for everyone.
+# Re-read the live value before every publish:
+#   pocketd query service show-service {{SERVICE_ID}} --network={{NETWORK}}
+services:
+  - service_id: {{SERVICE_ID}}
+    compute_units_per_relay: {{COMPUTE_UNITS_PER_RELAY}}
+    card_file: ./card.json

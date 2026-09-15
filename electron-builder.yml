@@ -1,0 +1,40 @@
+appId: network.pocket.servicemanager
+productName: Pocket Service Manager
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**
+  - package.json
+extraResources:
+  - from: resources/server
+    to: server
+  - from: resources/fonts
+    to: fonts
+asar: true
+npmRebuild: false
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: zip
+      arch: [x64]
+  icon: build/pocket.ico
+  artifactName: PocketServiceManager-${version}-win-${arch}.${ext}
+  # Code signing stays unset until credentials exist. See docs/PACKAGING.md section 3.
+  # azureSignOptions:
+  #   endpoint: https://<region>.codesigning.azure.net
+  #   codeSigningAccountName: <account>
+  #   certificateProfileName: <profile>
+  # or: sign: ./build/sign.js
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Pocket Service Manager
+  artifactName: PocketServiceManager-Setup-${version}.${ext}
+  deleteAppDataOnUninstall: false
+# mac:  # phase 3
+publish: null

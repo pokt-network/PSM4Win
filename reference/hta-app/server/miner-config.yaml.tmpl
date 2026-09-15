@@ -1,0 +1,41 @@
+# HA RelayMiner miner config, written by the Pocket Service Manager for {{NETWORK}}.
+# The miner claims and proves for every service this supplier serves.
+
+redis:
+  url: "redis://{{PROJECT}}-redis:6379"
+  claim_idle_timeout_ms: 60000
+
+pocket_node:
+  chain_id: "{{CHAIN_ID}}"
+  query_node_rpc_url: "{{RPC_URL}}"
+  query_node_grpc_url: "{{GRPC_URL}}"
+  grpc_insecure: false
+  query_timeout_seconds: 5
+
+keys:
+  keys_file: "/keys/supplier-keys.yaml"
+
+block_time_seconds: {{BLOCK_TIME}}
+
+balance_monitor:
+  enabled: true
+  check_interval_seconds: 300
+  balance_threshold_upokt: 10000
+
+transaction:
+  gas_limit: 0
+  gas_price: "0.000001upokt"
+  gas_adjustment: 1.7
+
+leader_election:
+  leader_ttl_seconds: 30
+  heartbeat_rate_seconds: 10
+
+metrics:
+  enabled: true
+  addr: "0.0.0.0:9092"
+
+logging:
+  level: "info"
+  format: "json"
+  output: "stdout"

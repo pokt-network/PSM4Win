@@ -1,0 +1,45 @@
+{
+  "app": "Pocket Service Manager",
+  "updated": "2026-09-14",
+  "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
+  "latest": "hta-2026-09-14",
+  "minimum_supported": "hta-2026-09-14",
+  "versions": {
+    "hta-2026-09-14": {
+      "channel": "repository (tools/service-manager, Windows HTML Application)",
+      "local_mcp_bridge": false,
+      "capabilities": [
+        "owner wallet import, balance, revoke",
+        "application wallets: create, recover, import, fund, export, remove",
+        "create service folder and card",
+        "register service (Beta and MainNet)",
+        "stake application",
+        "delegate an application to a gateway chosen from the live gateway list, and undelegate",
+        "settings: services folder, SSH server entries (a server is network-agnostic)",
+        "provision one supplier stack per network per server (HA RelayMiner in its own directory, operator key created on the server, one public hostname per network, shared Caddy per server)",
+        "deploy a service backend to a provisioned server and connect it to that network's relayer",
+        "stake supplier (signed on the server)",
+        "unstake supplier (signed by the owner wallet; the app shows the live unbonding period and the return block, and an unstaking supplier shows as unstaking until the stake returns)",
+        "service lifecycle status per network: created, registered, pending (with the activation block), active",
+        "test relays through the protocol with pocket-ap"
+      ],
+      "not_available": [
+        "no local MCP bridge: the assistant guides the user through the app's buttons rather than driving them",
+        "no auto-update"
+      ]
+    }
+  },
+  "planned": {
+    "electron": {
+      "status": "in design",
+      "local_mcp_bridge": "planned: the app exposes its own operations on loopback with a per-install token; every spend or signature still confirms in the app"
+    }
+  },
+  "protocol_verified_against": {
+    "poktroll": "v0.1.35 (main @ fea9e14)",
+    "sage": "703d8d9",
+    "pocket-relay-miner": "main",
+    "pocket-ap": "v0.1.2",
+    "chain_ids": { "beta": "pocket-lego-testnet", "main": "pocket" }
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "schema": "pocket-service-card/v1",
+  "description": "Service Builder Test. REPLACE with what the service does, the request shape (POST JSON to /v1/<resource>), and the response shape (a JSON object; non-JSON output rides in a string field). State whether output is identical across suppliers.",
+  "rpc_types": [
+    {
+      "type": "REST",
+      "intent": "expected",
+      "backend_hint": "jinx-service-builder-test HTTP server on :8080; mount at /",
+      "notes": "Only POST /v1/<resource>, GET /v1/version and GET /healthz are expected. Every response is a JSON object; non-JSON content is carried in a string field."
+    }
+  ],
+  "apis": [
+    "jinx-service-builder-test-api"
+  ],
+  "specs": [
+    {
+      "kind": "openapi",
+      "api": "jinx-service-builder-test-api",
+      "url": "https://REPLACE.example/openapi/v1/openapi.json",
+      "notes": "Version-addressed URL. Add sha256 (lowercase hex of the exact bytes) only once this URL is frozen."
+    }
+  ],
+  "access": "public",
+  "results": "deterministic",
+  "serving": {
+    "backend": "REPLACE: what a supplier deploys, e.g. the jinx-service-builder-test container behind a RelayMiner with the rest backend pointed at it. No auth toward the backend; callers cannot send headers.",
+    "implementations": [
+      "jinx-service-builder-test >= 1.0"
+    ],
+    "docs": "https://REPLACE.example/docs/operators",
+    "min_disk_gb": 1,
+    "min_ram_gb": 1,
+    "healthcheck": [
+      {
+        "rpc_type": "REST",
+        "request": { "path": "/v1/version", "method": "GET" },
+        "expect": { "json_path": "$.service", "matches": "^jinx-service-builder-test$" },
+        "notes": "Identity probe: pins the backend to this service so a wrong backend cannot be staked under this id."
+      },
+      {
+        "rpc_type": "REST",
+        "request": { "path": "/healthz", "method": "GET" },
+        "expect": { "json_path": "$.status", "matches": "^ok$" },
+        "notes": "Readiness probe."
+      },
+      {
+        "rpc_type": "REST",
+        "request": {
+          "path": "/v1/REPLACE-resource",
+          "method": "POST",
+          "body": { "REPLACE": "a minimal valid request with a known answer" }
+        },
+        "expect": { "json_path": "$.REPLACE", "matches": "REPLACE-regex" },
+        "notes": "Functional probe with a deterministic expected value. Keep it cheap; gateways run it every cycle."
+      }
+    ],
+    "notes": "REPLACE: rate limits to disable for the RelayMiner's address, request sizes, timeouts. Gateway operators: configure as type passthrough with rpc_types [\"rest\"]; see sage-service.yaml."
+  },
+  "docs": "https://REPLACE.example/docs",
+  "updated": "REPLACE-YYYY-MM-DD"
+}

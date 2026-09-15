@@ -1,0 +1,18 @@
+# {{SERVICE_ID}} backend, written by the Pocket Service Manager. Starts only the
+# backend container on the supplier stack's network, where the relayer reaches it as
+# http://{{SERVICE_ID}}-backend:8080. Nothing is exposed to the internet.
+
+services:
+  backend:
+    build: ../backend
+    image: {{SERVICE_ID}}-backend:latest
+    container_name: {{SERVICE_ID}}-backend
+    restart: unless-stopped
+    expose:
+      - "8080"
+    networks: [supplier]
+
+networks:
+  supplier:
+    external: true
+    name: pocket-supplier

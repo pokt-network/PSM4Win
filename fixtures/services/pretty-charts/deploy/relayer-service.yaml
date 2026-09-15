@@ -1,0 +1,14 @@
+# The pretty-charts entry for the HA relayer's config (relayer-config.yaml, under
+# `services:`). add-to-relayer.sh inserts it and restarts the relayer. The key is the
+# service id; `rest` is the card's rpc_types[].type lowercased.
+  pretty-charts:
+    timeout_profile: fast
+    max_body_size_bytes: 20971520
+    default_backend: rest
+    backends:
+      rest:
+        url: "http://pretty-charts-backend:8080"
+        health_check:
+          endpoint: "/healthz"
+          interval_seconds: 10
+          timeout_seconds: 5

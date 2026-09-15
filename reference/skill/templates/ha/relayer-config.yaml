@@ -1,0 +1,54 @@
+# HA RelayMiner relayer config for the supplier on {{NETWORK}}, rendered for its
+# first service, {{SERVICE_ID}}. The relayer is the stateless proxy; the miner
+# (miner-config.yaml) submits claims. Both share Redis. One relayer serves every
+# service the supplier is staked for: add one entry under `services:` per service,
+# with the URL of that service's backend container on the pocket-supplier network,
+# then recreate the relayer (docker compose -p pocket-supplier up -d --force-recreate relayer).
+
+listen_addr: "0.0.0.0:8080"
+
+redis:
+  url: "redis://redis:6379"
+
+keys:
+  keys_file: "/keys/supplier-keys.yaml"
+
+pocket_node:
+  chain_id: "{{CHAIN_ID}}"
+  query_node_rpc_url: "{{RPC_URL}}"
+  query_node_grpc_url: "{{GRPC_URL}}"
+  grpc_insecure: false
+
+services:
+  {{SERVICE_ID}}:
+    # Use "streaming" (600s, no header timeout) only for long or SSE responses.
+    timeout_profile: {{TIMEOUT_PROFILE}}
+    max_body_size_bytes: 20971520
+    default_backend: {{RPC_TYPE_LOWER}}
+    backends:
+      # key MUST be one of: jsonrpc | rest | websocket | grpc | cometbft
+      {{RPC_TYPE_LOWER}}:
+        url: "{{BACKEND_URL}}"
+        health_check:
+          endpoint: "{{HEALTH_PATH}}"
+          interval_seconds: 10
+          timeout_seconds: 5
+
+default_request_timeout_seconds: 30
+default_max_body_size_bytes: 20971520
+
+health_check:
+  enabled: true
+  addr: "0.0.0.0:8081"
+
+timeout_profiles:
+  fast:
+    request_timeout_seconds: 30
+    response_header_timeout_seconds: 30
+    dial_timeout_seconds: 5
+    tls_handshake_timeout_seconds: 10
+  streaming:
+    request_timeout_seconds: 600
+    response_header_timeout_seconds: 0
+    dial_timeout_seconds: 10
+    tls_handshake_timeout_seconds: 15

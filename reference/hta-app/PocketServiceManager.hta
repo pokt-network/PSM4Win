@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="x-ua-compatible" content="IE=edge">
+<meta charset="utf-8">
+<title>Pocket Service Manager</title>
+<hta:application id="PSMApp"
+  applicationname="PocketServiceManager"
+  border="none" caption="no" innerborder="no" showintaskbar="yes" singleinstance="yes"
+  sysmenu="no" windowstate="normal" scroll="no" selection="yes" contextmenu="yes" navigable="no"
+  icon="assets/pocket.ico" />
+<link rel="stylesheet" href="app.css">
+</head>
+<body class="net-beta">
+
+<div id="titlebar" onmousedown="PSM.dragStart(event)" ondblclick="PSM.toggleMaximize()">
+  <img src="assets/pocket-mark-40.png" alt="" class="mark">
+  <span class="apptitle">Pocket Service Manager</span>
+  <div class="wincontrols">
+    <button type="button" title="Minimise" onclick="PSM.minimize()" onmousedown="PSM.stopDrag(event)"><svg width="12" height="12" viewBox="0 0 12 12"><line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="1.5"/></svg></button>
+    <button type="button" title="Maximise or restore" onclick="PSM.toggleMaximize()" onmousedown="PSM.stopDrag(event)"><svg width="12" height="12" viewBox="0 0 12 12"><rect x="1.5" y="1.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
+    <button type="button" class="close" title="Close" onclick="window.close()" onmousedown="PSM.stopDrag(event)"><svg width="12" height="12" viewBox="0 0 12 12"><line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" stroke-width="1.5"/><line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" stroke-width="1.5"/></svg></button>
+  </div>
+</div>
+<div id="topbar">
+  <div class="netswitch">
+    <button id="netBeta" class="net on" onclick="PSM.setNetwork('beta')">Beta TestNet</button>
+    <button id="netMain" class="net" onclick="PSM.setNetwork('main')">MainNet</button>
+  </div>
+  <button id="themeBtn" onclick="PSM.toggleTheme()" title="Toggle theme"></button>
+  <div id="dockerState"><span class="dot"></span><span id="dockerText">Docker: checking</span></div>
+</div>
+<div id="mainnetBanner">MAINNET. Transactions here spend real POKT. Every action asks you to confirm.</div>
+
+<div id="layout">
+  <div id="side">
+
+    <!-- ========================== OWNER WALLET ========================== -->
+    <div class="panel" id="walletPanel">
+      <h2>Owner wallet</h2>
+      <div id="walletNone">
+        <p class="hint" style="margin:0 0 8px 0">Import the private key of the wallet that will own your services and fund the rest. It is stored encrypted and never shown again unless you revoke it.</p>
+        <div class="btnrow"><button class="btn primary" onclick="PSM.importDialog()">Import private key</button></div>
+      </div>
+      <div id="walletSome" class="hidden">
+        <div class="addr" id="walletAddr" title="Click to copy" onclick="PSM.copy(PSM.state.address)"></div>
+        <div class="big"><span id="walletBal">?</span><small>POKT</small></div>
+        <div class="hint" id="walletBalNote">balance on this network</div>
+        <table class="kv" style="margin-top:10px">
+          <tr><td>Registration fee</td><td id="pFee">?</td></tr>
+          <tr><td>Application min stake</td><td id="pAppMin">?</td></tr>
+          <tr><td>Supplier min stake</td><td id="pSupMin">?</td></tr>
+        </table>
+        <div class="btnrow">
+          <button class="btn small" onclick="PSM.refreshNetwork();PSM.refreshBalance()">Refresh</button>
+          <button class="btn small danger" onclick="PSM.revokeDialog()">Revoke key</button>
+        </div>
+      </div>
+      <div id="walletPartial" class="hidden warnbox">Leftover wallet files were found but the key cannot be opened. Import the key again; the leftovers are replaced.</div>
+    </div>
+
+    <!-- ============================= MENU ============================== -->
+    <div id="nav"></div>
+
+  </div>
+
+  <div id="content">
+
+    <!-- =========================== DASHBOARD =========================== -->
+    <div class="tabpane on" id="tab-dashboard">
+      <div class="row">
+        <div class="panel">
+          <h2>Overview <span id="dashNetBadge" class="badge info">beta</span></h2>
+          <div id="dashStats"></div>
+        </div>
+        <div class="panel">
+          <h2>Chain</h2>
+          <table class="kv">
+            <tr><td>Block height</td><td id="dHeight">?</td></tr>
+            <tr><td>Block time</td><td id="dBlockTime">?</td></tr>
+            <tr><td>Session</td><td id="dSession">?</td></tr>
+            <tr><td>Next session</td><td id="dNext">?</td></tr>
+          </table>
+          <div class="hint">New suppliers, stakes, and price changes take effect at the next session boundary.</div>
+          <div class="hint" style="margin-top:12px"><b>Services directory</b></div>
+          <div id="dashServicesDir" class="hint">?</div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Services</h2>
+        <div class="hint">Your services on this network: who serves them and whether their application stake has margin. Relays are paid from the application stake, and the protocol unstakes an application that falls below the minimum.</div>
+        <div id="dashServices" style="margin-top:8px"><span class="hint">Import the owner wallet to see its services.</span></div>
+      </div>
+      <div class="panel">
+        <h2>Suppliers</h2>
+        <div class="hint">One per configured server. Click a row to manage that supplier.</div>
+        <div id="dashSuppliers" style="margin-top:8px"><span class="hint">No servers configured yet.</span></div>
+      </div>
+      <div class="panel">
+        <h2>Recent activity</h2>
+        <div class="hint">Every transaction this machine broadcast, on either network, newest first.</div>
+        <div id="histWrap"><table class="hist" id="histTable"></table></div>
+        <div class="btnrow"><button class="btn small" onclick="PSM.renderDashboard(true)">Refresh</button></div>
+      </div>
+    </div>
+
+    <!-- =========================== MY SERVICES ========================== -->
+    <div class="tabpane" id="tab-services">
+      <div class="panel">
+        <h2>My services <span id="svcNetBadge" class="badge info">beta</span></h2>
+        <div class="hint" id="svcListHint">Services the owner wallet owns on the selected network, plus service folders on this machine that are not registered yet.</div>
+        <div id="svcList" style="margin-top:10px"></div>
+        <div class="btnrow"><button class="btn small" onclick="PSM.renderServices(true)">Refresh</button><button class="btn small primary" onclick="PSM.tab('create')">Create service</button></div>
+      </div>
+    </div>
+
+    <!-- ============================= DEPLOY ============================= -->
+    <div class="tabpane" id="tab-deploy">
+      <div class="panel">
+        <h2>Deploy a service <span id="depNetBadge" class="badge info">beta</span></h2>
+        <p class="hint" style="margin:0 0 6px 0">Ships the service's backend to a provisioned server, builds and starts it on the supplier's network, and connects it to the RelayMiner. Afterwards, stake the supplier for it (Suppliers) and test it (Test service). Safe to run again to redeploy a new version.</p>
+        <div class="row">
+          <div>
+            <label>Service</label>
+            <select id="depId" onchange="PSM.onDeployServiceChange()"><option value="">No deployable services</option></select>
+            <div class="hint" id="depIdHint">Service folders on this machine that contain <span class="mono">backend/Dockerfile</span>.</div>
+          </div>
+          <div>
+            <label>Server</label>
+            <select id="depServer"><option value="">No provisioned servers</option></select>
+            <div class="hint" id="depServerHint">Provisioned servers on this network (Settings).</div>
+          </div>
+        </div>
+        <div class="btnrow">
+          <button class="btn primary" id="btnDeploy" onclick="PSM.runDeploy()">Deploy</button>
+          <button class="btn hidden" id="btnDeployStake" onclick="PSM.deployThenStake()">Stake the supplier for it</button>
+          <button class="btn hidden" id="btnDeployTest" onclick="PSM.deployThenTest()">Test it</button>
+        </div>
+        <div class="status" id="depStatus"></div>
+        <ul class="checks" id="depChecks"></ul>
+        <div class="log hidden" id="depLog"></div>
+      </div>
+    </div>
+
+    <!-- ============================== TEST ============================== -->
+    <div class="tabpane" id="tab-test">
+      <div class="panel">
+        <h2>Test a service <span id="tstNetBadge" class="badge info">beta</span></h2>
+        <p class="hint" style="margin:0 0 6px 0">Sends the service's own health-check probes through the protocol, exactly as a gateway would: signed by an application wallet staked for the service, routed to a supplier in the current session, and graded against the expectations in the service card. Relays are sent with pocket-ap in a container; the wallet key is read from the keyring for the call and never displayed.</p>
+        <div class="row">
+          <div>
+            <label>Service</label>
+            <select id="tstId" onchange="PSM.onTestServiceChange()"><option value="">No services</option></select>
+            <div class="hint" id="tstIdHint">Probes come from the service's card.</div>
+          </div>
+          <div>
+            <label>Application wallet</label>
+            <select id="tstWallet"><option value="">No wallets</option></select>
+            <div class="hint" id="tstWalletHint">Must be staked for this service, and the supplier must be in its session.</div>
+          </div>
+          <div>
+            <label>Relay client</label>
+            <div id="tstClient" class="hint" style="margin-top:8px">Checking</div>
+          </div>
+        </div>
+        <div class="btnrow">
+          <button class="btn primary" id="btnTest" onclick="PSM.runTest()">Run test</button>
+          <button class="btn" onclick="PSM.viewTestLog()">View log</button>
+          <button class="btn danger" onclick="PSM.clearTestLog()">Clear log</button>
+        </div>
+        <div class="status" id="tstStatus"></div>
+        <ul class="checks" id="tstChecks"></ul>
+        <div class="log hidden" id="tstLog"></div>
+      </div>
+      <div class="panel hidden" id="tstLogPanel">
+        <h2>Previous tests</h2>
+        <div id="tstLogTable"></div>
+      </div>
+    </div>
+
+    <!-- ============================= CREATE ============================= -->
+    <div class="tabpane" id="tab-create">
+      <div class="panel">
+        <h2>Service definition</h2>
+        <p class="hint" style="margin:0 0 6px 0">Fill this in once. It creates <span class="mono">services/&lt;service id&gt;/</span> with a <span class="mono">card.json</span> (the on-chain description consumers and suppliers read) and a <span class="mono">service.json</span> (what the Register screen needs). Fields marked optional can be left blank and added later; an update re-publishes the card.</p>
+        <div class="row" style="margin-top:6px">
+          <div>
+            <label>Load an existing folder (optional)</label>
+            <select id="crFolder" onchange="PSM.loadCreateFromFolder()"><option value="">Start from scratch</option></select>
+            <div class="hint">Fills the form from that folder's card.json so you can edit and re-create it.</div>
+          </div>
+          <div></div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Service ID</label>
+            <input type="text" id="crId" placeholder="pretty-charts" maxlength="42" onkeyup="PSM.onCreateIdChange()" onchange="PSM.onCreateIdChange()">
+            <div class="hint" id="crIdHint">Permanent once registered. Also becomes the folder name. Lowercase letters, digits, hyphen, underscore.</div>
+          </div>
+          <div>
+            <label>Display name</label>
+            <input type="text" id="crName" placeholder="Pretty Charts" maxlength="169">
+            <div class="hint">Shown in the catalog. Letters, digits, spaces, hyphen, underscore.</div>
+          </div>
+          <div>
+            <label>Compute units per relay</label>
+            <input type="number" id="crCupr" min="1" max="1048576" value="100">
+            <div class="hint">Price of one relay. Changeable later.</div>
+          </div>
+        </div>
+        <label>Description</label>
+        <textarea id="crDesc" rows="4" maxlength="2048" placeholder="What the service does, the request shape (for example POST JSON to /v1/chart), and the response shape. State whether every supplier returns identical output."></textarea>
+        <div class="hint">Up to 2,048 characters. Every response on Pocket must be a JSON object; HTML or other non-JSON output rides inside a string field. Say so here if it applies.</div>
+      </div>
+
+      <div class="panel">
+        <h2>Interface</h2>
+        <div class="row">
+          <div>
+            <label>Protocol</label>
+            <select id="crRpc" onchange="PSM.onCreateIdChange()">
+              <option value="REST" selected>REST (HTTP with JSON bodies)</option>
+              <option value="JSON_RPC">JSON-RPC</option>
+              <option value="WEBSOCKET">WebSocket</option>
+              <option value="GRPC">gRPC</option>
+              <option value="COMET_BFT">CometBFT</option>
+            </select>
+            <div class="hint">REST is right for almost every non-blockchain service.</div>
+          </div>
+          <div>
+            <label>Backend hint</label>
+            <input type="text" id="crHint" maxlength="256" onkeyup="PSM.markManual('hint')">
+            <div class="hint">For supplier operators: what process listens behind their RelayMiner, on which port, and at which path prefix. "mount at /" means paths pass through unchanged. Example: "pretty-charts container on :8080; mount at /". Up to 256 characters.</div>
+          </div>
+        </div>
+        <label>Endpoints a caller can rely on</label>
+        <input type="text" id="crEndpoints" maxlength="512" placeholder="Only POST /v1/chart, GET /v1/version and GET /healthz are expected. Every response is a JSON object.">
+        <div class="hint">Up to 512 characters. Consumers must not depend on anything not listed here.</div>
+        <div class="row">
+          <div>
+            <label>API contract names</label>
+            <input type="text" id="crApis" onkeyup="PSM.markManual('apis')" placeholder="pretty-charts-api">
+            <div class="hint">Comma-separated, lowercase kebab-case, <span class="mono">&lt;service&gt;-&lt;family&gt;</span>. Other cards claiming the same name promise the same contract.</div>
+          </div>
+          <div>
+            <label>Access</label>
+            <select id="crAccess"><option value="public" selected>public (anyone with an app stake)</option><option value="gated">gated (needs a credential the service defines)</option></select>
+          </div>
+          <div>
+            <label>Results</label>
+            <select id="crResults"><option value="deterministic" selected>deterministic (identical bytes from every supplier)</option><option value="variable">variable (timestamps, randomness, per-supplier rendering)</option></select>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>API spec URL (optional)</label>
+            <input type="text" id="crSpecUrl" placeholder="https://example.com/openapi/v1/openapi.json">
+            <div class="hint">Point at the spec; never inline it. Use a version-addressed URL that will not change in place.</div>
+          </div>
+          <div>
+            <label>Spec kind</label>
+            <select id="crSpecKind"><option value="openapi" selected>openapi</option><option value="openrpc">openrpc</option><option value="markdown">markdown</option><option value="docs">docs</option></select>
+          </div>
+          <div>
+            <label>Public docs URL (optional)</label>
+            <input type="text" id="crDocs" placeholder="https://example.com/docs">
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Serving (what a supplier runs)</h2>
+        <label>Backend description</label>
+        <textarea id="crBackend" rows="3" maxlength="1024" placeholder="What a supplier deploys, e.g. the pretty-charts container behind a RelayMiner with the rest backend pointed at it. No auth toward the backend; callers cannot send headers."></textarea>
+        <div class="row">
+          <div>
+            <label>Implementations</label>
+            <input type="text" id="crImpl" onkeyup="PSM.markManual('impl')" placeholder="pretty-charts >= 1.0">
+            <div class="hint">Comma-separated software and version constraints a supplier may run.</div>
+          </div>
+          <div>
+            <label>Minimum disk (GB)</label>
+            <input type="number" id="crDisk" min="0" value="1">
+          </div>
+          <div>
+            <label>Minimum RAM (GB)</label>
+            <input type="number" id="crRam" min="0" value="1">
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Operator docs URL (optional)</label>
+            <input type="text" id="crOpDocs" placeholder="https://example.com/docs/operators">
+          </div>
+          <div>
+            <label>Operator notes (optional)</label>
+            <input type="text" id="crServingNotes" maxlength="2048" placeholder="Rate limits to disable for the RelayMiner's address, request size limits, timeouts.">
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Health checks (gateways run these every cycle)</h2>
+        <p class="hint" style="margin:0 0 6px 0">Three probes are the convention. The identity probe pins a backend to this service so a wrong backend cannot be staked under this ID. Paths are relative to the backend root; expectations are a JSONPath into the response and a regular expression it must match.</p>
+        <div class="row">
+          <div><label>Identity probe path</label><input type="text" id="crIdPath" value="/v1/version"></div>
+          <div><label>JSON path</label><input type="text" id="crIdJson" value="$.service"></div>
+          <div><label>Must match</label><input type="text" id="crIdMatch" onkeyup="PSM.markManual('idMatch')" placeholder="^pretty-charts$"></div>
+        </div>
+        <div class="row">
+          <div><label>Readiness probe path</label><input type="text" id="crRdPath" value="/healthz"></div>
+          <div><label>JSON path</label><input type="text" id="crRdJson" value="$.status"></div>
+          <div><label>Must match</label><input type="text" id="crRdMatch" value="^ok$"></div>
+        </div>
+        <div class="row">
+          <div><label>Functional probe path (optional)</label><input type="text" id="crFnPath" placeholder="/v1/chart"></div>
+          <div><label>Method</label><select id="crFnMethod"><option value="POST" selected>POST</option><option value="GET">GET</option></select></div>
+          <div><label>JSON path</label><input type="text" id="crFnJson" placeholder="$.marks"></div>
+          <div><label>Must match</label><input type="text" id="crFnMatch" placeholder="^1$"></div>
+        </div>
+        <label>Functional probe request body (JSON, for POST)</label>
+        <textarea id="crFnBody" rows="3" class="mono" placeholder='{"data": {"values": [{"a": "A", "b": 1}]}, "chart": {"type": "bar", "x": "a", "y": "b"}}'></textarea>
+        <div class="hint">A minimal valid request with a known answer. Keep it cheap.</div>
+      </div>
+
+      <div class="panel">
+        <div class="btnrow">
+          <button class="btn" onclick="PSM.previewCard()">Preview card</button>
+          <button class="btn primary" onclick="PSM.createService()">Create folder and card</button>
+        </div>
+        <div class="status" id="crStatus"></div>
+        <ul class="checks" id="crChecks"></ul>
+        <div class="plan hidden" id="crPreview"><div class="lbl">card.json</div><pre id="crPreviewJson"></pre></div>
+      </div>
+    </div>
+
+    <!-- ============================ REGISTER ============================ -->
+    <div class="tabpane" id="tab-register">
+      <div class="panel">
+        <h2>Register a service</h2>
+        <label>Service folder</label>
+        <select id="svcFolder" onchange="PSM.onServiceFolder()"><option value="">Choose a folder in services/</option></select>
+        <div class="hint">Picking a folder fills the form from its service.json and uses its card.json. You can still edit every field. No folder yet? Use Create service.</div>
+
+        <div class="row" style="margin-top:6px">
+          <div>
+            <label>Service ID</label>
+            <input type="text" id="svcId" placeholder="pretty-charts" maxlength="42" onkeyup="PSM.onIdChange()">
+            <div class="hint" id="svcIdHint">Permanent once registered. Lowercase, letters, digits, hyphen, underscore. Up to 42 characters.</div>
+          </div>
+          <div>
+            <label>Display name</label>
+            <input type="text" id="svcName" placeholder="Pretty Charts" maxlength="169">
+            <div class="hint">Shown in the catalog. Letters, digits, spaces, hyphen, underscore. Can be changed later.</div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>Compute units per relay</label>
+            <input type="number" id="svcCupr" min="1" max="1048576" value="100" onkeyup="PSM.onCuprChange()" onchange="PSM.onCuprChange()">
+            <div class="hint" id="cuprHint">Sets the price of one relay. Can be changed later; takes effect next session.</div>
+          </div>
+          <div>
+            <label>Service card (JSON file)</label>
+            <div class="filerow">
+              <input type="text" id="svcCard" placeholder="C:\path\to\card.json">
+              <input type="file" id="svcCardBrowse" onchange="PSM.onCardBrowse(this)" title="Browse">
+            </div>
+            <div class="hint">Optional but recommended. Describes the service to gateways and agents. Validated before anything is sent.</div>
+          </div>
+        </div>
+
+        <div class="btnrow">
+          <button class="btn" onclick="PSM.validateCardOnly()">Check card</button>
+          <button class="btn" onclick="PSM.saveManifest()">Save to service.json</button>
+          <button class="btn primary" onclick="PSM.preflightRegister()">Run preflight</button>
+          <button class="btn primary" id="btnRegister" disabled onclick="PSM.executeRegister()">Register on Beta TestNet</button>
+        </div>
+      </div>
+
+      <div class="panel hidden" id="regResults">
+        <h2>Preflight</h2>
+        <ul class="checks" id="regChecks"></ul>
+        <div class="plan hidden" id="regPlan"><div class="lbl">Exact command the signer will run (the passphrase never touches the command line)</div><pre id="regPlanCmd"></pre></div>
+        <div class="status" id="regStatus"></div>
+        <div class="log hidden" id="regLog"></div>
+      </div>
+    </div>
+
+    <!-- ============================= STAKE ============================= -->
+    <div class="tabpane" id="tab-stake">
+      <div class="panel">
+        <h2>Application stake</h2>
+        <p class="hint" style="margin:0 0 6px 0">An application stake lets a wallet send relays to a service through a gateway, which is how you test the service once a supplier is serving it. On Pocket an application stakes for exactly one service, so use a dedicated application wallet per service (Wallets) and fund it from the owner wallet below. The stake is drawn down as relays settle, and an application whose stake falls below the minimum is unstaked by the protocol, so always stake with a margin above it.</p>
+        <div id="stkAppBox" class="warnbox hidden"></div>
+        <div class="row">
+          <div>
+            <label>Service</label>
+            <select id="stkId" onchange="PSM.onStakeServiceChange()"><option value="">No registered services for this wallet on this network</option></select>
+            <div class="hint">Lists the services the owner wallet owns on the selected network. Register a service first if the list is empty.</div>
+          </div>
+          <div>
+            <label>Stake as</label>
+            <select id="stkFrom" onchange="PSM.onStakeFromChange()"><option value="service-manager">Owner wallet</option></select>
+            <div class="hint" id="stkFromHint">The wallet that signs and is staked. Prefer the app wallet made for this service.</div>
+          </div>
+          <div>
+            <label>Stake amount (POKT)</label>
+            <input type="number" id="stkAmount" min="0" step="1" placeholder="1000">
+            <div class="hint" id="stkHint">Minimum is fetched live from the network.</div>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Staking wallet balance</label>
+            <div class="big" id="stkFromBal">?</div>
+            <div class="hint" id="stkFromBalHint">The staking wallet pays the stake and gas from its own balance.</div>
+          </div>
+          <div>
+            <label>Fund it from the owner wallet</label>
+            <div class="filerow">
+              <input type="number" id="stkFundAmount" min="0" step="1" placeholder="POKT to send">
+              <button class="btn small" onclick="PSM.fundStakeWallet()">Send from owner</button>
+            </div>
+            <div class="status" id="stkFundStatus"></div>
+          </div>
+        </div>
+        <div class="btnrow">
+          <button class="btn primary" onclick="PSM.preflightStake()">Run preflight</button>
+          <button class="btn primary" id="btnStake" disabled onclick="PSM.executeStake()">Stake on Beta TestNet</button>
+        </div>
+      </div>
+      <div class="panel hidden" id="stkResults">
+        <h2>Preflight</h2>
+        <ul class="checks" id="stkChecks"></ul>
+        <div class="plan hidden" id="stkPlan"><div class="lbl">Exact command the signer will run</div><pre id="stkPlanCmd"></pre></div>
+        <div class="status" id="stkStatus"></div>
+        <div class="log hidden" id="stkLog"></div>
+      </div>
+
+      <div class="panel" id="dlgPanel">
+        <h2>Gateway delegation</h2>
+        <p class="hint" style="margin:0 0 6px 0">A staked application can let a gateway sign relays on its behalf, which is how a service is reached through a gateway such as the one behind the agentic portal instead of by a self-signing client. Delegation costs gas only; the application's stake still pays for the relays. Undelegating takes effect when the current session ends. The number of gateways an application may delegate to is a network parameter read live.</p>
+        <div class="row">
+          <div>
+            <label>Application</label>
+            <select id="dlgFrom" onchange="PSM.onDelegateFromChange()"><option value="">No staked application on this network</option></select>
+            <div class="hint" id="dlgFromHint">Wallets of this app that hold an application stake here.</div>
+          </div>
+          <div>
+            <label>Gateway</label>
+            <select id="dlgGateway"><option value="">Loading gateways</option></select>
+            <div class="hint" id="dlgGatewayHint">Every gateway registered on this network, read live. Pick the one that will route requests to your service.</div>
+          </div>
+        </div>
+        <div class="btnrow"><button class="btn primary" id="btnDelegate" onclick="PSM.delegateGateway()">Delegate</button></div>
+        <div class="status" id="dlgStatus"></div>
+        <h2 style="margin-top:14px">Current delegations</h2>
+        <div id="dlgList" class="hint">Choose an application.</div>
+      </div>
+    </div>
+
+    <!-- ============================ SUPPLY ============================= -->
+    <div class="tabpane" id="tab-supply">
+      <div id="supListView">
+        <div class="panel">
+          <h2>Suppliers <span id="supNetBadge" class="badge info">beta</span></h2>
+          <p class="hint" style="margin:0 0 6px 0">A supplier is the operator key on one of your servers, staked on chain for one or more services behind that server's RelayMiner URL. The owner wallet receives the revenue and the returned stake; the operator signs relays and claims and never leaves the server. One supplier per server per network; servers come from Settings.</p>
+          <div id="supList" style="margin-top:10px"></div>
+          <div class="btnrow"><button class="btn small" onclick="PSM.renderSuppliers(true)">Refresh</button><button class="btn small" onclick="PSM.tab('settings')">Add a server</button></div>
+        </div>
+      </div>
+
+      <div id="supEditView" class="hidden">
+        <div class="panel">
+          <h2>Supplier on <span id="supEditName"></span> <button class="btn small" style="float:right" onclick="PSM.closeSupplier()">Back to suppliers</button></h2>
+          <p class="hint" style="margin:0 0 6px 0">Only the operator may set the service list, so the stake config is copied to the server over SSH and signed there with the operator key, paid from the operator's balance (fund it from the owner wallet below). One stake covers every service ticked below; the list on chain is replaced on each stake, so leave existing services ticked to keep serving them.</p>
+          <select id="supServer" class="hidden" onchange="PSM.onSupplyServerChange()"><option value="">No servers configured</option></select>
+          <div class="row">
+            <div>
+              <label>Operator address</label>
+              <input type="text" id="supOperator" placeholder="pokt1..." maxlength="43">
+              <div class="hint" id="supServerHint">From the server entry. Its account must exist on this network with its public key published.</div>
+            </div>
+            <div>
+              <label>Public HTTPS URL of the RelayMiner</label>
+              <input type="text" id="supUrl" placeholder="https://...">
+              <div class="hint">From the server entry; used for every service below unless a row overrides it.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Services this supplier serves</h2>
+          <div class="row">
+            <div>
+              <label>Add a service</label>
+              <div class="filerow">
+                <select id="supAdd"><option value="">Nothing to add</option></select>
+                <button class="btn small" onclick="PSM.addSupplyService()">Add</button>
+              </div>
+              <div class="hint"><input type="checkbox" id="supShowAll" onclick="PSM.populateSupplyAdd()"> <label for="supShowAll" style="display:inline;font-weight:400">Show all services on the network</label> (off: only services the owner wallet owns)</div>
+            </div>
+            <div></div>
+          </div>
+          <div id="supServices" style="margin-top:10px"></div>
+        </div>
+
+        <div class="panel">
+          <h2>Stake</h2>
+          <div class="row">
+            <div>
+              <label>Stake amount (POKT)</label>
+              <input type="number" id="supAmount" min="0" step="1">
+              <div class="hint" id="supHint">Minimum is fetched live from the network. Keep a margin above it: a stake that drops below the minimum is auto-unstaked.</div>
+            </div>
+            <div>
+              <label>Operator liquid balance</label>
+              <div class="big" id="supOpBal">?</div>
+              <div class="hint" id="supOpBalHint">The operator pays the stake and its ongoing claim and proof gas from this balance.</div>
+              <div class="filerow" style="margin-top:8px">
+                <input type="number" id="supFundAmount" min="0" step="1" placeholder="POKT to send">
+                <button class="btn small" onclick="PSM.fundOperator()">Send from owner wallet</button>
+              </div>
+              <div class="status" id="supFundStatus"></div>
+            </div>
+          </div>
+          <div class="btnrow">
+            <button class="btn primary" onclick="PSM.preflightSupply()">Run preflight</button>
+            <button class="btn primary" id="btnSupply" disabled onclick="PSM.executeSupply()">Stake supplier on Beta TestNet</button>
+          </div>
+        </div>
+        <div class="panel hidden" id="supResults">
+          <h2>Preflight</h2>
+          <ul class="checks" id="supChecks"></ul>
+          <div class="plan hidden" id="supPlan"><div class="lbl">Exact command the signer will run</div><pre id="supPlanCmd"></pre></div>
+          <div class="status" id="supStatus"></div>
+          <div class="log hidden" id="supLog"></div>
+        </div>
+
+        <div class="panel" id="supUnstakePanel">
+          <h2>Unstake this supplier</h2>
+          <div id="supUnstakeBox" class="warnbox hidden"></div>
+          <p class="hint" style="margin:0 0 6px 0" id="supUnstakeHint">Stops supplying every service from the end of the current session. The stake then stays locked for the unbonding period, a network parameter read live, and returns to the owner wallet. Signed by the owner wallet on this PC; the operator key on the server is not involved.</p>
+          <div class="btnrow"><button class="btn danger" id="btnUnstake" onclick="PSM.unstakeSupplierDialog()">Unstake supplier</button></div>
+          <div class="status" id="supUnstakeStatus"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================= WALLETS ============================ -->
+    <div class="tabpane" id="tab-wallets">
+      <div class="panel">
+        <h2>Wallets <span id="walNetBadge" class="badge info">beta</span></h2>
+        <p class="hint" style="margin:0 0 6px 0">On Pocket an account can be staked as an application for exactly one service, so each service you want to call gets its own application wallet. The owner wallet registers services and funds these wallets. Every wallet lives in the same encrypted keyring; the app can show a wallet's private key on request, and a new wallet's recovery phrase is shown once, at creation.</p>
+        <div id="walList" style="margin-top:10px"></div>
+        <div class="btnrow">
+          <button class="btn primary" onclick="PSM.newWalletDialog()">New app wallet</button>
+          <button class="btn" onclick="PSM.recoverWalletDialog()">Recover from phrase</button>
+          <button class="btn" onclick="PSM.importAppWalletDialog()">Import private key</button>
+          <button class="btn small" onclick="PSM.loadWallets(true)">Refresh</button>
+        </div>
+        <div class="status" id="walStatus"></div>
+      </div>
+    </div>
+
+    <!-- ============================ SETTINGS ============================ -->
+    <div class="tabpane" id="tab-settings">
+      <div class="panel">
+        <h2>Services folder</h2>
+        <div class="hint">Each subfolder is one service: its <span class="mono">service.json</span> and <span class="mono">card.json</span>. Set once.</div>
+        <div class="filerow" style="margin-top:8px">
+          <input type="text" id="setRoot" placeholder="C:\path\to\services">
+          <button class="btn small" onclick="PSM.saveServicesRoot()">Use this folder</button>
+        </div>
+        <div class="btnrow"><button class="btn small" onclick="PSM.openServicesFolder()">Open folder</button><button class="btn small" onclick="PSM.loadServiceFolders()">Rescan</button><button class="btn small" onclick="PSM.resetServicesRoot()">Back to default</button></div>
+        <div class="status" id="setRootStatus"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Servers</h2>
+        <div class="hint">Where RelayMiners run. A server is an SSH connection and a deploy root; it knows nothing about networks. Each network it supplies gets its own stack on it (a RelayMiner, an operator key that never leaves the server, and a public hostname), created by Provision. The server's Caddy is shared. Nothing here depends on an SSH config file. Only a key path is stored, never key material.</div>
+        <div id="srvList" style="margin-top:10px"></div>
+        <h2 id="srvFormTitle" style="margin-top:18px">Add new server</h2>
+        <div class="row">
+          <div><label>Name</label><input type="text" id="srvName" placeholder="a short name" maxlength="40"></div>
+          <div><label>Host</label><input type="text" id="srvHost" placeholder="hostname or IP"></div>
+          <div><label>Port</label><input type="number" id="srvPort" value="22" min="1" max="65535"></div>
+          <div><label>User</label><input type="text" id="srvUser" placeholder="ssh user"></div>
+        </div>
+        <div class="row">
+          <div><label>SSH private key file</label><input type="text" id="srvKey" placeholder="C:\path\to\private-key"><div class="hint">An OpenSSH key on this PC. Its passphrase, if any, must be held by ssh-agent.</div></div>
+          <div><label>Deploy root</label><input type="text" id="srvRoot" placeholder="/opt/pocket/services"><div class="hint">Where service backends are shipped. One backend container serves every network's stack.</div></div>
+        </div>
+        <div class="btnrow">
+          <button class="btn primary" onclick="PSM.saveServer()">Save server</button>
+          <button class="btn" onclick="PSM.testServer()">Test connection</button>
+          <button class="btn" onclick="PSM.clearServerForm()">Clear form</button>
+        </div>
+        <div class="status" id="srvStatus"></div>
+      </div>
+
+      <div class="panel" id="provPanel">
+        <h2>Provision a supplier</h2>
+        <p class="hint" style="margin:0 0 6px 0">Creates one network's supplier stack on a server: copies the RelayMiner stack to its own directory, creates that stack's operator key there (it never leaves), funds it from the owner wallet if needed, publishes its public key, starts the server's shared Caddy with the network's hostname, then Redis and the miner. The relayer starts when the first service is deployed. Safe to run again on a provisioned stack; existing keys and configs are kept.</p>
+        <div class="row">
+          <div><label>Server</label><select id="provServer" onchange="PSM.onProvServerChange()"><option value="">No servers</option></select><div class="hint" id="provServerHint">From the list above.</div></div>
+          <div><label>Network</label><select id="provNet" onchange="PSM.onProvNetChange()"><option value="beta">Beta TestNet</option><option value="main">MainNet</option></select><div class="hint">One stack per network; a server can hold both. Must match the network the app is on.</div></div>
+          <div><label>Stack directory</label><input type="text" id="provDir" placeholder="/opt/pocket/supplier-main"><div class="hint" id="provDirHint">Holds this network's RelayMiner, operator keyring, and relayer config.</div></div>
+          <div><label>Public hostname</label><input type="text" id="provHost" placeholder="services.example.com"><div class="hint">One hostname per network, its DNS record already pointing at the server; Caddy requests the certificate for it.</div></div>
+          <div><label>Operator gas top-up (POKT)</label><input type="number" id="provFund" min="0" step="1" value="10"><div class="hint">Sent from the owner wallet only if the operator holds less than 5 POKT.</div></div>
+        </div>
+        <div class="btnrow">
+          <button class="btn primary" id="btnProv" onclick="PSM.runProvision()">Start provisioning</button>
+        </div>
+        <div class="status" id="provStatus"></div>
+        <ul class="checks" id="provChecks"></ul>
+        <div class="log hidden" id="provLog"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Welcome message</h2>
+        <div class="hint">The introduction shown on first run: what the app does, what to have ready, and the order of the steps.</div>
+        <div class="btnrow"><button class="btn small" onclick="PSM.showWelcome()">Show Welcome Message</button></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="footer"><span id="footText">Starting</span></div>
+<div id="grip" title="Drag to resize" onmousedown="PSM.resizeStart(event)"></div>
+
+<div id="modalWrap" class="hidden">
+  <div id="modal">
+    <h3 id="modalTitle"></h3>
+    <div id="modalBody"></div>
+    <div id="modalButtons"></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+<script>PSM.init();</script>
+</body>
+</html>

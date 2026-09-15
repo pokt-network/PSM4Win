@@ -1,0 +1,5 @@
+# Shared Caddy for every supplier stack on this server, written by the Pocket Service
+# Manager. Each stack owns one file in sites/ (beta.caddy, main.caddy): its public
+# hostname reverse-proxied to that stack's relayer. Do not add sites here.
+
+import /etc/caddy/sites/*.caddy

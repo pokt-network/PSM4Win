@@ -1,0 +1,24 @@
+{
+  "name": "pocket-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "node scripts/sync-skill.mjs",
+    "start": "npm run sync && wrangler dev",
+    "deploy": "npm run sync && wrangler deploy",
+    "check": "npm run sync && tsc --noEmit",
+    "types": "wrangler types"
+  },
+  "dependencies": {
+    "@cfworker/json-schema": "4.1.1",
+    "@modelcontextprotocol/server": "2.0.0",
+    "agents": "0.23.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260914.1",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.131.2"
+  }
+}

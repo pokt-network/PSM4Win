@@ -1,0 +1,51 @@
+# DEPRECATED: the single-process RelayMiner is scheduled for deprecation and cannot
+# claim through the public Sauron gRPC endpoints. Use templates/ha/ instead.
+#
+# Backend + single-process RelayMiner for {{SERVICE_ID}} on {{NETWORK}}.
+# The reverse proxy (Caddy/nginx) runs in front of the relayminer and is not
+# included here; point it at 127.0.0.1:{{LISTEN_PORT}}.
+#
+# The operator key is mounted from a keyring directory you create with:
+#   pocketd keys add {{OPERATOR_KEY_NAME}} --keyring-backend test --home ./pocket-home
+# Use --keyring-backend file with a password file for anything beyond a test.
+
+services:
+  backend:
+    # REPLACE with your service image, or build: ./backend
+    image: REPLACE-your-backend-image
+    container_name: {{SERVICE_ID}}-backend
+    restart: unless-stopped
+    # Expose only inside the compose network; the relayminer reaches it by name.
+    expose:
+      - "8080"
+    networks: [pocket]
+
+  relayminer:
+    image: ghcr.io/pokt-network/pocketd:latest
+    container_name: {{SERVICE_ID}}-relayminer
+    restart: unless-stopped
+    command:
+      - relayminer
+      - start
+      - --config=/config/relayminer_config.yaml
+      - --chain-id={{CHAIN_ID}}
+      - --keyring-backend=test
+      - --home=/home
+      - --grpc-insecure=false
+    volumes:
+      - ./relayminer_config.yaml:/config/relayminer_config.yaml:ro
+      - ./pocket-home:/home            # keyring with the operator key
+      - smt:/var/lib/pocket/smt        # persistent; matches smt_store_path
+    ports:
+      - "127.0.0.1:{{LISTEN_PORT}}:{{LISTEN_PORT}}"   # reverse proxy target, loopback only
+      - "127.0.0.1:8081:8081"                          # ping, loopback only
+      - "127.0.0.1:9090:9090"                          # metrics, loopback only
+    depends_on: [backend]
+    networks: [pocket]
+
+networks:
+  pocket:
+    name: {{SERVICE_ID}}-net
+
+volumes:
+  smt:
