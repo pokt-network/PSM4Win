@@ -1,31 +1,74 @@
-# Pocket Service Manager
+# Pocket Service Manager for Windows
 
-A Windows desktop app for registering, staking, supplying, deploying, and testing HTTP services on Pocket Network's Shannon protocol, without typing `pocketd` commands. It performs every transaction and every signature; the assistant-side tooling (the Pocket Service Builder MCP server and Claude Skill) is read-only and hands the work to this app.
+A desktop app that takes an HTTP API from a folder on your PC to a live, paid service on [Pocket Network](https://pocket.network). It writes the service card, registers the service on chain, turns a server of yours into a supplier that serves it, stakes the supplier and an application wallet, and tests real relays through the protocol. Every step is a button. You never type a `pocketd` command.
+
+It works with Claude Code: one click in Settings gives Claude the read-only Pocket tools, and one more lets Claude drive this app's own operations through a local bridge, with every spend still confirmed in the app window.
 
 ## Install
 
-Docker Desktop is required: [download](https://www.docker.com/products/docker-desktop/) or `winget install Docker.DockerDesktop`.
+**Requirements:** Windows 10 or 11, 64-bit, and [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running. The Pocket tools run in containers; the app downloads them once.
+
+**With Scoop** (recommended: updates in place, and Windows raises no SmartScreen warning because nothing is downloaded through a browser):
 
 ```powershell
-irm get.scoop.sh | iex                                        # once, if Scoop is not installed
-scoop bucket add pocket https://github.com/pokt-network/PSM4Win       # once
-scoop install pocket-service-manager
-scoop update pocket-service-manager                           # every later version
+irm get.scoop.sh | iex
 ```
 
-An installer is also on the releases page for anyone who prefers it. Unsigned builds show a SmartScreen warning when downloaded from a browser and not when installed through Scoop.
+```powershell
+scoop bucket add pocket https://github.com/pokt-network/PSM4Win
+```
 
-## Status
+```powershell
+scoop install pocket-service-manager
+```
 
-Phase 1 (platform layer) is built: the main-process signer with the same named operations as the original HTML Application, typed IPC, the Docker and SSH drivers, the same-PC importer, the installer configuration, and CI. Phase 2 (the React screens) is built and awaits the screen-by-screen parity check against the HTA on the same keyring. See `CLAUDE.md` for the plan.
+Later versions:
+
+```powershell
+scoop update pocket-service-manager
+```
+
+**Without Scoop:** download `PocketServiceManager-Setup-<version>.exe` or the portable `PocketServiceManager-<version>-win-x64.zip` from the [releases page](https://github.com/pokt-network/PSM4Win/releases). Builds are not code-signed yet, so a browser download shows a SmartScreen warning on first run; choose "More info", then "Run anyway". `SHA256SUMS` on the same page lists the checksums.
+
+## First run
+
+1. Import the wallet that will own your services from the **Owner wallet** card. It goes into an encrypted keyring on this PC.
+2. Open **Settings, Help** and read the five short chapters. They explain how a service works, what to have ready, and the steps in order. With your service app and server ready, the whole cycle takes about twenty minutes.
+3. Do everything on **Beta TestNet** first. Test POKT is free from the faucet linked under Help, Resources.
+
+If you used the earlier Windows HTML Application, the app offers to import its settings, wallet records, activity, and keyring passphrase on first start. Nothing is retyped.
+
+## Claude Code
+
+Under **Settings, Claude Integration**:
+
+- **Add to Claude Code** gives Claude the read-only Pocket tools (catalog, live parameters, cards, supplier state). Choose "Always allow" when Claude asks about them; they never sign or spend.
+- **Local action bridge**: turn it on, then Add to Claude Code. Claude can then read the app's state, preview any transaction, deploy, and start transactions. Every spend or signature opens a confirmation in the app window and waits for you; on MainNet you type the usual word. Keys and recovery phrases are never available over the bridge.
+
+Both work with Claude Code in the Claude desktop app's Code tab and in a terminal.
+
+## What the app never does
+
+- It never shows a private key except when you ask for it with a typed confirmation, and never sends one anywhere.
+- It never hardcodes a chain value. Fees, minimum stakes, session length, and unbonding periods are read from the network at the moment of use.
+- It never runs a `pocketd` command you did not start from a button, and every transaction shows its exact command before you confirm it.
 
 ## Development
 
 ```powershell
 npm install
-npm run dev            # electron-vite with hot reload
-npm test               # vitest, src/core
-npm run typecheck
-npm run selftest:beta  # the phase 1 exit check against Beta TestNet (needs Docker Desktop)
-npm run build:win      # NSIS installer and portable zip under release/
 ```
+
+```powershell
+npm run dev
+```
+
+`npm test` runs the unit tests, `npm run typecheck` and `npm run lint` the checks, `npm run selftest:beta` the headless signer check against Beta TestNet (needs Docker Desktop), and `npm run build:win` produces the installer and portable zip under `release/`.
+
+The specification lives in `docs/`: `ARCHITECTURE.md` (process model, signer port, the local bridge), `SIGNER-CONTRACT.md` (every operation), `SCREENS.md` (every screen), `MIGRATION.md` (the importer), and `PACKAGING.md` (installer, CI, Scoop). `CLAUDE.md` is the working brief for contributors and for Claude Code sessions in this repository.
+
+The macOS app is a separate project; this repository is Windows only.
+
+## Licence
+
+MIT. See `LICENSE`.

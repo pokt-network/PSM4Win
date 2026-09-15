@@ -13,3 +13,9 @@ One line per user-visible change. Versions are tags `v<version>`; compat strings
 - First-run import from the HTA offered in the window, with the services folder confirmed before it runs.
 - Reachability probes and file pickers run in the main process; the renderer's content security policy stays closed.
 - NSIS installer, portable zip, `SHA256SUMS`, GitHub Actions build, and the Scoop bucket manifest.
+- Screen-by-screen parity pass against the HTA on the same keyring: about fifty deviations fixed; the deliberate differences are listed in `docs/SCREENS.md`.
+- Local MCP action bridge: the app exposes its own operations to Claude Code on this PC over a loopback endpoint with a per-install token; every spend or signature is confirmed in the app window, and no key or phrase is ever available to it.
+- One-click "Add to Claude Code" for both the read-only Pocket tools and the bridge; Settings shows no JSON and no commands by default.
+- Help screen under Settings: a five-chapter guide for a first-time service owner.
+- Settings split into Start here, Servers, Suppliers, and Claude Integration tabs.
+- Fixtures and reference material carry example values only; no live service, host, or wallet detail is in the repository.
