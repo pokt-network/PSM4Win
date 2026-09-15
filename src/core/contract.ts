@@ -104,7 +104,15 @@ export interface RelayCallResult {
 }
 
 export type ValidateCardResult =
-  { ok: true; skipped: true; reason: string } | { ok: boolean; code: number; output: string }
+  | { ok: true; skipped: true; reason: string }
+  | {
+      ok: boolean
+      code: number
+      output: string
+      /** The card's own service_id when the file parses and carries one (Register warns when it
+       *  differs from the form, app.js checkCard). */
+      service_id?: string
+    }
 
 export interface StakeService {
   service_id: string

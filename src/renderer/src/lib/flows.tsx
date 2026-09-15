@@ -11,7 +11,8 @@ import {
   pollTx,
   loadHistory,
   setBusy,
-  psm
+  psm,
+  txUrl
 } from './actions'
 import type { Status } from '../components/ui'
 
@@ -22,6 +23,8 @@ export interface TxConfirm {
   mainBody: ReactNode
   /** Token to type on MainNet; null for a plain modal with a primary button. */
   token: string | null
+  /** Prompt above the token input (default "Type <token> to confirm."). */
+  prompt?: ReactNode
   mainOkLabel: string
   /** Beta TestNet confirm() text. */
   betaText: string
@@ -58,6 +61,7 @@ export async function confirmTx(c: TxConfirm): Promise<boolean> {
       title: c.mainTitle,
       body: c.mainBody,
       token: c.token,
+      prompt: c.prompt,
       okLabel: c.mainOkLabel
     })
   }
@@ -232,14 +236,7 @@ export async function fundOperator(
 export function TxLink({ hash }: { hash: string }): React.JSX.Element {
   const net = S().net
   return (
-    <a
-      className="mono"
-      onClick={() =>
-        psm().app.openExternal(
-          `${net === 'main' ? 'https://sauron-api.infra.pocket.network' : 'https://sauron-api.beta.infra.pocket.network'}/cosmos/tx/v1beta1/txs/${hash}`
-        )
-      }
-    >
+    <a className="mono" onClick={() => psm().app.openExternal(txUrl(net, hash))}>
       {hash}
     </a>
   )

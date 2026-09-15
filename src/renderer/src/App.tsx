@@ -6,6 +6,7 @@ import { ModalHost } from './lib/modal'
 import { dockerCycle, loadSettings, loadServiceFolders, tab } from './lib/actions'
 import { showWelcome } from './lib/welcome'
 import { offerHtaImport } from './screens/ownerDialogs'
+import { selectRegisterFolder } from './screens/Services'
 import { DashboardScreen } from './screens/Dashboard'
 import { ServicesScreen } from './screens/Services'
 import { CreateScreen } from './screens/Create'
@@ -38,6 +39,7 @@ export default function App(): React.JSX.Element {
         reg: { ...useStore.getState().reg, folder: settings.lastService ?? '' }
       })
       await loadServiceFolders()
+      if (settings.lastService) await selectRegisterFolder(settings.lastService)
       tab('dashboard')
       void dockerCycle(true)
       if (!settings.importedFrom) {

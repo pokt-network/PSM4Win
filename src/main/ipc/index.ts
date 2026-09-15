@@ -2,7 +2,7 @@
 // `signer:<op>`), plus window controls, settings, constrained service-folder
 // file access, and the importer. Every payload is validated with zod first.
 import { app, ipcMain, dialog, BrowserWindow, shell } from 'electron'
-import { join, resolve, sep } from 'node:path'
+import { join, resolve, sep, isAbsolute } from 'node:path'
 import { promises as fs } from 'node:fs'
 import { SIGNER_OPS, type SignerOp, type ProgressEvent } from '@core/contract'
 import {
@@ -189,10 +189,16 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       } catch {
         manifest = null
       }
+      const cardRel =
+        manifest &&
+        typeof manifest === 'object' &&
+        typeof (manifest as { card?: unknown }).card === 'string'
+          ? (manifest as { card: string }).card || 'card.json'
+          : 'card.json'
       folders.push({
         folder: d.name,
         manifest,
-        hasCard: exists(join(root, d.name, 'card.json')),
+        hasCard: exists(isAbsolute(cardRel) ? cardRel : join(root, d.name, cardRel)),
         hasDockerfile: exists(join(root, d.name, 'backend', 'Dockerfile')),
         hasCompose: exists(join(root, d.name, 'deploy', 'docker-compose.yaml'))
       })

@@ -397,6 +397,8 @@ Each probe is `{ rpc_type, request: { path, method, body? }, expect: { json_path
 
 **Load from folder (`loadCreateFromFolder`).** Reads `card.json` and `service.json`; invalid card JSON → status err. Reverse-maps every field (id from `service_id || folder`, cupr default 100, `rpc_types[0].type/backend_hint/notes`, `apis` joined with ", ", `specs[0].url/kind`, `docs`, `serving.backend/implementations/min_disk_gb (default 1)/min_ram_gb (default 1)/docs`, `serving.notes` with the trailing "Gateway operators: configure as type passthrough..." sentence stripped by regex, and the healthcheck array classified: first probe whose notes contain "identity" → identity; first whose notes contain "readiness" or whose `expect.matches === "^ok$"` → readiness; first remaining → functional (body re-serialised with `JSON.stringify`). Then `onCreateIdChange()` and status "Loaded <folder>. Edit and press Create to rewrite its card."
 
+**Electron deviations (by design).** Loading a card that lacks `access`, `results`, or `specs` resets those selects to the form defaults instead of keeping the previous form's values, and a manifest with `compute_units_per_relay: 0` keeps 0 rather than falling back to 100. "Edit card" from My services keeps the parse error visible when `card.json` is invalid instead of overwriting it with the "Loaded" status.
+
 **Status area.** `.status#crStatus`, `ul.checks#crChecks`, `.plan.hidden#crPreview` > `.lbl` "card.json" + `pre#crPreviewJson`.
 
 **Files.** Reads/writes `<servicesRoot>/<id>/card.json` and `service.json`; reads `<repo>/skills/pocket-service-builder/scripts/validate_card.py` through the signer.
@@ -477,6 +479,8 @@ Each probe is `{ rpc_type, request: { path, method, body? }, expect: { json_path
 **Live reads.** `application/params` (`min_stake`, `max_delegated_gateways`), application record per holder, service by id, gateway list, balances.
 
 **Files.** `service.json` (`networks.<net>.app_stake_tx`, `app_wallet`, `app_address`; `application_stake_pokt` via Save to service.json on Register).
+
+**Electron deviation (by design).** The HTA's `recordManifest` writes the stake record into whatever folder is selected on the Register screen, even when that is another service. The Electron app writes it into the folder whose `service.json` carries the staked service ID (`folderForId`), and writes nothing when no local folder has it.
 
 ### 3.6 Supply service: Suppliers list and Supplier editor (Manage)
 

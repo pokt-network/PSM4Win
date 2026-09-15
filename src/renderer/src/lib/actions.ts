@@ -384,7 +384,9 @@ export async function readCardFor(id: string): Promise<unknown | null> {
 }
 
 export async function writeManifest(folder: string, m: Manifest): Promise<void> {
-  await psm().files.writeServiceFile(folder, 'service.json', JSON.stringify(m, null, 2) + '\n')
+  // No trailing newline: the HTA's saveManifest and recordManifest write JSON.stringify(m, null, 2)
+  // as is; only createService adds "\n" (Create writes its own file).
+  await psm().files.writeServiceFile(folder, 'service.json', JSON.stringify(m, null, 2))
   await loadServiceFolders()
 }
 

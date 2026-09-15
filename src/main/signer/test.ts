@@ -105,5 +105,13 @@ export async function validateCard(req: Req<'validate-card'>): Promise<Res<'vali
   const text = await readText(card)
   if (text === null) fail(`Card file not found: ${card}`)
   const v = validateCardText(text!)
-  return { ok: v.ok, code: v.ok ? 0 : 1, output: formatCardValidation(v) }
+  let sid: string | undefined
+  try {
+    const parsed = JSON.parse(text!) as { service_id?: unknown }
+    if (parsed && typeof parsed === 'object' && typeof parsed.service_id === 'string')
+      sid = parsed.service_id
+  } catch {
+    sid = undefined
+  }
+  return { ok: v.ok, code: v.ok ? 0 : 1, output: formatCardValidation(v), service_id: sid }
 }

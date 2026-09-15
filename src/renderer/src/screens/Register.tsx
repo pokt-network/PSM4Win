@@ -53,7 +53,6 @@ export function RegisterScreen(): React.JSX.Element {
   const { lines, log, clear } = useLog()
   const set = (patch: Partial<typeof reg>): void => {
     useStore.setState((s) => ({ reg: { ...s.reg, ...patch } }))
-    setPlanOk(false)
   }
   const form = (): Snapshot => ({
     id: reg.id.trim(),
@@ -99,6 +98,14 @@ export function RegisterScreen(): React.JSX.Element {
       items.push({ level: 'fail', text: 'Card file not found.', sub: path })
       return null
     }
+    if (!r.ok && !('output' in r)) {
+      items.push({
+        level: 'fail',
+        text: 'Could not read the card.',
+        sub: `${(r as { error?: string }).error ?? ''} ${(r as { detail?: string }).detail ?? ''}`
+      })
+      return null
+    }
     // The signer reads the file; the size and JSON checks below use the same file through it.
     const txt = 'output' in r ? r.output : ''
     const size = /size: (\d+) bytes/.exec(txt)
@@ -130,6 +137,13 @@ export function RegisterScreen(): React.JSX.Element {
       text: `Card parses; ${fmtInt(bytes)} bytes.${bytes > 4096 ? ' Larger than the 4 KiB target.' : ''}`,
       sub: path
     })
+    const cardSid = 'service_id' in r ? r.service_id : undefined
+    if (cardSid && cardSid !== reg.id.trim())
+      items.push({
+        level: 'warn',
+        text: "Card's service_id differs from the form.",
+        sub: `${cardSid} vs ${reg.id.trim()}`
+      })
     return { validate: r }
   }
 
@@ -356,6 +370,7 @@ export function RegisterScreen(): React.JSX.Element {
         </div>
       ),
       token: f.id,
+      prompt: <p>Type the service ID to confirm.</p>,
       mainOkLabel: 'Register on MainNet',
       betaText: `Register '${f.id}' on Beta TestNet now?`,
       betaOkLabel: 'Register'

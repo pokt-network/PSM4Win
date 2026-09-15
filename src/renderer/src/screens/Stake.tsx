@@ -5,6 +5,7 @@ import { fmtPokt, fmtInt, fmtDuration, shortAddr, POKT } from '@core/format'
 import { suggestedAppStake, appUnbonding, appServiceIds } from '@core/chain'
 import {
   service as lcdService,
+  application as lcdApplication,
   gateways as lcdGateways,
   type ChainApplication,
   type ChainGateway,
@@ -238,7 +239,21 @@ export function StakeScreen(): React.JSX.Element {
       })
     }
     let cur = 0
-    const app = await appRecordOf(ww.address)
+    let app: ChainApplication | null = null
+    let appRead = true
+    try {
+      app = await lcdApplication(S().net, ww.address)
+    } catch (e) {
+      const status = (e as LcdError).status ?? 0
+      if (status === 404) app = null
+      else {
+        appRead = false
+        items.push({
+          level: 'fail',
+          text: `Could not read the application record (HTTP ${status}).`
+        })
+      }
+    }
     if (app) {
       cur = Number(app.stake.amount)
       const ids = appServiceIds(app)
@@ -264,7 +279,7 @@ export function StakeScreen(): React.JSX.Element {
           level: 'warn',
           text: `This application is unbonding (its stake stops at the session ending at block ${fmtInt(appUnbonding(app))}). Staking now cancels that and keeps its gateway delegations.`
         })
-    } else
+    } else if (appRead)
       items.push({ level: 'ok', text: `This wallet has no application stake yet on ${label}.` })
     const bal = await balanceOf(ww.address)
     setFromBal(bal)
@@ -333,6 +348,7 @@ export function StakeScreen(): React.JSX.Element {
         </div>
       ),
       token: f.id,
+      prompt: <p>Type the service ID to confirm.</p>,
       mainOkLabel: 'Stake on MainNet',
       betaText: `Stake ${fmtPokt(f.upokt)} POKT from '${f.from}' for '${f.id}' on Beta TestNet now?`,
       betaOkLabel: 'Stake'
@@ -494,7 +510,9 @@ export function StakeScreen(): React.JSX.Element {
             <div className="hint" id="stkHint">
               {params.appMinStake !== undefined
                 ? `Minimum on ${netLabel(net)} right now: ${fmtPokt(params.appMinStake)} POKT. Stake above it; suggested ${fmtPokt(suggestedAppStake(params))} POKT.`
-                : 'Minimum is fetched live from the network.'}
+                : catalog !== null
+                  ? 'Minimum could not be read.'
+                  : 'Minimum is fetched live from the network.'}
             </div>
           </div>
         </div>
