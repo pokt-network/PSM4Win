@@ -8,7 +8,7 @@ It works with Claude Code: one click in Settings gives Claude the read-only Pock
 
 **Requirements:** Windows 10 or 11, 64-bit, and [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running. The Pocket tools run in containers; the app downloads them once.
 
-**With Scoop** (recommended: updates in place, and Windows raises no SmartScreen warning because nothing is downloaded through a browser). Open a normal PowerShell window, not one run as administrator, and run these one at a time:
+**Install with Scoop.** This is the only supported way to install. The app is not code-signed yet, and current Windows 11 installs refuse to run an unsigned program downloaded through a browser; Scoop fetches and installs it with its own client, which Windows does not block. Open a normal PowerShell window, not one run as administrator, and run these one at a time:
 
 ```powershell
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
@@ -38,7 +38,7 @@ Later versions:
 scoop update pocket-service-manager
 ```
 
-**Without Scoop:** download `PocketServiceManager-Setup-<version>.exe` or the portable `PocketServiceManager-<version>-win-x64.zip` from the [releases page](https://github.com/pokt-network/PSM4Win/releases). Builds are not code-signed yet, so a browser download shows a SmartScreen warning on first run; choose "More info", then "Run anyway". `SHA256SUMS` on the same page lists the checksums.
+The [releases page](https://github.com/pokt-network/PSM4Win/releases) holds the files Scoop installs and their `SHA256SUMS`. Downloading them by hand is not a supported way to install: Windows blocks the unsigned files, and the in-app updater expects a Scoop install.
 
 ## First run
 

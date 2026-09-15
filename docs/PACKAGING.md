@@ -82,7 +82,7 @@ Releases: `electron-builder --publish always` with a `GH_TOKEN` attaches the ins
 
 ## 3. Code signing
 
-Unsigned builds work and are fine for development. SmartScreen shows "Windows protected your PC" on first run of an unsigned installer until the user clicks through. Signing removes the "Unknown publisher" line immediately and the SmartScreen warning after reputation builds (immediately with EV or with Azure Trusted Signing once trusted).
+Unsigned builds work and are fine for development. A browser-downloaded unsigned installer is not a usable path for users: current Windows 11 installs refuse to run it outright, and upgraded installs make the bypass hard to find (product owner, from earlier Electron builds). Scoop is therefore the only supported install path until signing exists. Signing removes the "Unknown publisher" line immediately and the SmartScreen warning after reputation builds (immediately with EV or with Azure Trusted Signing once trusted).
 
 Since June 2023 every code-signing private key must live in certified hardware or a cloud HSM; a `.pfx` file is no longer issued for OV or EV certificates. Options, in order of preference:
 
@@ -111,9 +111,9 @@ Wiring, kept disabled until credentials exist:
 
 Timestamping: whichever route, sign with an RFC 3161 timestamp so signatures outlive the certificate.
 
-## 4. Distribution: Scoop is the primary channel
+## 4. Distribution: Scoop is the only supported channel
 
-Decided 2026-09-14. SmartScreen's "Windows protected your PC" dialog fires only for executables that carry Mark-of-the-Web, which browsers attach on download. Scoop downloads with its own client, verifies a SHA-256 from the manifest, and extracts a portable zip, so nothing in that path carries the mark and an unsigned build runs without a warning. This is the normal way node-operator and developer tooling ships. The plain installer stays on the releases page for anyone who prefers it and is willing to click "Run anyway" once. Signing (section 3) remains the right long-term answer for the browser path; Scoop does not replace it, it sidesteps it for the audience that uses Scoop.
+Decided 2026-09-14. SmartScreen's "Windows protected your PC" dialog fires only for executables that carry Mark-of-the-Web, which browsers attach on download. Scoop downloads with its own client, verifies a SHA-256 from the manifest, and extracts a portable zip, so nothing in that path carries the mark and an unsigned build runs without a warning. This is the normal way node-operator and developer tooling ships. The installer and the portable zip stay on the releases page because Scoop installs from the zip and the checksums live beside it, not as a manual install path: Windows blocks the unsigned files when a browser downloads them.
 
 Rejected on the way here: a downloadable `.cmd` launcher that fetches the package with `curl`. The batch file itself carries the mark and is checked by SmartScreen, batch files cannot be signed so the warning never ages out, and a script that downloads and runs an executable is the shape of a dropper to antivirus heuristics. winget is a later addition for reach, not a bypass: it applies the mark and runs SmartScreen URL checks, and every version needs a reviewed manifest pull request.
 
@@ -178,7 +178,7 @@ Scoop installs into `%USERPROFILE%\scoop\apps\pocket-service-manager\<version>\`
 
 ### 4.5 README section
 
-The public README's install section is exactly the four lines in 4.1, the Docker Desktop prerequisite, one line saying the installer is on the releases page for those who want it, and one line saying that unsigned builds show a SmartScreen warning when downloaded from a browser and not when installed through Scoop. Nothing else.
+The public README's install section is the Docker Desktop prerequisite, the Scoop sequence (execution policy, Scoop, git, bucket, install, update) as one command per block, a sentence saying Scoop is the only supported way to install and why, and one line saying the releases page holds the files Scoop installs and their checksums, not a manual install path. Nothing else.
 
 ## 5. Versioning
 
