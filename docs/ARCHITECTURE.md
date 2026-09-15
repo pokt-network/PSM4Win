@@ -107,7 +107,7 @@ The bridge is the second half of phase 2: the app exposes its own operations to 
 
 **Transport.** MCP over Streamable HTTP, JSON responses only (every tool call resolves to one result; no SSE stream and no session id). The server is `node:http` in the main process (`src/main/bridge/server.ts`), bound to `127.0.0.1` on `settings.bridgePort` (default `BRIDGE_DEFAULT_PORT` in `src/core/versions.ts`), one path `/mcp`, POST only. Requests need `Authorization: Bearer <token>`; a request with an `Origin` header that is not this machine is refused (DNS rebinding). Request timeouts are disabled because a deploy can run for minutes.
 
-**Token.** 32 random bytes as hex, stored in `bridge.token` in the app data folder, created on first start and rotated from Settings. It is compared in constant time. Settings shows it (masked) with the exact `claude mcp add` command and `.mcp.json` snippet; the Claude desktop app's custom connectors need a public https URL, so they cannot reach the bridge.
+**Token.** 32 random bytes as hex, stored in `bridge.token` in the app data folder, created on first start and rotated from Settings. It is compared in constant time. Settings shows it (masked) with the exact `claude mcp add` command and `.mcp.json` snippet; the bridge works with Claude Code only, in the Claude desktop app's Code tab or in a terminal (the chat side's custom connectors need a public https URL).
 
 **Off by default.** `settings.bridgeEnabled` starts false; the Settings "Claude Integration" panel turns it on and off, changes the port, and rotates the token. Status and a per-call activity event reach the renderer over `psm:bridge-status` and `psm:bridge-activity` so the screens refresh after an assistant acts.
 

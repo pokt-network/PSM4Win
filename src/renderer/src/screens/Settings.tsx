@@ -1075,8 +1075,8 @@ function BridgePanel(): React.JSX.Element {
           </div>
           <ul className="checks">
             <li className="info">
-              The Claude desktop app's custom connectors need a public https URL, so they cannot
-              reach this bridge; use Claude Code.
+              The bridge works with Claude Code only, in the Claude desktop app's Code tab or in a
+              terminal.
             </li>
           </ul>
         </>
