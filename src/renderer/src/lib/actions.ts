@@ -640,3 +640,7 @@ export function pollTx(hash: string): Promise<{ ok: boolean; height?: number; er
 export function setBusy(b: boolean): void {
   useStore.setState({ busy: b })
 }
+
+// Development only: this module holds live state, so a hot update must reload the page and
+// re-run the startup sequence instead of swapping the module under the running screens.
+if (import.meta.hot) import.meta.hot.accept(() => window.location.reload())

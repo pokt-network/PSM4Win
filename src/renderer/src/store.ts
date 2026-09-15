@@ -173,3 +173,7 @@ export const useStore = create<State>((set) => ({
 }))
 
 export const S = (): State => useStore.getState()
+
+// Development only: this module holds live state, so a hot update must reload the page and
+// re-run the startup sequence instead of swapping the module under the running screens.
+if (import.meta.hot) import.meta.hot.accept(() => window.location.reload())
