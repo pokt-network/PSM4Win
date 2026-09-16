@@ -54,6 +54,8 @@ The [releases page](https://github.com/pokt-network/PSM4Win/releases) holds the 
 
 ## First run
 
+You should see Pocket Service Manager in your Start menu. If not, search "Pocket" to find it, and pin it. Then click to run.
+
 1. Import the wallet that will own your services from the **Owner wallet** card. It goes into an encrypted keyring on this PC.
 2. Open **Settings, Help** and read the five short chapters. They explain how a service works, what to have ready, and the steps in order. With your service app and server ready, the whole cycle takes about twenty minutes.
 3. Do everything on **Beta TestNet** first. Test POKT is free from the faucet linked under Help, Resources.
