@@ -18,7 +18,8 @@ import {
   settingsPatchSchema,
   serviceFileSchema,
   importSchema,
-  serviceReadFileSchema
+  serviceReadFileSchema,
+  verifyReportSchema
 } from './schemas'
 import { signer } from '../signer'
 import { readSettings, writeSettings } from '../state/settings'
@@ -117,6 +118,16 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       return 0
     }
   })
+  // Chain reads happen in the renderer, so a verification that fails for network
+  // reasons would otherwise leave no trace: the screen's red line is gone at the next
+  // reload and app.log never saw it. This is the one line the renderer may write.
+  ipcMain.handle('app:log-verify', async (_e, payload: unknown) => {
+    const p = verifyReportSchema.safeParse(payload)
+    if (!p.success) return false
+    log.warn('post-transaction verification did not confirm', { ...p.data })
+    return true
+  })
+
   ipcMain.handle('files:pick-file', async (_e, opts: unknown) => {
     const o = (opts && typeof opts === 'object' ? opts : {}) as { initial?: string; json?: boolean }
     const w = getWindow()

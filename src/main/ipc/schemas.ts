@@ -21,6 +21,21 @@ const addr = z.string().max(64)
 const amount = z.coerce.number()
 const dry = z.boolean().optional()
 
+/**
+ * The one report the renderer may write to the structured log (VerifyReport in
+ * @core/contract). Every field is an enum, a number or an id that matches a pattern,
+ * so the channel cannot carry a chosen string into the log file.
+ */
+export const verifyReportSchema = z.object({
+  what: z.enum(['supplier', 'application']),
+  network,
+  txhash: z.string().regex(/^[0-9A-Fa-f]{64}$/),
+  height: z.coerce.number().int().nonnegative().max(1e12),
+  outcome: z.enum(['unreadable', 'stake-short', 'not-listed']),
+  status: z.coerce.number().int().min(0).max(599),
+  services: z.array(z.string().regex(/^[A-Za-z0-9_-]{1,64}$/)).max(32)
+})
+
 export const requestSchemas: Record<SignerOp, z.ZodTypeAny> = {
   'docker-check': empty,
   'docker-start': empty,

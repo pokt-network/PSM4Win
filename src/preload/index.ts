@@ -7,7 +7,8 @@ import {
   type SignerOp,
   type SignerRequests,
   type SignerResult,
-  type ProgressEvent
+  type ProgressEvent,
+  type VerifyReport
 } from '../core/contract'
 import type { Settings } from '../main/state/settings'
 import type { HtaDetection, ImportResult } from '../main/migration/importer'
@@ -74,7 +75,9 @@ const api = {
     info: (): Promise<AppInfo> => ipcRenderer.invoke('app:info'),
     openExternal: (url: string): Promise<boolean> => ipcRenderer.invoke('app:open-external', url),
     openPath: (p: string): Promise<boolean> => ipcRenderer.invoke('app:open-path', p),
-    probeUrl: (url: string): Promise<number> => ipcRenderer.invoke('net:probe-url', url)
+    probeUrl: (url: string): Promise<number> => ipcRenderer.invoke('net:probe-url', url),
+    /** The one line a screen may put in the structured log: fixed fields, no free text. */
+    logVerification: (r: VerifyReport): Promise<boolean> => ipcRenderer.invoke('app:log-verify', r)
   },
   settings: {
     get: (): Promise<Settings> => ipcRenderer.invoke('settings:get'),

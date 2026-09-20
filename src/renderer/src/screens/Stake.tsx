@@ -412,6 +412,17 @@ export function StakeScreen(): React.JSX.Element {
         okv ? 'ok' : 'err'
       )
     }
+    // Recorded here or nowhere: see the same call on the Supply screen.
+    if (!okv)
+      void psm().app.logVerification({
+        what: 'application',
+        network: S().net,
+        txhash: r.txhash,
+        height: t.height ?? 0,
+        outcome: !a ? 'unreadable' : short ? 'stake-short' : 'not-listed',
+        status: a ? 200 : 0,
+        services: [f.id]
+      })
     setStatus(
       okv
         ? `'${f.from}' is staked as an application for '${f.id}' on ${label}.`

@@ -711,6 +711,18 @@ function SupplierEditor({
         okv ? 'ok' : 'err'
       )
     }
+    // The screen's own log dies with the next reload, and chain reads never reach
+    // app.log, so a verification that did not confirm is recorded here or nowhere.
+    if (!okv)
+      void psm().app.logVerification({
+        what: 'supplier',
+        network: S().net,
+        txhash: r.txhash,
+        height: t.height ?? 0,
+        outcome: !v.rec ? 'unreadable' : short ? 'stake-short' : 'not-listed',
+        status: v.status,
+        services: v.rec ? missing : ids
+      })
     setStatus(
       okv
         ? `Supplier staked on ${label} for ${ids.join(', ')}.${pending.length ? ` ${pending.join(', ')} ${pending.length === 1 ? 'is scheduled and activates' : 'are scheduled and activate'} at block ${fmtInt(pendingAt)}, the next session boundary.` : ''}`

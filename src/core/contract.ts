@@ -296,6 +296,30 @@ export const SUPPLIER_STEP_TIMEOUTS_MS: Record<SupplierStep, number> = {
   'remove-service': 240_000
 }
 
+/**
+ * What a screen reports to the structured log when the read it does after a
+ * transaction does not confirm it.
+ *
+ * Chain reads happen in the renderer, so nothing about them reaches app.log. A
+ * verification that fails because the node did not answer therefore left no trace
+ * anywhere, and the only record of it was a red line on a screen that is gone at the
+ * next reload. This is the one thing the renderer may write to the log, and it carries
+ * fixed fields and no free text: nothing here can be used to put a chosen string,
+ * secret or otherwise, into the file.
+ */
+export interface VerifyReport {
+  what: 'supplier' | 'application'
+  network: 'beta' | 'main'
+  txhash: string
+  height: number
+  /** unreadable: the record did not come back. stake-short: less on chain than was
+   *  submitted. not-listed: a submitted service is neither active nor scheduled. */
+  outcome: 'unreadable' | 'stake-short' | 'not-listed'
+  /** The HTTP status of the read, 0 when the node did not answer at all. */
+  status: number
+  services: string[]
+}
+
 /** A progress line emitted while a long operation runs. */
 export interface ProgressEvent {
   runId: string
