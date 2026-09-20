@@ -689,6 +689,8 @@ Refused while `state.busy` (`alert("Wait for the current transaction to finish b
 
 Per-screen opener calls: `dashboard` → `renderDashboard()`; `services` → `renderServices()`; `wallets` → `renderWallets()`; `test` → `openTest()`; `deploy` → `openDeploy()`; `settings` → `renderServers()` and `#setRoot = servicesRoot`; `stake` → `populateStakeSelect(); populateStakeFrom(); onStakeServiceChange(); renderDelegation()`; `supply` → show list view, hide editor, `renderSuppliers()`. `create` and `register` have no opener (their state persists). The section containing the screen is forced open in `navOpen`, `renderNav()` runs, `#content.scrollTop = 0`.
 
+**Electron deviation (by design, product owner, 2026-09-20).** A jump made from inside a screen goes through `goTo(name)` rather than `tab(name)`: it records the screen the user was on in `cameFrom`, and `BackTrail` (`src/renderer/src/components/Shell.tsx`, rendered once at the top of `#content`) offers "&#8592; Back to <the menu's own label for that screen>". `tab()` clears `cameFrom`, so choosing a screen from the menu is a fresh start and the control disappears. Every row action and every "fix this in Settings" line is a `goTo`; the menu, startup, and screenshot mode are plain `tab`. The point is that a row action drops the user on a screen they did not choose, and until now the only way out was to guess at the menu. This is separate from the supplier editor's own "Back to suppliers" button, which closes `supOpen` within the Supply screen rather than changing screen; both can show at once, and they do different things.
+
 ### 4.3 Refresh cadence
 
 There is no timer-based refresh of balances, block height, or block time. Everything is event-driven:

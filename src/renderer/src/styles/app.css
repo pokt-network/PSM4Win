@@ -732,6 +732,10 @@ table.services select {
   white-space: nowrap;
 }
 
+.backtrail {
+  margin: 0 0 10px 0;
+}
+
 /* ---- checklists, plans, logs ---- */
 .checks {
   list-style: none;

@@ -1,7 +1,7 @@
 // The app: shell around one screen at a time (docs/SCREENS.md sections 1 and 6).
 import { useEffect } from 'react'
 import { useStore } from './store'
-import { TitleBar, TopBar, OwnerWalletCard, Nav, Footer } from './components/Shell'
+import { TitleBar, TopBar, OwnerWalletCard, Nav, Footer, BackTrail } from './components/Shell'
 import { ModalHost } from './lib/modal'
 import { dockerCycle, loadSettings, loadServiceFolders, tab } from './lib/actions'
 import { showWelcome } from './lib/welcome'
@@ -78,6 +78,7 @@ export default function App(): React.JSX.Element {
           <Nav />
         </div>
         <div id="content">
+          <BackTrail />
           <div className="tabpane" id={'tab-' + screen} key={epoch}>
             {screen === 'dashboard' && <DashboardScreen />}
             {screen === 'services' && <ServicesScreen />}

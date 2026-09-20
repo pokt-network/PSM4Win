@@ -1,7 +1,7 @@
 // Settings (docs/SCREENS.md 3.11): services folder, servers, Provision, welcome.
 import { useEffect, useRef, useState } from 'react'
 import { useStore, S, type SettingsTab } from '../store'
-import { copy } from '../lib/actions'
+import { copy, goTo } from '../lib/actions'
 import type { Network } from '@core/networks'
 import type { RemoteClaudeStatus } from '../../../preload/index'
 import { RE } from '@core/validate'
@@ -36,7 +36,6 @@ import {
   dockerReady,
   setBusy,
   setNetwork,
-  tab,
   psm,
   pollTx,
   type ServerEntry
@@ -506,7 +505,7 @@ export async function provisionOn(name: string, net: Network): Promise<void> {
     await setNetwork(net)
     if (S().net !== net) return
   }
-  tab('settings')
+  goTo('settings')
   openProvision(name, net)
 }
 

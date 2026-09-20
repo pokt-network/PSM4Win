@@ -129,6 +129,8 @@ export interface State {
   dep: { id: string; server: string }
   tst: { id: string; wallet: string }
   supOpen: { server: string; preselect?: string } | null
+  /** The screen a row action or a fix-this link came from, for the way back. */
+  cameFrom: Screen | null
   prov: { server: string; net: Network; dir: string; host: string; fund: string }
   deployed: { id: string; server: string } | null
   bridge: BridgeStatus | null
@@ -172,6 +174,7 @@ export const useStore = create<State>((set) => ({
   dep: { id: '', server: '' },
   tst: { id: '', wallet: '' },
   supOpen: null,
+  cameFrom: null,
   prov: { server: '', net: 'beta', dir: '', host: '', fund: '10' },
   deployed: null,
   bridge: null,

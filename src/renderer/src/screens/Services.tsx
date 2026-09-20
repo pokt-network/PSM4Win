@@ -18,7 +18,7 @@ import {
   netManifest,
   servers,
   serverByName,
-  tab,
+  goTo,
   foot,
   type AppStakeHolder
 } from '../lib/actions'
@@ -95,7 +95,7 @@ export function ServicesScreen(): React.JSX.Element {
           <Empty
             text={`No services yet on ${netLabel(net)} and no service folders on this machine.`}
             button={
-              <button className="btn primary" onClick={() => tab('create')}>
+              <button className="btn primary" onClick={() => goTo('create')}>
                 Create your first service
               </button>
             }
@@ -247,7 +247,7 @@ export function ServicesScreen(): React.JSX.Element {
         >
           Refresh
         </button>
-        <button className="btn small primary" onClick={() => tab('create')}>
+        <button className="btn small primary" onClick={() => goTo('create')}>
           Create service
         </button>
       </div>
@@ -274,7 +274,7 @@ export async function svcUpdate(id: string): Promise<void> {
       }
     }))
   }
-  tab('register')
+  goTo('register')
   foot(
     `Editing '${id}'. Change what you need, run preflight, and the registration becomes an update (gas only).`
   )
@@ -282,7 +282,7 @@ export async function svcUpdate(id: string): Promise<void> {
 
 export async function svcRegister(folder: string): Promise<void> {
   await selectRegisterFolder(folder)
-  tab('register')
+  goTo('register')
 }
 
 /** onServiceFolder(): fills the Register form (and the stake prefills) from a folder's service.json. */
@@ -316,7 +316,7 @@ export async function selectRegisterFolder(folder: string): Promise<void> {
 
 export function svcStake(id: string): void {
   useStore.setState((s) => ({ stk: { ...s.stk, id } }))
-  tab('stake')
+  goTo('stake')
 }
 
 export async function svcEdit(folder: string): Promise<void> {
@@ -346,24 +346,24 @@ export async function svcEdit(folder: string): Promise<void> {
     crLoadNote: err || `Loaded ${folder}. Edit and press Create to rewrite its card.`,
     crLoadErr: !!err
   } as never)
-  tab('create')
+  goTo('create')
 }
 
 export function svcDeploy(id: string): void {
   useStore.setState((s) => ({ dep: { ...s.dep, id } }))
-  tab('deploy')
+  goTo('deploy')
 }
 
 export function svcTest(id: string): void {
   useStore.setState((s) => ({ tst: { ...s.tst, id } }))
-  tab('test')
+  goTo('test')
 }
 
 export function svcSupply(id: string): void {
   const sv = servers()
   let name = S().settings?.supplierServer ?? ''
   if (!sv.length) {
-    tab('settings')
+    goTo('settings')
     foot('Add a server first; a supplier lives on a server.')
     return
   }
@@ -373,9 +373,9 @@ export function svcSupply(id: string): void {
 
 export function openSupplier(name: string, preselect?: string): void {
   if (!serverByName(name)) {
-    tab('supply')
+    goTo('supply')
     return
   }
-  tab('supply')
+  goTo('supply')
   useStore.setState({ supOpen: { server: name, preselect } })
 }

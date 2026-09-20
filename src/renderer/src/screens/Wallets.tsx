@@ -27,7 +27,7 @@ import {
   foot,
   ownedServices,
   localServices,
-  tab
+  goTo
 } from '../lib/actions'
 import { openModal, closeModal, setModalBody, setModalButtons, lockModal } from '../lib/modal'
 import { fundWallet } from '../lib/flows'
@@ -218,7 +218,7 @@ export function svcStakeAs(id: string, walletName: string): void {
   useStore.setState((s) => ({
     stk: { ...s.stk, id: id || s.stk.id, from: walletName, fromPinned: true }
   }))
-  tab('stake')
+  goTo('stake')
 }
 
 // ---- dialogs ----

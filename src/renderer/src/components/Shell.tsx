@@ -17,6 +17,7 @@ import {
   copy,
   NAV,
   navToggle,
+  screenLabel,
   sectionOf,
   tab
 } from '../lib/actions'
@@ -319,6 +320,26 @@ export function Nav(): React.JSX.Element {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+/**
+ * The way back out of a screen the user was sent into.
+ *
+ * Every screen is reachable from the menu, so nothing is ever a dead end, but a row
+ * action or a "fix this in Settings" line drops the user somewhere they did not choose
+ * and the menu does not remember where they were. This does. It shows only after such a
+ * jump: choosing a screen from the menu clears it.
+ */
+export function BackTrail(): React.JSX.Element | null {
+  const cameFrom = useStore((s) => s.cameFrom)
+  if (!cameFrom) return null
+  return (
+    <div className="backtrail">
+      <button className="btn small" onClick={() => tab(cameFrom)}>
+        &#8592; Back to {screenLabel(cameFrom)}
+      </button>
     </div>
   )
 }

@@ -29,7 +29,7 @@ import {
   loadHistory,
   setBusy,
   psm,
-  tab,
+  goTo,
   loadServiceFolders
 } from '../lib/actions'
 import { openSupplier, svcTest } from './Services'
@@ -256,7 +256,7 @@ export function DeployScreen(): React.JSX.Element {
             {!provisioned.length ? (
               <>
                 No server is provisioned for {label}.{' '}
-                <a onClick={() => tab('settings')}>Provision one under Settings.</a>
+                <a onClick={() => goTo('settings')}>Provision one under Settings.</a>
               </>
             ) : (
               `Provisioned servers on ${label}.`

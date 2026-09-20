@@ -367,16 +367,35 @@ export function sectionOf(screen: Screen): NavSection {
   return NAV[0]
 }
 
+/** The label the menu uses for a screen, so a way back is named the way the user got there. */
+export function screenLabel(screen: Screen): string {
+  for (const sec of NAV) for (const [id, label] of sec.screens) if (id === screen) return label
+  return 'back'
+}
+
 export function tab(name: Screen): void {
   const sec = sectionOf(name)
   useStore.setState((s) => ({
     screen: name,
     navOpen: sec.screens.length > 1 ? { ...s.navOpen, [sec.id]: true } : s.navOpen,
     // tab("supply") always resets to the suppliers list; openSupplier sets supOpen afterwards.
-    supOpen: name === 'supply' ? null : s.supOpen
+    supOpen: name === 'supply' ? null : s.supOpen,
+    // Choosing a screen from the menu is a fresh start, not a step into something.
+    cameFrom: null
   }))
   const c = document.getElementById('content')
   if (c) c.scrollTop = 0
+}
+
+/**
+ * A jump made from inside a screen: a row action, or a line that sends the user
+ * somewhere to fix something. The destination then offers a way back to where they
+ * were, which the menu does not need because the menu is where they came from.
+ */
+export function goTo(name: Screen): void {
+  const from = S().screen
+  tab(name)
+  if (from !== name) useStore.setState({ cameFrom: from })
 }
 
 export function navToggle(id: string): void {

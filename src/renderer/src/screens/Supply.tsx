@@ -41,7 +41,7 @@ import {
   pollTx,
   saveSettings,
   psm,
-  tab,
+  goTo,
   type SupplierRow as ListRow
 } from '../lib/actions'
 import { confirmTx, fundOperator, TxLink } from '../lib/flows'
@@ -107,7 +107,7 @@ function SuppliersList(): React.JSX.Element {
           <Empty
             text="No servers configured. A supplier lives on a server."
             button={
-              <button className="btn primary" onClick={() => tab('settings')}>
+              <button className="btn primary" onClick={() => goTo('settings')}>
                 Add a server
               </button>
             }
@@ -192,7 +192,7 @@ function SuppliersList(): React.JSX.Element {
         >
           Refresh
         </button>
-        <button className="btn small" onClick={() => tab('settings')}>
+        <button className="btn small" onClick={() => goTo('settings')}>
           Add a server
         </button>
       </div>

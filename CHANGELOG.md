@@ -2,6 +2,10 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`.
 
+## Unreleased
+
+- A way back. Opening a screen from a row, or from a line that sends you somewhere to fix something, now shows "Back to ..." above it, naming the screen you came from. Choosing a screen from the menu clears it.
+
 ## 0.1.3
 
 - A stake whose verification does not confirm is now written to the app log, so the reason survives the screen being closed. The renderer can log that one fixed report and nothing else.

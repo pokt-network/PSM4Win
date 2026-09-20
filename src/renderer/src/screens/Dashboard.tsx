@@ -18,7 +18,7 @@ import {
   refreshNetwork,
   refreshBalance,
   loadHistory,
-  tab,
+  goTo,
   psm,
   type SupplierRow,
   type AppStakeHolder,
@@ -81,11 +81,11 @@ export function DashboardScreen(): React.JSX.Element {
             Overview <NetBadge />
           </h2>
           <div id="dashStats">
-            <div className="stat" onClick={() => tab('services')}>
+            <div className="stat" onClick={() => goTo('services')}>
               <div className="n">{imported ? owned.length : '?'}</div>
               <div className="l">Services owned on {label}</div>
             </div>
-            <div className="stat" onClick={() => tab('supply')}>
+            <div className="stat" onClick={() => goTo('supply')}>
               <div className="n">
                 {staked}
                 <small>
@@ -95,7 +95,7 @@ export function DashboardScreen(): React.JSX.Element {
               <div className="l">Suppliers staked</div>
               {supStaked ? <div className="s">{fmtPokt(supStaked)} POKT staked</div> : null}
             </div>
-            <div className="stat" onClick={() => tab('wallets')}>
+            <div className="stat" onClick={() => goTo('wallets')}>
               <div className="n">{wallets.length}</div>
               <div className="l">App wallets</div>
               {appStaked ? (
@@ -151,12 +151,12 @@ export function DashboardScreen(): React.JSX.Element {
                 <div className="hint">
                   {/* Product owner (2026-09-15): no folder count here; the services are listed below. */}
                   <a onClick={() => psm().app.openPath(servicesRoot)}>Open folder</a> or{' '}
-                  <a onClick={() => tab('settings')}>change it in Settings</a>.
+                  <a onClick={() => goTo('settings')}>change it in Settings</a>.
                 </div>
               </>
             ) : (
               <>
-                No directory set. <a onClick={() => tab('settings')}>Select it in Settings.</a>
+                No directory set. <a onClick={() => goTo('settings')}>Select it in Settings.</a>
               </>
             )}
           </div>
@@ -175,7 +175,7 @@ export function DashboardScreen(): React.JSX.Element {
             <span className="hint">Import the owner wallet to see its services.</span>
           ) : !owned.length ? (
             <span className="hint">
-              No services owned on {label} yet. <a onClick={() => tab('create')}>Create one.</a>
+              No services owned on {label} yet. <a onClick={() => goTo('create')}>Create one.</a>
             </span>
           ) : (
             <>
@@ -319,7 +319,7 @@ export function DashboardScreen(): React.JSX.Element {
           ) : !rows.length ? (
             <span className="hint">
               No server is configured.{' '}
-              <a onClick={() => tab('settings')}>Add one under Settings.</a>
+              <a onClick={() => goTo('settings')}>Add one under Settings.</a>
             </span>
           ) : (
             <table className="services">
@@ -341,7 +341,7 @@ export function DashboardScreen(): React.JSX.Element {
                       key={x.server.name}
                       className="link"
                       onClick={() =>
-                        x.state === 'ready' ? openSupplier(x.server.name) : tab('supply')
+                        x.state === 'ready' ? openSupplier(x.server.name) : goTo('supply')
                       }
                     >
                       <td className="svcid">
