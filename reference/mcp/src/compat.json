@@ -2,10 +2,19 @@
   "app": "Pocket Service Manager",
   "updated": "2026-09-20",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.6",
+  "latest": "electron-0.1.7",
   "minimum_supported": "hta-2026-09-14",
   "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.7": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.5",
+      "changes": [
+        "a relay that never completes is sent once more rather than failing the probe: the first relay into a session the supplier's relayer has only just joined can arrive truncated, which read as a broken service. Any HTTP answer, a 5xx included, is still graded as it stands",
+        "the session check says when a session is at most a block old, since being in a session is not the same as the relayer having caught up with it",
+        "preflight folds to a green \"Preflight passed\" line once the action it cleared is running"
+      ]
+    },
     "electron-0.1.6": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.5",
