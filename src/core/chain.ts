@@ -191,7 +191,15 @@ export function activationNote(p: LiveParams, act: number): string {
  * rather than one that is a few blocks early.
  */
 export type SessionReadiness =
-  | { state: 'ready'; suppliers: number; endHeight: number; blocksLeft: number }
+  | {
+      state: 'ready'
+      suppliers: number
+      endHeight: number
+      blocksLeft: number
+      /** How many blocks the session has been running. A relay into one that has
+       *  only just started is the one that sometimes has to be sent twice. */
+      ageBlocks: number
+    }
   | { state: 'waiting'; reason: 'no-supplier' | 'next-session'; readyAt: number | null }
   | { state: 'unknown'; detail: string }
 
@@ -214,11 +222,13 @@ export function classifySession(
   const h = Number(p.height || 0)
   if (r.ok && r.session.suppliers.length) {
     const end = Number(r.session.end_height || 0)
+    const start = Number(r.session.start_height || 0)
     return {
       state: 'ready',
       suppliers: r.session.suppliers.length,
       endHeight: end,
-      blocksLeft: end && h ? end - h + 1 : 0
+      blocksLeft: end && h ? end - h + 1 : 0,
+      ageBlocks: start && h ? h - start : 0
     }
   }
   if (!r.ok && !isNoSupplierError(r.error))
@@ -255,7 +265,15 @@ export function sessionNote(p: LiveParams, r: SessionReadiness, serviceId: strin
           (p.blockTime ? ' (~' + fmtDuration(r.blocksLeft * p.blockTime) + ')' : '') +
           ' from now'
         : '') +
-      '.'
+      '.' +
+      // Being in the session is not quite the same as the supplier's relayer having
+      // caught up with it, and the first relay into a session that started moments ago
+      // can come back truncated. The test sends it again rather than failing the probe.
+      (r.ageBlocks <= 1
+        ? ' It started ' +
+          (r.ageBlocks === 0 ? 'this block' : 'a block ago') +
+          ', so a first relay may have to be sent twice; the test does that itself.'
+        : '')
     )
   if (r.state === 'unknown')
     return (

@@ -1,6 +1,12 @@
 // Probe building and grading (docs/SCREENS.md 3.8).
 import { describe, it, expect } from 'vitest'
-import { testProbes, gradeStep, BAD_INPUT_BODY, type ProbeStep } from '@core/probes'
+import {
+  testProbes,
+  gradeStep,
+  relayIncomplete,
+  BAD_INPUT_BODY,
+  type ProbeStep
+} from '@core/probes'
 import type { RelayCallResult } from '@core/contract'
 
 const card = (request: Record<string, unknown>): unknown => ({
@@ -77,6 +83,37 @@ describe('the bad-input probe', () => {
       'Identity probe GET /v1/version',
       'Readiness probe GET /healthz'
     ])
+  })
+})
+
+describe('an incomplete relay', () => {
+  // The cold-session case: the client exits non-zero with no HTTP status because the
+  // response was truncated. Nothing was answered, so nothing can be graded.
+  const truncated = answer({
+    ok: false,
+    exit_code: 1,
+    http: 0,
+    body: '',
+    diagnostics: 'attempt 1: pokt1v8v0 in 6021ms via https://x -> error\nunexpected EOF'
+  })
+
+  it('is told apart from an answer the service gave', () => {
+    expect(relayIncomplete(truncated)).toBe(true)
+    expect(relayIncomplete(answer({ http: 500, exit_code: 1, body: '{"error":"boom"}' }))).toBe(
+      false
+    )
+    expect(relayIncomplete(answer({ http: 200, exit_code: 0, body: '{}' }))).toBe(false)
+  })
+
+  it('counts a 4xx as an answer, not a failed relay', () => {
+    expect(relayIncomplete(answer({ http: 400, exit_code: 1, body: '{"error":"x"}' }))).toBe(false)
+  })
+
+  it('still grades as a failure when it is graded at all', () => {
+    const g = gradeStep(badStep, truncated)
+    expect(g.ok).toBe(false)
+    expect(g.note).toContain('relay failed')
+    expect(g.note).toContain('unexpected EOF')
   })
 })
 

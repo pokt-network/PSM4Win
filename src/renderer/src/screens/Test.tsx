@@ -3,7 +3,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { useStore, S } from '../store'
 import { fmtDuration } from '@core/format'
 import { appServiceIds, checkSession, type SessionCheck } from '@core/chain'
-import { testProbes, gradeStep, type ProbeStep, type TestLogEntry } from '@core/probes'
+import {
+  testProbes,
+  gradeStep,
+  relayIncomplete,
+  type ProbeStep,
+  type TestLogEntry
+} from '@core/probes'
+import type { SignerResult } from '@core/contract'
 import {
   Badge,
   Checks,
@@ -214,14 +221,26 @@ export function TestScreen(): React.JSX.Element {
       log(
         `Probe ${i + 1} of ${steps.length}: ${s.label}${s.badInput ? ' with malformed JSON (expecting a 4xx JSON error)' : s.body ? ' with body ' + s.body.substring(0, 120) : ''}${!s.badInput && s.jsonPath ? ` (expecting ${s.jsonPath} to match ${s.matches})` : ''}`
       )
-      const r = await psm().signer['relay-call']({
-        network: S().net,
-        wallet,
-        service_id: id,
-        method: s.method,
-        path: s.path,
-        body: s.body
-      })
+      const send = (): Promise<SignerResult<'relay-call'>> =>
+        psm().signer['relay-call']({
+          network: S().net,
+          wallet,
+          service_id: id,
+          method: s.method,
+          path: s.path,
+          body: s.body
+        })
+      let r = await send()
+      // A relay that never completed is not an answer to grade. The first one of a
+      // session is where this happens: the response comes back truncated while the
+      // supplier's relayer catches up with a session it has only just joined, and
+      // reporting that as a failed probe blames a service that was never reached. One
+      // more attempt settles it, and the log says so rather than hiding it.
+      if ('exit_code' in r && relayIncomplete(r)) {
+        log('The relay did not complete. Sending it once more.')
+        await new Promise((done) => setTimeout(done, 2000))
+        r = await send()
+      }
       const res = {
         label: s.label,
         ok: false,

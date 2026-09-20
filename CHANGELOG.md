@@ -2,6 +2,10 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`.
 
+## Unreleased
+
+- Test service: a relay that never completes is sent once more instead of failing the probe. The first relay into a session that has only just started can come back truncated while the supplier's relayer catches up, which read as a broken service; the log says when it happens.
+
 ## 0.1.6
 
 - Funding a wallet and returning POKT to the owner now show what is happening. Confirming used to close the dialog they were reporting into, so the app looked idle for the minute the transaction took; both now narrate into a modal that stays until you close it and ends with the block the transfer landed in.

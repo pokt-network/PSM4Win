@@ -42,7 +42,13 @@ describe('isNoSupplierError', () => {
 describe('classifySession', () => {
   it('is ready when the session holds suppliers, and counts the blocks left', () => {
     const r = classifySession(params, { ok: true, session: sess(3) }, { staked: 3 })
-    expect(r).toEqual({ state: 'ready', suppliers: 3, endHeight: 663720, blocksLeft: 15 })
+    expect(r).toEqual({
+      state: 'ready',
+      suppliers: 3,
+      endHeight: 663720,
+      blocksLeft: 15,
+      ageBlocks: 5
+    })
   })
 
   it('waits when the node reports no suppliers for the session', () => {
@@ -93,8 +99,18 @@ describe('classifySession', () => {
   })
 
   it('leaves the block count out when the head height is unknown', () => {
-    const r = classifySession({ blocksPerSession: 20 }, { ok: true, session: sess(1) }, { staked: 1 })
-    expect(r).toEqual({ state: 'ready', suppliers: 1, endHeight: 663720, blocksLeft: 0 })
+    const r = classifySession(
+      { blocksPerSession: 20 },
+      { ok: true, session: sess(1) },
+      { staked: 1 }
+    )
+    expect(r).toEqual({
+      state: 'ready',
+      suppliers: 1,
+      endHeight: 663720,
+      blocksLeft: 0,
+      ageBlocks: 0
+    })
   })
 })
 
@@ -112,6 +128,23 @@ describe('sessionNote', () => {
     expect(note(classifySession(params, { ok: true, session: sess(1) }, { staked: 1 }))).toContain(
       '1 supplier is serving'
     )
+  })
+
+  it('warns that a first relay into a session that just started may need two goes', () => {
+    // Head at the session's own start height: nothing has relayed in it yet.
+    const fresh: LiveParams = { ...params, height: 663701 }
+    const t = sessionNote(
+      fresh,
+      classifySession(fresh, { ok: true, session: sess(1) }, { staked: 1 }),
+      ID
+    )
+    expect(t).toContain('It started this block')
+    expect(t).toContain('sent twice')
+  })
+
+  it('says nothing about that once the session has been running a while', () => {
+    const t = note(classifySession(params, { ok: true, session: sess(1) }, { staked: 1 }))
+    expect(t).not.toContain('sent twice')
   })
 
   it('explains the boundary rather than the error, and names the block', () => {

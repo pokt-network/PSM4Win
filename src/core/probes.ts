@@ -119,12 +119,25 @@ export interface Grade {
   note: string
 }
 
+/**
+ * Whether the relay never completed, as opposed to the service answering badly.
+ *
+ * No HTTP status came back and the client exited non-zero, so nothing was graded: the
+ * request died at the protocol layer. The first relay of a session is where this shows
+ * up, with a truncated RelayResponse reported as an unexpected EOF, and grading it as a
+ * failed probe blames a service that was never asked. A relay like this is worth
+ * sending again; a 500 from the backend, or a body that is not JSON, is not.
+ */
+export function relayIncomplete(r: RelayCallResult): boolean {
+  return r.exit_code !== 0 && !(r.http || 0)
+}
+
 export function gradeStep(step: ProbeStep, r: RelayCallResult): Grade {
   const body = String(r.body ?? '')
   const first = body.trim().charAt(0)
   const out: Grade = { ok: false, note: '' }
   const status = r.http || 0
-  if (r.exit_code !== 0 && !status) {
+  if (relayIncomplete(r)) {
     out.note =
       'relay failed: ' +
       (String(r.diagnostics ?? '')
