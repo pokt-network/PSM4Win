@@ -2,7 +2,12 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`.
 
-## Unreleased (0.1.0)
+## 0.1.1
+
+- Create and Register: a folder picker replaces the service folder dropdown, so a folder made outside the app is selectable at once instead of after a restart.
+- The buttons beside a file or folder box match the height of the box again.
+
+## 0.1.0
 
 - Platform layer: main-process signer porting every `signer.ps1` operation, typed IPC with validated payloads, Docker and SSH drivers with timeouts and cancellation, structured redacted log.
 - Pinned `pocketd` image `0.1.35` and `pocket-ap` `v0.1.2`.
