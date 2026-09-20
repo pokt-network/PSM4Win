@@ -164,6 +164,9 @@ export interface SignerRequests {
   'tx-fund-wallet': { network: Network; name: string; amount_upokt: number; dry?: boolean }
   'tx-fund-operator': { network: Network; to: string; amount_upokt: number; dry?: boolean }
   'tx-unstake-supplier': { network: Network; operator_address: string; dry?: boolean }
+  /** The application signs its own unstake: MsgUnstakeApplication takes no address and
+   *  reads it from the signer, unlike the supplier's, which the owner signs for. */
+  'tx-unstake-app': { network: Network; from: string; dry?: boolean }
   'remote-stake-supplier': SshConn & {
     network: Network
     path: string
@@ -231,6 +234,7 @@ export interface SignerResults {
   'tx-fund-wallet': TxResult | DryResult
   'tx-fund-operator': TxResult | DryResult
   'tx-unstake-supplier': TxResult | DryResult
+  'tx-unstake-app': TxResult | DryResult
   'remote-stake-supplier': TxResult | (DryResult & { config: string })
   'ssh-test': { ok: true; hostname: string; docker: string; keyring: boolean }
   'supplier-ship': { ok: true; files: string[]; relayer_kept: boolean; out: string }
@@ -265,6 +269,7 @@ export const SIGNER_OPS: readonly SignerOp[] = [
   'tx-fund-wallet',
   'tx-fund-operator',
   'tx-unstake-supplier',
+  'tx-unstake-app',
   'remote-stake-supplier',
   'ssh-test',
   'supplier-ship',

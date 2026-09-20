@@ -473,6 +473,22 @@ pocketd tx supplier unstake-supplier <operator> --from service-manager --keyring
 
 History `op: "unstake-supplier"`, `extra: "operator=<op> owner=<owner address>"`. UI (`unstakeSupplierDialog`): refuses when already unbonding or when the on-chain owner is not this wallet; the dialog states the live unbonding period in sessions and time and the return block; MainNet: type `UNSTAKE`; Beta: a modal button. `pollTx`, then re-reads the supplier record.
 
+#### `tx-unstake-app`
+
+**New in the Electron app (product owner, 2026-09-20); the HTA has no equivalent.** Purpose: begin unbonding an application, signed by the application wallet itself.
+
+Request: `network`, `from` (a wallet name, resolved through `resolveSigner`), `dry`. Refuses the owner wallet, which is not an application.
+
+Command:
+
+```
+pocketd tx application unstake-application --from <app key> --keyring-backend file --network <net> --gas auto --gas-prices 1upokt --gas-adjustment 1.5 -y -o json
+```
+
+Note the shape: the message carries no address and the node reads it from the signer, so unlike `tx-unstake-supplier` there is no positional argument and the owner wallet cannot sign on the application's behalf. Verified against `pocketd` 0.1.35 help.
+
+History `op: "unstake-application"`, `service_id: ""`, `extra: "from=<key>"`. UI (Stake application, "Unstake this application"): shown only when the chosen wallet is staked, and replaced by a notice when it is already unbonding; the dialog states the live application unbonding period in sessions and time; MainNet: type `UNSTAKE`; Beta: a modal button. `pollTx`, then re-reads the application record through `readAfterTx`. Not on the MCP bridge: see `BRIDGE_APP_ONLY_OPS`.
+
 #### `remote-stake-supplier`
 
 Purpose: stake (or restake) a supplier, signed on the server by the operator key over SSH. The YAML lists every service the supplier serves because `stake-supplier` replaces the whole list; the UI merges the existing on-chain list before calling.
@@ -812,6 +828,7 @@ interface DryResult { ok: true; dry: true; command: string }
 | `signer:tx-fund-wallet` | `{ network: Network; name: string; amount_upokt: number; dry?: boolean }` | `TxResult \| DryResult \| Fail` |
 | `signer:tx-fund-operator` | `{ network: Network; to: string; amount_upokt: number; dry?: boolean }` | `TxResult \| DryResult \| Fail` |
 | `signer:tx-unstake-supplier` | `{ network: Network; operator_address: string; dry?: boolean }` | `TxResult \| DryResult \| Fail` |
+| `signer:tx-unstake-app` | `{ network: Network; from: string; dry?: boolean }` | `TxResult \| DryResult \| Fail` |
 | `signer:remote-stake-supplier` | `SshConn & { network: Network; path: string; operator_key_name?: string; owner_address: string; operator_address: string; stake_upokt: number; services: Array<{ service_id: string; url: string; rpc_type: 'REST' \| 'JSON_RPC' \| 'WEBSOCKET' \| 'GRPC' \| 'COMET_BFT' }>; dry?: boolean }` | `TxResult \| (DryResult & { config: string }) \| Fail` |
 | `signer:ssh-test` | `SshConn & { path?: string }` | `{ ok: true; hostname: string; docker: string; keyring: boolean } \| Fail` |
 | `signer:supplier-ship` | `SshConn & { path: string; network: Network; hostname: string; project?: string; caddy_dir?: string; health_port?: number; relayer_metrics_port?: number; miner_metrics_port?: number; block_time?: number }` | `{ ok: true; files: string[]; relayer_kept: boolean; out: string } \| Fail` |

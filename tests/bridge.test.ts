@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   BRIDGE_TOOLS,
   BRIDGE_EXCLUDED_OPS,
+  BRIDGE_APP_ONLY_OPS,
   bridgeTool,
   needsConfirmation,
   handleJsonRpc,
@@ -35,6 +36,13 @@ describe('bridge tool table', () => {
     for (const t of BRIDGE_TOOLS) expect(BRIDGE_EXCLUDED_OPS).not.toContain(t.op)
     // and the exclusion list itself names real operations
     for (const op of BRIDGE_EXCLUDED_OPS) expect(SIGNER_OPS).toContain(op)
+  })
+  it('withholds the operations the app keeps to itself, for a reason that is not secrecy', () => {
+    // Not on the bridge by choice, not because it carries a key: unstaking an application
+    // starts an unbonding period nothing can shorten, so it stays in the app window.
+    for (const t of BRIDGE_TOOLS) expect(BRIDGE_APP_ONLY_OPS).not.toContain(t.op)
+    for (const op of BRIDGE_APP_ONLY_OPS) expect(SIGNER_OPS).toContain(op)
+    expect(BRIDGE_APP_ONLY_OPS).toContain('tx-unstake-app')
   })
   it('server-scoped tools take a server name, never SSH fields', () => {
     for (const t of BRIDGE_TOOLS) {

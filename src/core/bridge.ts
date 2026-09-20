@@ -431,6 +431,12 @@ export function bridgeTool(name: string): BridgeTool | undefined {
 }
 
 /** Operations that must never appear on the bridge (they carry a key or a phrase). */
+/**
+ * Operations the bridge never exposes because they carry a key or a phrase in one
+ * direction or the other.
+ *
+ * Kept apart from BRIDGE_APP_ONLY_OPS below, which are withheld for a different reason.
+ */
 export const BRIDGE_EXCLUDED_OPS: readonly SignerOp[] = [
   'wallet-import',
   'wallet-import-app',
@@ -439,6 +445,17 @@ export const BRIDGE_EXCLUDED_OPS: readonly SignerOp[] = [
   'wallet-export',
   'wallet-delete'
 ]
+
+/**
+ * Operations that exist in the app but are deliberately not offered to an assistant.
+ *
+ * These carry no secret, so nothing forces them off the bridge; they are withheld
+ * because the product owner chose to keep them in the app window, where the person
+ * doing it is looking at the screen. Unstaking an application starts an unbonding
+ * period that cannot be hurried, so it is a decision to take deliberately rather than
+ * one to hand to an agent (product owner, 2026-09-20).
+ */
+export const BRIDGE_APP_ONLY_OPS: readonly SignerOp[] = ['tx-unstake-app']
 
 /** Whether this call needs the user's approval in the app window before it runs. */
 export function needsConfirmation(tool: BridgeTool, args: Record<string, unknown>): boolean {

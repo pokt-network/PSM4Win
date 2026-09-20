@@ -192,6 +192,30 @@ export async function txUnstakeSupplier(
   return emitTx(r, net, 'unstake-supplier', '', `operator=${op} owner=${w!.address}`)
 }
 
+/**
+ * Begins the unbonding of an application.
+ *
+ * The application signs for itself: the message carries no address and the node takes
+ * it from the signer, so there is nothing to pass and the wallet named here is the one
+ * that stops being staked. The supplier's equivalent is the other shape, where the
+ * owner signs and names the operator.
+ */
+export async function txUnstakeApp(
+  req: Req<'tx-unstake-app'>,
+  ctx: OpContext
+): Promise<Res<'tx-unstake-app'>> {
+  await requireDocker(ctx)
+  const net = requireNetwork(req.network)
+  const from = await resolveSigner(req.from)
+  if (from === OWNER_KEY_NAME)
+    fail('The owner wallet is not an application. Choose the application wallet instead.')
+  const argv = ['tx', 'application', 'unstake-application', '--from', from, ...txTail(net)]
+  if (req.dry) return dryResult(argv)
+  const pass = await requirePassphrase()
+  const r = await pocketd(argv, { pass, ctx })
+  return emitTx(r, net, 'unstake-application', '', `from=${from}`)
+}
+
 export async function remoteStakeSupplier(
   req: Req<'remote-stake-supplier'>,
   ctx: OpContext

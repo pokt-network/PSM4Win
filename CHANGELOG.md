@@ -4,6 +4,7 @@ One line per user-visible change. Versions are tags `v<version>`; compat strings
 
 ## Unreleased
 
+- Stake application: an "Unstake this application" panel. The application wallet signs for itself and pays the gas, the dialog states the live unbonding period and what comes back, and staking again before the stake returns cancels it. It is in the app window only and not offered to an assistant over the bridge.
 - A way back. Opening a screen from a row, or from a line that sends you somewhere to fix something, now shows "Back to ..." above it, naming the screen you came from. Choosing a screen from the menu clears it.
 
 ## 0.1.3

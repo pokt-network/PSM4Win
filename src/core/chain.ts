@@ -27,6 +27,7 @@ export interface LiveParams {
   blocksPerSession?: number
   sessionAnchor?: number
   supplierUnbondingSessions?: number
+  applicationUnbondingSessions?: number
   height?: number
   chainId?: string
   headTime?: string
@@ -63,6 +64,7 @@ export async function loadLiveParams(net: Network): Promise<LiveParams> {
     p.blocksPerSession = num(shared.value.num_blocks_per_session)
     p.sessionAnchor = num(shared.value.session_grid_anchor_height)
     p.supplierUnbondingSessions = num(shared.value.supplier_unbonding_period_sessions)
+    p.applicationUnbondingSessions = num(shared.value.application_unbonding_period_sessions)
   }
   if (head.status === 'fulfilled') {
     p.height = head.value.height
@@ -220,11 +222,18 @@ export function classifySession(
     }
   }
   if (!r.ok && !isNoSupplierError(r.error))
-    return { state: 'unknown', detail: r.error instanceof Error ? r.error.message : String(r.error) }
+    return {
+      state: 'unknown',
+      detail: r.error instanceof Error ? r.error.message : String(r.error)
+    }
   if (supply.staked === 0) return { state: 'waiting', reason: 'no-supplier', readyAt: null }
   const act = Number(supply.activationHeight || 0)
   const next = nextSessionBoundary(p)
-  return { state: 'waiting', reason: 'next-session', readyAt: act > h ? act : (next?.height ?? null) }
+  return {
+    state: 'waiting',
+    reason: 'next-session',
+    readyAt: act > h ? act : (next?.height ?? null)
+  }
 }
 
 /** The sentence the Test screen shows under the buttons. */

@@ -55,6 +55,7 @@ const handlers: { [K in SignerOp]: Handler<K> } = {
   'tx-fund-wallet': tx.txFundWallet,
   'tx-fund-operator': tx.txFundOperator,
   'tx-unstake-supplier': tx.txUnstakeSupplier,
+  'tx-unstake-app': tx.txUnstakeApp,
   'remote-stake-supplier': tx.remoteStakeSupplier,
   'ssh-test': server.sshTest,
   'supplier-ship': server.supplierShip,
@@ -83,6 +84,7 @@ const KEYRING_OPS = new Set<SignerOp>([
   'tx-fund-wallet',
   'tx-fund-operator',
   'tx-unstake-supplier',
+  'tx-unstake-app',
   'relay-call'
 ])
 

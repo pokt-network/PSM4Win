@@ -53,6 +53,7 @@ export function StakeScreen(): React.JSX.Element {
     useStore.setState((s) => ({ stk: { ...s.stk, ...patch } }))
   const [status, setStatus] = useStatus()
   const [fundStatus, setFundStatus] = useStatus()
+  const [unstakeStatus, setUnstakeStatus] = useStatus()
   const [checks, setChecks] = useState<CheckNode[]>([])
   const [plan, setPlan] = useState<string | null>(null)
   const [showResults, setShowResults] = useState(false)
@@ -119,6 +120,82 @@ export function StakeScreen(): React.JSX.Element {
 
   const stake = poktToUpokt(stk.amount) || suggestedAppStake(params)
   const current = fromRec ? Number(fromRec.stake.amount) : 0
+  // Unbonding an application. The wallet signs for itself, so the one chosen above is the
+  // one that stops being staked; the owner wallet is not involved and cannot stand in.
+  const unstakeApp = async (): Promise<void> => {
+    const ww = walletByName(stk.from)
+    const addr = ww?.address ?? ''
+    if (!fromRec || !addr) return
+    if (!dockerReady())
+      return setUnstakeStatus('Docker Desktop must be running with the pocketd image.', 'err')
+    const sessions = params.applicationUnbondingSessions || 0
+    const eta =
+      sessions && params.blocksPerSession && params.blockTime
+        ? fmtDuration(sessions * params.blocksPerSession * params.blockTime)
+        : ''
+    const body = (
+      <>
+        <div className="dangerbox">
+          This starts unbonding <b>{stk.from}</b>, the application staked for{' '}
+          <b>{appServiceIds(fromRec).join(', ') || 'its service'}</b>. It stops relaying when the
+          current session ends.
+        </div>
+        <p>
+          Its <b>{fmtPokt(fromRec.stake.amount)} POKT</b> is then locked for{' '}
+          <b>{fmtInt(sessions)} sessions</b>
+          {eta ? (
+            <>
+              {' '}
+              (about <b>{eta}</b>)
+            </>
+          ) : null}{' '}
+          and returns to this wallet. The unbonding period is a network parameter read just now. The
+          wallet is kept, and staking again before the stake returns cancels the unbonding.
+        </p>
+      </>
+    )
+    const ok = await confirmTx({
+      mainTitle: 'Confirm MainNet unstake',
+      mainBody: body,
+      token: 'UNSTAKE',
+      mainOkLabel: 'Unstake on MainNet',
+      betaText: '',
+      betaOkLabel: 'Unstake on Beta TestNet',
+      betaModal: { title: 'Unstake this application', body }
+    })
+    if (!ok) return
+    setBusy(true)
+    setUnstakeStatus('Waiting for pocketd (simulating gas, signing, broadcasting)', 'busy')
+    const r = await psm().signer['tx-unstake-app']({ network: S().net, from: stk.from })
+    if (!r.ok || !('txhash' in r)) {
+      setBusy(false)
+      return setUnstakeStatus(
+        `${(r as { error?: string }).error ?? ''} ${(r as { detail?: string }).detail ?? ''}`,
+        'err'
+      )
+    }
+    setUnstakeStatus(`Broadcast, waiting for the block (${r.txhash.substring(0, 10)})`, 'busy')
+    const t = await pollTx(r.txhash)
+    setBusy(false)
+    if (!t.ok) return setUnstakeStatus(t.error ?? '', 'err')
+    const a = await readAfterTx(
+      () => appRecordOf(addr),
+      (x) => !!x
+    )
+    setFromRec(a)
+    await refreshNetwork()
+    void loadHistory()
+    void refreshBalance()
+    void loadWallets()
+    const end = appUnbonding(a)
+    setUnstakeStatus(
+      end
+        ? `Unstake accepted in block ${fmtInt(t.height)}. ${stk.from} relays until block ${fmtInt(end)}, then the stake returns after ${fmtInt(params.applicationUnbondingSessions || 0)} sessions.`
+        : `Unstake accepted in block ${fmtInt(t.height)}.`,
+      'ok'
+    )
+  }
+
   const need = Math.max(0, stake - current) + 1 * POKT
   useEffect(() => {
     if (
@@ -148,6 +225,11 @@ export function StakeScreen(): React.JSX.Element {
     `Signs and holds the stake. Address ${shortAddr(w.address)}.`
   )
   const ub = appUnbonding(fromRec)
+
+  const appReturnsAt =
+    ub && params.applicationUnbondingSessions && params.blocksPerSession
+      ? ub + params.applicationUnbondingSessions * params.blocksPerSession
+      : 0
   const balHint =
     fromBal === null
       ? 'Could not read the balance.'
@@ -600,6 +682,41 @@ export function StakeScreen(): React.JSX.Element {
           <PlanBlock label="Exact command the signer will run" text={plan} />
           <StatusLine status={status} id="stkStatus" />
           <LogBox lines={lines} id="stkLog" />
+        </div>
+      ) : null}
+      {fromRec ? (
+        <div className="panel" id="stkUnstakePanel">
+          <h2>Unstake this application</h2>
+          {ub ? (
+            <div id="stkUnstakeBox" className="warnbox">
+              <b>Already unbonding.</b> {stk.from} relays until block {fmtInt(ub)} and its{' '}
+              {fmtPokt(fromRec.stake.amount)} POKT
+              {appReturnsAt
+                ? ` returns to the wallet around block ${fmtInt(appReturnsAt)}`
+                : ' returns after the unbonding period'}
+              . Staking again before then cancels it.
+            </div>
+          ) : (
+            <>
+              <p className="hint" style={{ margin: '0 0 6px 0' }} id="stkUnstakeHint">
+                Stops <b>{stk.from}</b> relaying from the end of the current session. Its stake then
+                stays locked for the unbonding period, a network parameter read live, and returns to
+                this wallet. Signed by the application wallet itself, which pays the gas; the owner
+                wallet is not involved. The wallet is kept and can be staked again.
+              </p>
+              <div className="btnrow">
+                <button
+                  className="btn danger"
+                  id="btnUnstakeApp"
+                  disabled={busy}
+                  onClick={unstakeApp}
+                >
+                  Unstake application
+                </button>
+              </div>
+            </>
+          )}
+          <StatusLine status={unstakeStatus} id="stkUnstakeStatus" />
         </div>
       ) : null}
       <DelegationPanel />

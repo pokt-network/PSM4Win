@@ -75,6 +75,7 @@ export const requestSchemas: Record<SignerOp, z.ZodTypeAny> = {
   'tx-fund-wallet': z.object({ network, name, amount_upokt: amount, dry }),
   'tx-fund-operator': z.object({ network, to: addr, amount_upokt: amount, dry }),
   'tx-unstake-supplier': z.object({ network, operator_address: addr, dry }),
+  'tx-unstake-app': z.object({ network, from: name, dry }),
   'remote-stake-supplier': ssh.extend({
     network,
     path: z.string().max(512),
