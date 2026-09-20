@@ -2,10 +2,18 @@
   "app": "Pocket Service Manager",
   "updated": "2026-09-20",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.2",
+  "latest": "electron-0.1.3",
   "minimum_supported": "hta-2026-09-14",
   "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.3": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.0",
+      "changes": [
+        "a stake whose verification does not confirm is reported as what actually went wrong: the record could not be read, the stake on chain is below what was submitted, or a service is neither active nor scheduled. A service scheduled for the next session boundary is success, named with its activation block, not a failure",
+        "the record is re-read past the cache, and once more if the node does not answer, so one unlucky request no longer reads as a stake that did not take"
+      ]
+    },
     "electron-0.1.2": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.0",
