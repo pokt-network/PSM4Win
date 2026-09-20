@@ -2,7 +2,7 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`.
 
-## Unreleased
+## 0.1.2
 
 - Test service: the bad-input probe sends malformed JSON instead of an empty object. An empty object is a legal request to a service whose fields are all optional, so the probe was failing services that answered it correctly.
 - Test service: before a test runs, the screen asks the network whether a supplier is serving the service in the session running now. A service staked minutes ago is not, so instead of four failed probes and a node error it says so, names the block the wait ends at, and turns the button on by itself when it does.
