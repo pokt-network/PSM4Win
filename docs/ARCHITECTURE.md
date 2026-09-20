@@ -134,5 +134,5 @@ Keep in `src/core/versions.ts` and update here in the same commit:
 | LCD | `https://sauron-api.infra.pocket.network`, `https://sauron-api.beta.infra.pocket.network` |
 | Explorer | `https://explorer.pocket.network`, `https://explorer.pocket.network/beta` |
 | HTA version string | `hta-2026-09-14` (in `reference/mcp/src/compat.json`) |
-| Electron version string | `electron-0.1.0` (`APP_VERSION_PREFIX` + `package.json` version) |
+| Electron version string | `APP_VERSION_PREFIX` + `package.json` version, so `electron-0.1.2` at this tag. `reference/mcp/src/compat.json` keys an entry by the version that introduced a capability set and points later versions at it with `capabilities_as`, so every released version resolves. |
 | Bridge default port | `41777` (`BRIDGE_DEFAULT_PORT`) |

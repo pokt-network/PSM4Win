@@ -1,10 +1,26 @@
 {
   "app": "Pocket Service Manager",
-  "updated": "2026-09-15",
+  "updated": "2026-09-20",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.0",
+  "latest": "electron-0.1.2",
   "minimum_supported": "hta-2026-09-14",
+  "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.2": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.0",
+      "changes": [
+        "Test service refuses to run until the node reports a supplier serving the service in the current session, and names the block the wait ends at: a stake joins at a session boundary, never the moment it is signed",
+        "the Test screen's bad-input probe sends malformed JSON instead of an empty object, which a service whose fields are all optional answers 200 to, correctly"
+      ]
+    },
+    "electron-0.1.1": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.0",
+      "changes": [
+        "Create and Register pick a service folder with the platform folder dialog, so a folder made outside the app no longer needs a restart to appear"
+      ]
+    },
     "electron-0.1.0": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "local_mcp_bridge": {
