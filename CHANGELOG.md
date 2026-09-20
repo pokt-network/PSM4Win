@@ -2,6 +2,10 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`.
 
+## Unreleased
+
+- Wallets: "Return to owner" on an application wallet sends its POKT back to the owner wallet. Until now funds only went the other way, so a wallet whose service was finished, or whose stake had come back after unbonding, was a dead end. The owner address is resolved inside the app and is the only place the transfer can go.
+
 ## 0.1.4
 
 - Stake application: an "Unstake this application" panel. The application wallet signs for itself and pays the gas, the dialog states the live unbonding period and what comes back, and staking again before the stake returns cancels it. It is in the app window only and not offered to an assistant over the bridge.

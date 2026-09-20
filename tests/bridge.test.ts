@@ -43,6 +43,7 @@ describe('bridge tool table', () => {
     for (const t of BRIDGE_TOOLS) expect(BRIDGE_APP_ONLY_OPS).not.toContain(t.op)
     for (const op of BRIDGE_APP_ONLY_OPS) expect(SIGNER_OPS).toContain(op)
     expect(BRIDGE_APP_ONLY_OPS).toContain('tx-unstake-app')
+    expect(BRIDGE_APP_ONLY_OPS).toContain('tx-return-to-owner')
   })
   it('server-scoped tools take a server name, never SSH fields', () => {
     for (const t of BRIDGE_TOOLS) {

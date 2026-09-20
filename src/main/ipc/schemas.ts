@@ -73,6 +73,7 @@ export const requestSchemas: Record<SignerOp, z.ZodTypeAny> = {
   'tx-delegate-gateway': z.object({ network, from: name.optional(), gateway_address: addr, dry }),
   'tx-undelegate-gateway': z.object({ network, from: name.optional(), gateway_address: addr, dry }),
   'tx-fund-wallet': z.object({ network, name, amount_upokt: amount, dry }),
+  'tx-return-to-owner': z.object({ network, from: name, amount_upokt: amount, dry }),
   'tx-fund-operator': z.object({ network, to: addr, amount_upokt: amount, dry }),
   'tx-unstake-supplier': z.object({ network, operator_address: addr, dry }),
   'tx-unstake-app': z.object({ network, from: name, dry }),

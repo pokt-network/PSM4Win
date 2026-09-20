@@ -161,6 +161,14 @@ export interface SignerRequests {
     gateway_address: string
     dry?: boolean
   }
+  /**
+   * The way back: POKT from an application wallet to the owner wallet.
+   *
+   * There is no destination field on purpose. The owner address is read in the main
+   * process from wallet.json, so this can only ever send to the wallet the user
+   * imported; a renderer cannot point it somewhere else.
+   */
+  'tx-return-to-owner': { network: Network; from: string; amount_upokt: number; dry?: boolean }
   'tx-fund-wallet': { network: Network; name: string; amount_upokt: number; dry?: boolean }
   'tx-fund-operator': { network: Network; to: string; amount_upokt: number; dry?: boolean }
   'tx-unstake-supplier': { network: Network; operator_address: string; dry?: boolean }
@@ -232,6 +240,7 @@ export interface SignerResults {
   'tx-delegate-gateway': TxResult | (DryResult & { from: string })
   'tx-undelegate-gateway': TxResult | (DryResult & { from: string })
   'tx-fund-wallet': TxResult | DryResult
+  'tx-return-to-owner': TxResult | DryResult
   'tx-fund-operator': TxResult | DryResult
   'tx-unstake-supplier': TxResult | DryResult
   'tx-unstake-app': TxResult | DryResult
@@ -267,6 +276,7 @@ export const SIGNER_OPS: readonly SignerOp[] = [
   'tx-delegate-gateway',
   'tx-undelegate-gateway',
   'tx-fund-wallet',
+  'tx-return-to-owner',
   'tx-fund-operator',
   'tx-unstake-supplier',
   'tx-unstake-app',

@@ -30,7 +30,7 @@ import {
   goTo
 } from '../lib/actions'
 import { openModal, closeModal, setModalBody, setModalButtons, lockModal } from '../lib/modal'
-import { fundWallet } from '../lib/flows'
+import { fundWallet, returnToOwner } from '../lib/flows'
 
 interface Row {
   name: string
@@ -166,6 +166,12 @@ export function WalletsScreen(): React.JSX.Element {
                               onClick={() => svcStakeAs(w.service_id || ids[0] || '', w.name)}
                             >
                               {w.app ? 'Restake' : 'Stake'}
+                            </button>
+                            <button
+                              className="btn small"
+                              onClick={() => returnToOwnerDialog(w.name, refresh)}
+                            >
+                              Return to owner
                             </button>
                             <button
                               className="btn small"
@@ -743,6 +749,79 @@ function FundBody({
       />
       <StatusLine status={status} id="fwStatus" />
     </>
+  )
+}
+
+function ReturnBody({
+  name,
+  bal,
+  onDone
+}: {
+  name: string
+  bal: number
+  onDone: () => void
+}): React.JSX.Element {
+  // Everything except a POKT for the fee, which this wallet pays itself.
+  const suggest = Math.max(0, bal - 1 * POKT)
+  const [amount, setAmount] = useState(suggest ? String(Math.floor(suggest / POKT)) : '')
+  const [status, setStatus] = useStatus()
+  const amountRef = useRef(amount)
+  useEffect(() => {
+    amountRef.current = amount
+  })
+  useEffect(() => {
+    setModalButtons([
+      { label: 'Close', id: 'rtoClose', onClick: closeModal },
+      {
+        label: 'Send to owner wallet',
+        cls: 'primary',
+        id: 'rtoGo',
+        onClick: async () => {
+          const upokt = Math.round(parseFloat(amountRef.current) * POKT)
+          const ok = await returnToOwner(name, upokt, setStatus)
+          if (ok)
+            setTimeout(() => {
+              closeModal()
+              onDone()
+            }, 1500)
+        }
+      }
+    ])
+  }, [name, onDone, setStatus])
+  return (
+    <>
+      <p>
+        {name} holds <b>{fmtPokt(bal)} POKT</b> on {netLabel(S().net)}. This sends it to the owner
+        wallet, where it can pay for a registration or fund another wallet. The gas comes out of{' '}
+        {name}, so the suggested amount leaves about 1 POKT behind.
+      </p>
+      <p className="hint">
+        An application wallet is named after its service and cannot be reused for another, so
+        emptying one you have finished with is the normal end of its life. The wallet itself stays
+        until you remove it.
+      </p>
+      <label>Amount (POKT)</label>
+      <input
+        type="number"
+        id="rtoAmount"
+        min={0}
+        step={1}
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+      />
+      <StatusLine status={status} id="rtoStatus" />
+    </>
+  )
+}
+
+export async function returnToOwnerDialog(name: string, onDone: () => void): Promise<void> {
+  const w = walletByName(name)
+  if (!w || w.parent) return
+  const bal = (await balanceOf(w.address)) || 0
+  openModal(
+    `Return POKT from ${name} to the owner wallet`,
+    <ReturnBody name={name} bal={bal} onDone={onDone} />,
+    []
   )
 }
 

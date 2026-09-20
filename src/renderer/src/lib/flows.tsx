@@ -12,7 +12,8 @@ import {
   loadHistory,
   setBusy,
   psm,
-  txUrl
+  txUrl,
+  balanceOf
 } from './actions'
 import type { Status } from '../components/ui'
 
@@ -155,6 +156,85 @@ export async function fundWallet(
   void refreshBalance()
   void loadHistory()
   setStatus(`Sent ${fmtPokt(upokt)} POKT to ${name} in block ${fmtInt(t.height)}.`, 'ok')
+  return true
+}
+
+/**
+ * Sends POKT from an application wallet back to the owner wallet.
+ *
+ * The gas comes out of the sending wallet, so the caller is expected to leave a little
+ * behind; the dialog suggests an amount that does.
+ */
+export async function returnToOwner(
+  name: string,
+  upokt: number,
+  setStatus: SetStatus
+): Promise<boolean> {
+  const s = S()
+  if (s.busy) return false
+  const w = walletByName(name)
+  if (!w || w.parent) {
+    setStatus('Choose an application wallet.', 'err')
+    return false
+  }
+  if (!(upokt > 0)) {
+    setStatus('Enter an amount in POKT.', 'err')
+    return false
+  }
+  if (!s.imported || !dockerReady()) {
+    setStatus('Owner wallet and Docker must be ready.', 'err')
+    return false
+  }
+  const bal = (await balanceOf(w.address)) ?? 0
+  if (bal < upokt + 1 * POKT) {
+    setStatus(
+      `${name} holds ${fmtPokt(bal)} POKT; not enough for ${fmtPokt(upokt)} plus gas.`,
+      'err'
+    )
+    return false
+  }
+  const ok = await confirmTx({
+    mainTitle: 'Confirm MainNet transfer',
+    mainBody: (
+      <div className="dangerbox">
+        This sends <b>{fmtPokt(upokt)} POKT</b> of real funds from <b>{name}</b> to the owner
+        wallet. Transfers cannot be reversed.
+      </div>
+    ),
+    token: 'SEND',
+    mainOkLabel: 'Send on MainNet',
+    betaText: `Send ${fmtPokt(upokt)} POKT from ${name} to the owner wallet on Beta TestNet?`,
+    betaOkLabel: 'Send'
+  })
+  if (!ok) return false
+  setBusy(true)
+  setStatus(`Sending ${fmtPokt(upokt)} POKT to the owner wallet`, 'busy')
+  const r = await psm().signer['tx-return-to-owner']({
+    network: S().net,
+    from: name,
+    amount_upokt: upokt
+  })
+  if (!r.ok || !('txhash' in r)) {
+    setBusy(false)
+    setStatus(
+      `${(r as { error?: string }).error ?? ''} ${(r as { detail?: string }).detail ?? ''}`,
+      'err'
+    )
+    return false
+  }
+  setStatus(`Broadcast, waiting for the block (${r.txhash.substring(0, 10)})`, 'busy')
+  const t = await pollTx(r.txhash)
+  setBusy(false)
+  if (!t.ok) {
+    setStatus(t.error ?? '', 'err')
+    return false
+  }
+  void refreshBalance()
+  void loadHistory()
+  setStatus(
+    `Sent ${fmtPokt(upokt)} POKT from ${name} to the owner wallet in block ${fmtInt(t.height)}.`,
+    'ok'
+  )
   return true
 }
 

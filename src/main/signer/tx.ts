@@ -155,6 +155,45 @@ export async function txFundWallet(
   )
 }
 
+/**
+ * Sends POKT from an application wallet to the owner wallet.
+ *
+ * The counterpart of txFundWallet. An application wallet is named after the service it
+ * was made for, so it cannot be reused for another, and after an unbonding its stake
+ * comes back to it rather than to the owner; without this the POKT would sit there with
+ * no way out of the app. The destination is not a field: it is read here from
+ * wallet.json, so the only address this can reach is the owner's own.
+ */
+export async function txReturnToOwner(
+  req: Req<'tx-return-to-owner'>,
+  ctx: OpContext
+): Promise<Res<'tx-return-to-owner'>> {
+  await requireDocker(ctx)
+  const net = requireNetwork(req.network)
+  const w = await findWallet(req.from)
+  if (!w) fail(`'${req.from}' is not a wallet this app manages.`)
+  const owner = await readOwnerWallet()
+  if (!owner) fail('No owner wallet is imported.')
+  const to = owner!.address
+  if (!RE.address.test(to)) fail('The owner wallet record has no valid address.')
+  if (w!.address === to) fail('That is the owner wallet itself.')
+  const amt = toInt64(req.amount_upokt)
+  if (!(amt > 0)) fail('Amount must be a positive number of uPOKT.')
+  const from = await resolveSigner(req.from)
+  if (from === OWNER_KEY_NAME) fail('That is the owner wallet itself.')
+  const argv = ['tx', 'bank', 'send', from, to, `${amt}upokt`, ...txTail(net)]
+  if (req.dry) return dryResult(argv)
+  const pass = await requirePassphrase()
+  const r = await pocketd(argv, { pass, ctx })
+  return emitTx(
+    r,
+    net,
+    'return-to-owner',
+    w!.service_id,
+    `from=${w!.name} to=${to} amount_upokt=${amt}`
+  )
+}
+
 export async function txFundOperator(
   req: Req<'tx-fund-operator'>,
   ctx: OpContext

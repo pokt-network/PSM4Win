@@ -452,10 +452,11 @@ export const BRIDGE_EXCLUDED_OPS: readonly SignerOp[] = [
  * These carry no secret, so nothing forces them off the bridge; they are withheld
  * because the product owner chose to keep them in the app window, where the person
  * doing it is looking at the screen. Unstaking an application starts an unbonding
- * period that cannot be hurried, so it is a decision to take deliberately rather than
- * one to hand to an agent (product owner, 2026-09-20).
+ * period that cannot be hurried, and returning a wallet's balance to the owner empties
+ * it, so both are decisions to take deliberately rather than hand to an agent (product
+ * owner, 2026-09-20).
  */
-export const BRIDGE_APP_ONLY_OPS: readonly SignerOp[] = ['tx-unstake-app']
+export const BRIDGE_APP_ONLY_OPS: readonly SignerOp[] = ['tx-unstake-app', 'tx-return-to-owner']
 
 /** Whether this call needs the user's approval in the app window before it runs. */
 export function needsConfirmation(tool: BridgeTool, args: Record<string, unknown>): boolean {

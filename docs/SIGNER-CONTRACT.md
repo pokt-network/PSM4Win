@@ -451,6 +451,22 @@ pocketd tx bank send service-manager <recipient> <amount>upokt --keyring-backend
 
 Signs: owner wallet. History `op: "fund-wallet"`, `service_id: <wallet's service_id>`, `extra: "to=<addr> name=<name> amount_upokt=<n>"`. UI (`fundWallet`): checks the owner balance covers amount + 1 POKT; MainNet: type `SEND`; Beta: `confirm()`; `pollTx`.
 
+#### `tx-return-to-owner`
+
+**New in the Electron app (product owner, 2026-09-20); the HTA has no equivalent.** Purpose: send POKT from an application wallet to the owner wallet. The counterpart of `tx-fund-wallet`, and the only transfer that does not start at the owner.
+
+Request: `network`, `from` (a wallet name), `amount_upokt`, `dry`. There is no destination field: the owner address is read in main from `wallet.json`, so the only address this operation can reach is the owner's own and a renderer cannot redirect it. Refuses the owner wallet as the source.
+
+Command:
+
+```
+pocketd tx bank send <app key> <owner address> <amount>upokt --keyring-backend file --network <net> --gas auto --gas-prices 1upokt --gas-adjustment 1.5 -y -o json
+```
+
+The fee comes out of the sending wallet, so the UI suggests the balance less about 1 POKT.
+
+History `op: "return-to-owner"`, `service_id` from the wallet record, `extra: "from=<name> to=<owner> amount_upokt=<n>"`. UI (Wallets, "Return to owner" on an application wallet row): a dialog stating the balance and why the wallet is a dead end once its service is done; MainNet: type `SEND`; Beta: a modal button. `pollTx`, then `refreshBalance()` and `loadHistory()`. Not on the MCP bridge: see `BRIDGE_APP_ONLY_OPS`.
+
 #### `tx-fund-operator`
 
 Purpose: send POKT from the owner wallet to a supplier operator address the user names.
@@ -826,6 +842,7 @@ interface DryResult { ok: true; dry: true; command: string }
 | `signer:tx-delegate-gateway` | `{ network: Network; from?: string; gateway_address: string; dry?: boolean }` | `TxResult \| (DryResult & { from: string }) \| Fail` |
 | `signer:tx-undelegate-gateway` | same as above | same as above |
 | `signer:tx-fund-wallet` | `{ network: Network; name: string; amount_upokt: number; dry?: boolean }` | `TxResult \| DryResult \| Fail` |
+| `signer:tx-return-to-owner` | `{ network: Network; from: string; amount_upokt: number; dry?: boolean }` | `TxResult \| DryResult \| Fail` |
 | `signer:tx-fund-operator` | `{ network: Network; to: string; amount_upokt: number; dry?: boolean }` | `TxResult \| DryResult \| Fail` |
 | `signer:tx-unstake-supplier` | `{ network: Network; operator_address: string; dry?: boolean }` | `TxResult \| DryResult \| Fail` |
 | `signer:tx-unstake-app` | `{ network: Network; from: string; dry?: boolean }` | `TxResult \| DryResult \| Fail` |
