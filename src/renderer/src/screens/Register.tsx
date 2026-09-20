@@ -8,6 +8,7 @@ import {
   Checks,
   LogBox,
   PlanBlock,
+  PreflightSection,
   StatusLine,
   useLog,
   useStatus,
@@ -49,6 +50,8 @@ export function RegisterScreen(): React.JSX.Element {
   const [plan, setPlan] = useState<string | null>(null)
   const [showResults, setShowResults] = useState(false)
   const [planOk, setPlanOk] = useState(false)
+  // True once the action itself is running, which folds the preflight away.
+  const [ran, setRan] = useState(false)
   const [snap, setSnap] = useState<Snapshot | null>(null)
   const [isUpdate, setIsUpdate] = useState(false)
   const { lines, log, clear } = useLog()
@@ -213,6 +216,7 @@ export function RegisterScreen(): React.JSX.Element {
     clear()
     setStatus('')
     setPlanOk(false)
+    setRan(false)
     if (!dockerReady() && !rechecked) {
       setStatus('Checking Docker Desktop and the pocketd image', 'busy')
       await dockerCycle(false)
@@ -387,6 +391,8 @@ export function RegisterScreen(): React.JSX.Element {
     if (!ok) return
     setBusy(true)
     setPlanOk(false)
+    // The checklist and the plan have done their job; fold them so the run is what shows.
+    setRan(true)
     clear()
     log(`Signing and broadcasting add-service for '${f.id}' on ${label}`)
     setStatus('Waiting for pocketd (simulating gas, signing, broadcasting)', 'busy')
@@ -569,12 +575,13 @@ export function RegisterScreen(): React.JSX.Element {
       </div>
       {showResults ? (
         <div className="panel" id="regResults">
-          <h2>Preflight</h2>
-          <Checks items={checks} id="regChecks" />
-          <PlanBlock
-            label="Exact command the signer will run (the passphrase never touches the command line)"
-            text={plan}
-          />
+          <PreflightSection collapsed={ran} id="regPreflightFold">
+            <Checks items={checks} id="regChecks" />
+            <PlanBlock
+              label="Exact command the signer will run (the passphrase never touches the command line)"
+              text={plan}
+            />
+          </PreflightSection>
           <StatusLine status={status} id="regStatus" />
           <LogBox lines={lines} id="regLog" />
         </div>

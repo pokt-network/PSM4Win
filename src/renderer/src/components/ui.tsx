@@ -125,6 +125,54 @@ export function LogBox({ lines, id }: { lines: LogLine[]; id?: string }): React.
   )
 }
 
+/**
+ * The preflight results, folded away once the action they cleared is under way.
+ *
+ * Preflight prints a checklist and the exact command the signer will run. That is the
+ * point before the button is pressed and it is in the way afterwards: the run's own
+ * narration starts below a screenful of something the user has already read and agreed
+ * to, and on a slow transaction there is nothing visible to say anything is happening.
+ * Once the action runs this becomes one green line, which opens again on a click.
+ */
+export function PreflightSection({
+  collapsed,
+  children,
+  id
+}: {
+  collapsed: boolean
+  children: ReactNode
+  id?: string
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  // A fresh run folds it away again, whatever the user last left it as.
+  useEffect(() => {
+    if (collapsed) setOpen(false)
+  }, [collapsed])
+  if (!collapsed)
+    return (
+      <>
+        <h2>Preflight</h2>
+        {children}
+      </>
+    )
+  return (
+    <>
+      <h2 className="foldhd">
+        <button
+          type="button"
+          className="fold ok"
+          id={id}
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <span className="chev">{open ? '\u25bc' : '\u25b6'}</span> Preflight passed
+        </button>
+      </h2>
+      {open ? children : null}
+    </>
+  )
+}
+
 export function PlanBlock({
   label,
   text

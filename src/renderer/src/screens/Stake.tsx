@@ -16,6 +16,7 @@ import {
   Checks,
   LogBox,
   PlanBlock,
+  PreflightSection,
   StatusLine,
   useLog,
   useStatus,
@@ -58,6 +59,7 @@ export function StakeScreen(): React.JSX.Element {
   const [plan, setPlan] = useState<string | null>(null)
   const [showResults, setShowResults] = useState(false)
   const [planOk, setPlanOk] = useState(false)
+  const [ran, setRan] = useState(false)
   const [snap, setSnap] = useState<{
     id: string
     upokt: number
@@ -251,6 +253,7 @@ export function StakeScreen(): React.JSX.Element {
     clear()
     setStatus('')
     setPlanOk(false)
+    setRan(false)
     if (!dockerReady() && !rechecked) {
       setStatus('Checking Docker Desktop and the pocketd image', 'busy')
       await dockerCycle(false)
@@ -439,6 +442,8 @@ export function StakeScreen(): React.JSX.Element {
     if (!ok) return
     setBusy(true)
     setPlanOk(false)
+    // The checklist and the plan have done their job; fold them so the run is what shows.
+    setRan(true)
     clear()
     log(
       `Signing and broadcasting stake-application for '${f.id}' as '${f.from}' with ${fmtPokt(f.upokt)} POKT on ${label}`
@@ -677,9 +682,10 @@ export function StakeScreen(): React.JSX.Element {
       </div>
       {showResults ? (
         <div className="panel" id="stkResults">
-          <h2>Preflight</h2>
-          <Checks items={checks} id="stkChecks" />
-          <PlanBlock label="Exact command the signer will run" text={plan} />
+          <PreflightSection collapsed={ran} id="stkPreflightFold">
+            <Checks items={checks} id="stkChecks" />
+            <PlanBlock label="Exact command the signer will run" text={plan} />
+          </PreflightSection>
           <StatusLine status={status} id="stkStatus" />
           <LogBox lines={lines} id="stkLog" />
         </div>

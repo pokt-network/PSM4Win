@@ -5,6 +5,7 @@ One line per user-visible change. Versions are tags `v<version>`; compat strings
 ## Unreleased
 
 - Test service: a relay that never completes is sent once more instead of failing the probe. The first relay into a session that has only just started can come back truncated while the supplier's relayer catches up, which read as a broken service; the log says when it happens.
+- Register, Stake application and the supplier editor fold the preflight checklist and plan into a green "Preflight passed" line once the action runs, so the run itself is what you see. Click it to read them again.
 
 ## 0.1.6
 

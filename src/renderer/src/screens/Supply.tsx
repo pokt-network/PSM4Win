@@ -15,6 +15,7 @@ import {
   Checks,
   LogBox,
   PlanBlock,
+  PreflightSection,
   StatusLine,
   useLog,
   useStatus,
@@ -242,6 +243,7 @@ function SupplierEditor({
   const [plan, setPlan] = useState<string | null>(null)
   const [showResults, setShowResults] = useState(false)
   const [planOk, setPlanOk] = useState(false)
+  const [ran, setRan] = useState(false)
   const [snap, setSnap] = useState<Snapshot | null>(null)
   const [unstakeStatus, setUnstakeStatus] = useStatus()
   const { lines, log, clear } = useLog()
@@ -390,6 +392,7 @@ function SupplierEditor({
     clear()
     setStatus('')
     setPlanOk(false)
+    setRan(false)
     if (!S().imported)
       items.push({
         level: 'fail',
@@ -639,6 +642,8 @@ function SupplierEditor({
     if (!ok) return
     setBusy(true)
     setPlanOk(false)
+    // The checklist and the plan have done their job; fold them so the run is what shows.
+    setRan(true)
     clear()
     log(
       `Copying the stake config to ${f.server} and signing with the operator key there, ${fmtPokt(f.upokt)} POKT for ${ids.join(', ')} on ${label}`
@@ -1077,9 +1082,10 @@ function SupplierEditor({
       </div>
       {showResults ? (
         <div className="panel" id="supResults">
-          <h2>Preflight</h2>
-          <Checks items={checks} id="supChecks" />
-          <PlanBlock label="Exact command the signer will run" text={plan} />
+          <PreflightSection collapsed={ran} id="supPreflightFold">
+            <Checks items={checks} id="supChecks" />
+            <PlanBlock label="Exact command the signer will run" text={plan} />
+          </PreflightSection>
           <StatusLine status={status} id="supStatus" />
           <LogBox lines={lines} id="supLog" />
         </div>
