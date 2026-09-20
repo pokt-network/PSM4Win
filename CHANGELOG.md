@@ -2,7 +2,7 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`.
 
-## Unreleased
+## 0.1.6
 
 - Funding a wallet and returning POKT to the owner now show what is happening. Confirming used to close the dialog they were reporting into, so the app looked idle for the minute the transaction took; both now narrate into a modal that stays until you close it and ends with the block the transfer landed in.
 

@@ -1,7 +1,7 @@
 {
   "name": "pocket-service-manager",
   "productName": "Pocket Service Manager",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Register, stake, supply, deploy, and test services on Pocket Network.",
   "main": "./out/main/index.js",
   "license": "MIT",
