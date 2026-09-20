@@ -1,0 +1,76 @@
+name: Sync compat to service-builder
+
+# On each release tag, mirror reference/mcp/src/compat.json into
+# pokt-network/service-builder at mcp/src/compat.json. That push touches mcp/**,
+# which triggers service-builder's own "Deploy pocket-mcp" workflow, so the public
+# MCP at mcp.pocketmcp.network serves the current version table with no hand copy.
+#
+# compat.json is authored HERE (see docs/PACKAGING.md): the assistant-facing
+# capability text cannot be derived from a version number, only written, so this
+# carries the file the author already maintains rather than reading a git tag.
+#
+# Needs the repository secret SERVICE_BUILDER_PUSH_TOKEN: a fine-grained personal
+# access token with Contents: Read and write on pokt-network/service-builder only.
+# Without it the job explains and stops instead of failing the release.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: sync-compat
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      SOURCE: reference/mcp/src/compat.json
+      HAS_TOKEN: ${{ secrets.SERVICE_BUILDER_PUSH_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate the compat file is JSON
+        run: |
+          jq empty "$SOURCE" || { echo "::error::$SOURCE is not valid JSON; refusing to sync."; exit 1; }
+
+      - name: Warn if latest does not match the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          want="electron-${GITHUB_REF_NAME#v}"
+          have="$(jq -r '.latest' "$SOURCE")"
+          if [ "$want" != "$have" ]; then
+            echo "::warning::compat \"latest\" is '$have' but tag ${GITHUB_REF_NAME} implies '$want'; bump it in $SOURCE. Syncing the file as written."
+          fi
+
+      - name: Explain when the token is missing
+        if: env.HAS_TOKEN != 'true'
+        run: echo "::notice::SERVICE_BUILDER_PUSH_TOKEN is not set; validated compat.json but did not sync it. Add the secret to enable syncing."
+
+      - name: Check out service-builder
+        if: env.HAS_TOKEN == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: pokt-network/service-builder
+          token: ${{ secrets.SERVICE_BUILDER_PUSH_TOKEN }}
+          path: service-builder
+
+      - name: Copy, commit, and push when changed
+        if: env.HAS_TOKEN == 'true'
+        run: |
+          cp "$SOURCE" service-builder/mcp/src/compat.json
+          cd service-builder
+          if git diff --quiet -- mcp/src/compat.json; then
+            echo "service-builder already has this compat.json; nothing to push."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mcp/src/compat.json
+          git commit -m "Sync app compatibility table" -m "From pokt-network/PSM4Win@${GITHUB_REF_NAME} (${GITHUB_SHA::7})."
+          git push origin HEAD:main
+          echo "Pushed compat.json to service-builder; its Deploy pocket-mcp workflow will redeploy the worker."

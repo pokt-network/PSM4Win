@@ -187,5 +187,5 @@ The public README's install section is the Docker Desktop prerequisite, the Scoo
 ## 6. Versioning
 
 - `package.json` `version` is the app version; the tag is `v<version>`; the compat string is `electron-<version>`.
-- Bump the version, update `reference/mcp/src/compat.json` (and the copy in the service-builder repository) when capabilities change, tag, push, and let the workflow build, publish, and commit the bucket manifest.
+- Bump the version, update `reference/mcp/src/compat.json` when capabilities change, tag, push, and let the workflows build, publish, commit the bucket manifest, and mirror `compat.json` into the service-builder repository. The `sync-compat` workflow carries that file on each `v*` tag (secret `SERVICE_BUILDER_PUSH_TOKEN`), and its push there redeploys the public MCP; no hand copy.
 - Keep a `CHANGELOG.md` with one line per user-visible change; the Settings screen shows the version and the pinned `pocketd` tag.
