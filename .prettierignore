@@ -4,3 +4,12 @@ pnpm-lock.yaml
 LICENSE.md
 tsconfig.json
 tsconfig.*.json
+
+# Snapshots of other repositories. They are read here and never edited, so `npm run
+# format` must not rewrite them; some are templates holding {{TOKENS}} that are not
+# valid YAML and make prettier fail outright.
+reference/
+
+# Shipped to a supplier host and kept byte-identical to the copy under reference/
+# until Provision is re-verified (CLAUDE.md).
+resources/server/

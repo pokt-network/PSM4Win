@@ -2,3 +2,8 @@ singleQuote: true
 semi: false
 printWidth: 100
 trailingComma: none
+# The repository stores CRLF and checks it out the way it stores it, so prettier keeps
+# whatever a file already uses. Left at its default of lf, it treated every line of every
+# file on a Windows checkout as needing a CR deleted: about 1,900 warnings from `npm run
+# lint`, which buried anything real it had to say.
+endOfLine: auto

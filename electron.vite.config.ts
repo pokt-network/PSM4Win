@@ -23,7 +23,13 @@ const PROD_CSP = [
 const cspMeta: Plugin = {
   name: 'psm-csp-meta',
   apply: 'build',
-  transformIndexHtml: () => [{ tag: 'meta', attrs: { 'http-equiv': 'Content-Security-Policy', content: PROD_CSP }, injectTo: 'head-prepend' }]
+  transformIndexHtml: () => [
+    {
+      tag: 'meta',
+      attrs: { 'http-equiv': 'Content-Security-Policy', content: PROD_CSP },
+      injectTo: 'head-prepend'
+    }
+  ]
 }
 
 export default defineConfig({

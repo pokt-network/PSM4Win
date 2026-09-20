@@ -32,7 +32,7 @@ jobs:
       SOURCE: reference/mcp/src/compat.json
       HAS_TOKEN: ${{ secrets.SERVICE_BUILDER_PUSH_TOKEN != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Validate the compat file is JSON
         run: |
@@ -53,7 +53,7 @@ jobs:
 
       - name: Check out service-builder
         if: env.HAS_TOKEN == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: pokt-network/service-builder
           token: ${{ secrets.SERVICE_BUILDER_PUSH_TOKEN }}
