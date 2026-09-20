@@ -2,7 +2,7 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`.
 
-## Unreleased
+## 0.1.8
 
 - Test service: choosing a wallet that is not staked for the service now says so in a sentence, instead of showing the node's raw 500 with the request URL and JSON in it. Any error that genuinely is unexpected is trimmed to the status and the message. The badge and the Check again button sit on their own row so nothing runs together.
 
