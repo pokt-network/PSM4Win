@@ -2,6 +2,10 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`.
 
+## Unreleased
+
+- Test service: before a test runs, the screen asks the network whether a supplier is serving the service in the session running now. A service staked minutes ago is not, so instead of four failed probes and a node error it says so, names the block the wait ends at, and turns the button on by itself when it does.
+
 ## 0.1.1
 
 - Create and Register: a folder picker replaces the service folder dropdown, so a folder made outside the app is selectable at once instead of after a restart.

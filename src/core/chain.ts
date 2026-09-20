@@ -6,7 +6,11 @@ import {
   params as moduleParams,
   allServices,
   latestBlock,
+  latestHeight,
   blockAt,
+  session,
+  suppliersForService,
+  type ChainSession,
   type ChainSupplier,
   type ChainApplication
 } from './lcd'
@@ -171,6 +175,169 @@ export function activationNote(p: LiveParams, act: number): string {
         fmtInt(h)
       : '')
   )
+}
+
+// ---- session readiness (docs/SCREENS.md 3.8) ----
+
+/**
+ * Whether a relay can reach a supplier for a service right now.
+ *
+ * A stake does not take effect the moment it is signed: the session that is
+ * running was drawn at its own start height, so a supplier that staked inside it
+ * joins only at the next boundary. Until then the node answers a session query
+ * with an error and every relay fails with it, which reads as a broken service
+ * rather than one that is a few blocks early.
+ */
+export type SessionReadiness =
+  | { state: 'ready'; suppliers: number; endHeight: number; blocksLeft: number }
+  | { state: 'waiting'; reason: 'no-supplier' | 'next-session'; readyAt: number | null }
+  | { state: 'unknown'; detail: string }
+
+/** The node reports "no suppliers ... not found for session", not an empty list. */
+export function isNoSupplierError(e: unknown): boolean {
+  const m = e instanceof Error ? e.message : String(e ?? '')
+  return /no suppliers|could not find suppliers|not found for session/i.test(m)
+}
+
+/**
+ * Grades a session query. `staked` is how many suppliers are staked for the
+ * service on chain, or null when that lookup did not answer; the two are kept
+ * apart so the note never claims a stake exists that was never read.
+ */
+export function classifySession(
+  p: LiveParams,
+  r: { ok: true; session: ChainSession } | { ok: false; error: unknown },
+  supply: { staked: number | null; activationHeight?: number | null }
+): SessionReadiness {
+  const h = Number(p.height || 0)
+  if (r.ok && r.session.suppliers.length) {
+    const end = Number(r.session.end_height || 0)
+    return {
+      state: 'ready',
+      suppliers: r.session.suppliers.length,
+      endHeight: end,
+      blocksLeft: end && h ? end - h + 1 : 0
+    }
+  }
+  if (!r.ok && !isNoSupplierError(r.error))
+    return { state: 'unknown', detail: r.error instanceof Error ? r.error.message : String(r.error) }
+  if (supply.staked === 0) return { state: 'waiting', reason: 'no-supplier', readyAt: null }
+  const act = Number(supply.activationHeight || 0)
+  const next = nextSessionBoundary(p)
+  return { state: 'waiting', reason: 'next-session', readyAt: act > h ? act : (next?.height ?? null) }
+}
+
+/** The sentence the Test screen shows under the buttons. */
+export function sessionNote(p: LiveParams, r: SessionReadiness, serviceId: string): string {
+  if (r.state === 'ready')
+    return (
+      r.suppliers +
+      (r.suppliers === 1 ? ' supplier is' : ' suppliers are') +
+      ' serving ' +
+      serviceId +
+      ' in the session running now' +
+      (r.blocksLeft > 0
+        ? ', which ends at block ' +
+          fmtInt(r.endHeight) +
+          ', ' +
+          fmtInt(r.blocksLeft) +
+          ' block' +
+          (r.blocksLeft === 1 ? '' : 's') +
+          (p.blockTime ? ' (~' + fmtDuration(r.blocksLeft * p.blockTime) + ')' : '') +
+          ' from now'
+        : '') +
+      '.'
+    )
+  if (r.state === 'unknown')
+    return (
+      'Could not read the current session from the network (' +
+      r.detail +
+      '). The test will run and show whatever the protocol answers.'
+    )
+  if (r.reason === 'no-supplier')
+    return (
+      'No supplier is staked for ' +
+      serviceId +
+      ' yet, so a relay has nowhere to go. Supply the service on a server and deploy it first; ' +
+      'testing works from the session after the supplier stake.'
+    )
+  const every = p.blocksPerSession
+    ? ' Sessions start every ' + fmtInt(p.blocksPerSession) + ' blocks.'
+    : ''
+  return (
+    'Nothing is serving ' +
+    serviceId +
+    ' in the session running now. A supplier joins only at a session boundary, never the moment it stakes.' +
+    every +
+    (r.readyAt ? ' The next one is ' + activationNote(p, r.readyAt) + '.' : '') +
+    ' Relays fail until then, so the test waits.'
+  )
+}
+
+/**
+ * The preflight the Test screen runs before it lets a test go out: ask the node
+ * for the session this application and service would relay through, and when
+ * there is none, find out whether that is a missing stake or a boundary that has
+ * not come round yet.
+ */
+export interface SessionCheck {
+  readiness: SessionReadiness
+  /** Built here, with the height that was read for the query rather than a stored one. */
+  note: string
+  height: number
+}
+
+export async function checkSession(
+  net: Network,
+  p: LiveParams,
+  appAddress: string,
+  serviceId: string
+): Promise<SessionCheck> {
+  if (!appAddress || !serviceId) {
+    const readiness: SessionReadiness = { state: 'unknown', detail: 'no application wallet' }
+    return { readiness, note: sessionNote(p, readiness, serviceId), height: Number(p.height || 0) }
+  }
+  // The head moves while a screen sits open, and a boundary a few blocks away is the
+  // whole point of this check, so the height is read now rather than taken from the store.
+  let height = Number(p.height || 0)
+  try {
+    height = await latestHeight(net)
+  } catch {
+    /* the stored height stands in */
+  }
+  const live = height ? { ...p, height } : p
+  let r: { ok: true; session: ChainSession } | { ok: false; error: unknown }
+  try {
+    r = { ok: true, session: await session(net, appAddress, serviceId, height) }
+  } catch (e) {
+    r = { ok: false, error: e }
+  }
+  const done = (readiness: SessionReadiness): SessionCheck => ({
+    readiness,
+    note: sessionNote(live, readiness, serviceId),
+    height
+  })
+  if (r.ok && r.session.suppliers.length) return done(classifySession(live, r, { staked: 1 }))
+  let staked: number | null = null
+  let activation: number | null = null
+  try {
+    const sups = await suppliersForService(net, serviceId)
+    staked = sups.length
+    for (const s of sups)
+      for (const e of s.service_config_history ?? []) {
+        const act = Number(e.activation_height || 0)
+        if (
+          e.service?.service_id !== serviceId ||
+          String(e.deactivation_height || '0') !== '0' ||
+          act <= height
+        )
+          continue
+        if (!activation || act < activation) activation = act
+      }
+  } catch {
+    /* the stake count stays unknown; the note then speaks only of the boundary */
+  }
+  return done(classifySession(live, r, { staked, activationHeight: activation }))
 }
 
 export type SupplyState =

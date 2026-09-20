@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useStore, S } from '../store'
 import { fmtDuration } from '@core/format'
-import { appServiceIds } from '@core/chain'
+import { appServiceIds, checkSession, type SessionCheck } from '@core/chain'
 import { testProbes, gradeStep, type ProbeStep, type TestLogEntry } from '@core/probes'
 import {
   Badge,
@@ -35,6 +35,7 @@ import { confirmDialog, alertDialog } from '../lib/modal'
 
 interface WalletOpt {
   name: string
+  address: string
   label: string
   staked: boolean
 }
@@ -53,6 +54,8 @@ export function TestScreen(): React.JSX.Element {
     deployed: boolean
   } | null>(null)
   const [client, setClient] = useState<React.ReactNode>('Checking')
+  const [sess, setSess] = useState<(SessionCheck & { id: string; wallet: string }) | null>(null)
+  const [sessBusy, setSessBusy] = useState(false)
   const [logRows, setLogRows] = useState<TestLogEntry[] | null>(null)
   const [logNote, setLogNote] = useState<string | null>(null)
   const { lines, log, clear } = useLog()
@@ -123,6 +126,7 @@ export function TestScreen(): React.JSX.Element {
       if (staked && !p) p = h.name
       return {
         name: h.name,
+        address: h.address,
         label: h.name + (recs[i] ? ` (staked for ${sids.join(', ')})` : ' (no application stake)'),
         staked
       }
@@ -142,6 +146,42 @@ export function TestScreen(): React.JSX.Element {
     void refresh()
   }, [refresh, tst.id, wallets, address, net])
 
+  // A stake joins the session drawn at the last boundary, never the one running, so a
+  // service registered and supplied minutes ago answers nothing and every probe fails
+  // with the node's session error. Ask the node first and say which block to wait for.
+  const runCheck = useCallback(async (): Promise<SessionCheck | null> => {
+    const id = S().tst.id
+    const name = S().tst.wallet
+    const addr = walletOpts.find((o) => o.name === name)?.address ?? ''
+    if (!id || !addr) return null
+    setSessBusy(true)
+    try {
+      const c = await checkSession(S().net, S().params, addr, id)
+      setSess({ ...c, id, wallet: name })
+      return c
+    } finally {
+      setSessBusy(false)
+    }
+  }, [walletOpts])
+
+  // An answer is shown only against the service and wallet it was asked about, so a slow
+  // one cannot arrive over a different choice and read as that service's verdict.
+  const shown = sess && sess.id === tst.id && sess.wallet === tst.wallet ? sess : null
+
+  useEffect(() => {
+    void runCheck()
+  }, [runCheck, tst.id, tst.wallet, net])
+
+  // Waiting for a boundary ends by itself, so the screen looks again rather than
+  // leaving a stale "wait" that the user has to guess is over. A missing supplier does
+  // not, so that state is left alone.
+  useEffect(() => {
+    const r = shown?.readiness
+    if (r?.state !== 'waiting' || r.reason !== 'next-session') return
+    const t = setTimeout(() => void runCheck(), 20_000)
+    return () => clearTimeout(t)
+  }, [shown, runCheck])
+
   const run = async (): Promise<void> => {
     if (S().busy) return
     const id = tst.id
@@ -152,6 +192,8 @@ export function TestScreen(): React.JSX.Element {
       return setStatus('Docker Desktop must be running with the pocketd image downloaded.', 'err')
     if (!S().docker?.pocketap)
       return setStatus('Download the pocket-ap image first (button above).', 'err')
+    const ready = await runCheck()
+    if (ready?.readiness.state === 'waiting') return setStatus(ready.note, 'err')
     const steps: ProbeStep[] = testProbes(await readCardFor(id), id).steps
     const results: TestLogEntry['steps'] = []
     setBusy(true)
@@ -367,8 +409,38 @@ export function TestScreen(): React.JSX.Element {
             </div>
           </div>
         </div>
+        <div className="hint" id="tstSession" style={{ marginTop: 10 }}>
+          {shown ? (
+            <>
+              {shown.readiness.state === 'ready' ? (
+                <Badge cls="ok">in session</Badge>
+              ) : shown.readiness.state === 'waiting' ? (
+                <Badge cls="warn">not in session yet</Badge>
+              ) : (
+                <Badge cls="warn">session unknown</Badge>
+              )}{' '}
+              {shown.readiness.state === 'waiting' ? (
+                <WarnText>{shown.note}</WarnText>
+              ) : (
+                shown.note
+              )}{' '}
+              <button className="btn small" disabled={sessBusy} onClick={() => void runCheck()}>
+                {sessBusy ? 'Checking' : 'Check again'}
+              </button>
+            </>
+          ) : sessBusy ? (
+            <Busy>Checking which suppliers are in the current session</Busy>
+          ) : (
+            'Choose a service and a wallet staked for it to check the current session.'
+          )}
+        </div>
         <div className="btnrow">
-          <button className="btn primary" id="btnTest" disabled={busy} onClick={run}>
+          <button
+            className="btn primary"
+            id="btnTest"
+            disabled={busy || shown?.readiness.state === 'waiting' || (!shown && sessBusy)}
+            onClick={run}
+          >
             Run test
           </button>
           <button className="btn" onClick={viewLog}>

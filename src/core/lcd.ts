@@ -204,6 +204,51 @@ export async function suppliersForService(
   return d.supplier ?? []
 }
 
+// ---- sessions ----
+
+/** The session a relay is routed through: which suppliers serve an application for a
+ *  service, and the heights the session runs between. Port of session() in
+ *  reference/mcp/src/lcd.ts. The node answers with an error, not an empty list, when no
+ *  supplier serves the service at that height, so callers grade the failure too. */
+export interface ChainSession {
+  session_id?: string
+  start_height: number
+  end_height: number
+  suppliers: string[]
+}
+
+export async function session(
+  net: Network,
+  app: string,
+  serviceId: string,
+  height: number
+): Promise<ChainSession> {
+  const d = await getJson<{
+    session?: {
+      header?: {
+        session_id?: string
+        session_start_block_height?: string
+        session_end_block_height?: string
+      }
+      suppliers?: { operator_address?: string }[]
+    }
+  }>(
+    lcd(
+      net,
+      `/pokt-network/poktroll/session/get_session?application_address=${app}&service_id=${encodeURIComponent(serviceId)}&block_height=${height}`
+    )
+  )
+  const h = d.session?.header ?? {}
+  return {
+    session_id: h.session_id,
+    start_height: Number(h.session_start_block_height || 0),
+    end_height: Number(h.session_end_block_height || 0),
+    suppliers: (d.session?.suppliers ?? [])
+      .map((x) => x.operator_address || '')
+      .filter((x) => x.length > 0)
+  }
+}
+
 // ---- applications, gateways ----
 
 export interface ChainApplication {

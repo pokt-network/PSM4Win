@@ -71,6 +71,17 @@ function stub(url: string): unknown | undefined {
     return x[1] === APP ? { application } : { code: 5, message: 'not found' }
   if ((x = m(/\/supplier\/supplier\/(pokt1[0-9a-z]+)/)))
     return x[1] === OPERATOR ? { supplier } : { code: 5, message: 'not found' }
+  if ((x = m(/\/session\/get_session\?.*service_id=([^&]+)/))) {
+    // The heights are left at zero: the example session has no place on the live grid,
+    // and the screen then says who is serving without naming a block that is not real.
+    const serves = catalog.some((c) => c.id === decodeURIComponent(x![1]))
+    return {
+      session: {
+        header: {},
+        suppliers: serves ? [{ operator_address: OPERATOR }] : []
+      }
+    }
+  }
   if (/\/service\/service\?/.test(url)) return { service: catalog }
   if ((x = m(/\/service\/service\/([A-Za-z0-9_-]+)$/))) {
     const s = catalog.find((c) => c.id === x![1])

@@ -195,7 +195,9 @@ function TheSteps(): React.JSX.Element {
         </li>
         <li>
           <b>Test.</b> <Go screen="test">Test service</Go> sends real requests through the network.
-          All probes green means your service is live.
+          All probes green means your service is live. Straight after staking, the screen will say
+          your service is not in a session yet and name the block to wait for: that is the pause in
+          step 5, not a fault, and the button turns on by itself once the session starts.
         </li>
       </ol>
       <p>
