@@ -722,12 +722,11 @@ function FundBody({
         id: 'fwGo',
         onClick: async () => {
           const upokt = Math.round(parseFloat(amountRef.current) * POKT)
-          const ok = await fundWallet(name, upokt, setStatus)
-          if (ok)
-            setTimeout(() => {
-              closeModal()
-              onDone()
-            }, 1500)
+          // The progress modal takes over the window from here, and the user closes it.
+          const ok = await fundWallet(name, upokt, setStatus, {
+            progress: `Funding ${name} from the owner wallet`
+          })
+          if (ok) onDone()
         }
       }
     ])
@@ -778,12 +777,10 @@ function ReturnBody({
         id: 'rtoGo',
         onClick: async () => {
           const upokt = Math.round(parseFloat(amountRef.current) * POKT)
-          const ok = await returnToOwner(name, upokt, setStatus)
-          if (ok)
-            setTimeout(() => {
-              closeModal()
-              onDone()
-            }, 1500)
+          const ok = await returnToOwner(name, upokt, setStatus, {
+            progress: `Returning POKT from ${name} to the owner wallet`
+          })
+          if (ok) onDone()
         }
       }
     ])

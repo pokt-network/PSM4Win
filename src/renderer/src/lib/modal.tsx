@@ -73,6 +73,48 @@ export function closeModal(): void {
   fireDismiss()
 }
 
+/**
+ * A modal that reports on work already under way.
+ *
+ * There is one modal at a time, and a typed confirmation closes it when the user
+ * confirms. Anything that asks for confirmation from inside a dialog therefore loses
+ * the dialog, and with it the status line it was writing to: the window went quiet for
+ * the minute a transaction takes to reach a block. This opens a fresh modal after the
+ * confirmation, so the work is narrated where the user is already looking. It cannot be
+ * dismissed until the work ends.
+ */
+interface ProgressState {
+  text: ReactNode
+  cls: 'busy' | 'ok' | 'err'
+}
+const useProgress = create<ProgressState>(() => ({ text: '', cls: 'busy' }))
+
+function ProgressBody(): React.JSX.Element {
+  const { text, cls } = useProgress()
+  return <div className={'status ' + cls}>{text}</div>
+}
+
+export interface Progress {
+  /** A step, while the work continues. */
+  set: (text: ReactNode) => void
+  /** The outcome, leaving a Close button. */
+  finish: (text: ReactNode, ok: boolean) => void
+}
+
+export function progressModal(title: ReactNode, first: ReactNode = ''): Progress {
+  useProgress.setState({ text: first, cls: 'busy' })
+  openModal(title, <ProgressBody />, [])
+  lockModal(true)
+  return {
+    set: (text) => useProgress.setState({ text, cls: 'busy' }),
+    finish: (text, ok) => {
+      useProgress.setState({ text, cls: ok ? 'ok' : 'err' })
+      lockModal(false)
+      setModalButtons([{ label: 'Close', cls: ok ? 'primary' : '', onClick: closeModal }])
+    }
+  }
+}
+
 /** In-app replacement for native confirm(). */
 export function confirmDialog(
   text: ReactNode,

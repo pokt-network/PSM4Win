@@ -2,6 +2,10 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`.
 
+## Unreleased
+
+- Funding a wallet and returning POKT to the owner now show what is happening. Confirming used to close the dialog they were reporting into, so the app looked idle for the minute the transaction took; both now narrate into a modal that stays until you close it and ends with the block the transfer landed in.
+
 ## 0.1.5
 
 - Wallets: "Return to owner" on an application wallet sends its POKT back to the owner wallet. Until now funds only went the other way, so a wallet whose service was finished, or whose stake had come back after unbonding, was a dead end. The owner address is resolved inside the app and is the only place the transfer can go.

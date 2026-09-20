@@ -1,7 +1,7 @@
 // Confirmation and transfer flows shared by several screens (docs/SCREENS.md 1.8 and 4.6).
 import type { ReactNode } from 'react'
 import { S } from '../store'
-import { confirmDialog, typedConfirm, openModal, closeModal } from './modal'
+import { confirmDialog, typedConfirm, openModal, closeModal, progressModal } from './modal'
 import { fmtPokt, fmtInt } from '@core/format'
 import { POKT } from '@core/format'
 import {
@@ -96,7 +96,8 @@ type SetStatus = (text: ReactNode, cls?: Status['cls']) => void
 export async function fundWallet(
   name: string,
   upokt: number,
-  setStatus: SetStatus
+  setStatus: SetStatus,
+  opts: { progress?: string } = {}
 ): Promise<boolean> {
   const s = S()
   if (s.busy) return false
@@ -135,27 +136,36 @@ export async function fundWallet(
     betaOkLabel: 'Send'
   })
   if (!ok) return false
+  // The confirmation closed whatever dialog asked for this, so the caller's status line
+  // may no longer be on screen; a progress modal narrates the minute that follows.
+  const prog = opts.progress ? progressModal(opts.progress) : null
+  const say = (text: string): void => {
+    setStatus(text, 'busy')
+    prog?.set(text)
+  }
+  const failed = (text: string): false => {
+    setStatus(text, 'err')
+    prog?.finish(text, false)
+    return false
+  }
   setBusy(true)
-  setStatus(`Sending ${fmtPokt(upokt)} POKT to ${name}`, 'busy')
+  say(`Sending ${fmtPokt(upokt)} POKT to ${name}`)
   const r = await psm().signer['tx-fund-wallet']({ network: S().net, name, amount_upokt: upokt })
   if (!r.ok || !('txhash' in r)) {
     setBusy(false)
-    setStatus(
-      `${(r as { error?: string }).error ?? ''} ${(r as { detail?: string }).detail ?? ''}`,
-      'err'
+    return failed(
+      `${(r as { error?: string }).error ?? ''} ${(r as { detail?: string }).detail ?? ''}`
     )
-    return false
   }
-  setStatus(`Broadcast, waiting for the block (${r.txhash.substring(0, 10)})`, 'busy')
+  say(`Broadcast, waiting for the block (${r.txhash.substring(0, 10)})`)
   const t = await pollTx(r.txhash)
   setBusy(false)
-  if (!t.ok) {
-    setStatus(t.error ?? '', 'err')
-    return false
-  }
+  if (!t.ok) return failed(t.error ?? 'The transaction did not succeed.')
   void refreshBalance()
   void loadHistory()
-  setStatus(`Sent ${fmtPokt(upokt)} POKT to ${name} in block ${fmtInt(t.height)}.`, 'ok')
+  const done = `Sent ${fmtPokt(upokt)} POKT to ${name} in block ${fmtInt(t.height)}.`
+  setStatus(done, 'ok')
+  prog?.finish(done, true)
   return true
 }
 
@@ -168,7 +178,8 @@ export async function fundWallet(
 export async function returnToOwner(
   name: string,
   upokt: number,
-  setStatus: SetStatus
+  setStatus: SetStatus,
+  opts: { progress?: string } = {}
 ): Promise<boolean> {
   const s = S()
   if (s.busy) return false
@@ -207,8 +218,18 @@ export async function returnToOwner(
     betaOkLabel: 'Send'
   })
   if (!ok) return false
+  const prog = opts.progress ? progressModal(opts.progress) : null
+  const say = (text: string): void => {
+    setStatus(text, 'busy')
+    prog?.set(text)
+  }
+  const failed = (text: string): false => {
+    setStatus(text, 'err')
+    prog?.finish(text, false)
+    return false
+  }
   setBusy(true)
-  setStatus(`Sending ${fmtPokt(upokt)} POKT to the owner wallet`, 'busy')
+  say(`Sending ${fmtPokt(upokt)} POKT to the owner wallet`)
   const r = await psm().signer['tx-return-to-owner']({
     network: S().net,
     from: name,
@@ -216,25 +237,19 @@ export async function returnToOwner(
   })
   if (!r.ok || !('txhash' in r)) {
     setBusy(false)
-    setStatus(
-      `${(r as { error?: string }).error ?? ''} ${(r as { detail?: string }).detail ?? ''}`,
-      'err'
+    return failed(
+      `${(r as { error?: string }).error ?? ''} ${(r as { detail?: string }).detail ?? ''}`
     )
-    return false
   }
-  setStatus(`Broadcast, waiting for the block (${r.txhash.substring(0, 10)})`, 'busy')
+  say(`Broadcast, waiting for the block (${r.txhash.substring(0, 10)})`)
   const t = await pollTx(r.txhash)
   setBusy(false)
-  if (!t.ok) {
-    setStatus(t.error ?? '', 'err')
-    return false
-  }
+  if (!t.ok) return failed(t.error ?? 'The transaction did not succeed.')
   void refreshBalance()
   void loadHistory()
-  setStatus(
-    `Sent ${fmtPokt(upokt)} POKT from ${name} to the owner wallet in block ${fmtInt(t.height)}.`,
-    'ok'
-  )
+  const done = `Sent ${fmtPokt(upokt)} POKT from ${name} to the owner wallet in block ${fmtInt(t.height)}.`
+  setStatus(done, 'ok')
+  prog?.finish(done, true)
   return true
 }
 
