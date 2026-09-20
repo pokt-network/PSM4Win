@@ -212,7 +212,7 @@ export function TestScreen(): React.JSX.Element {
     for (let i = 0; i < steps.length; i++) {
       const s = steps[i]
       log(
-        `Probe ${i + 1} of ${steps.length}: ${s.label}${s.body ? ' with body ' + s.body.substring(0, 120) : ''}${s.badInput ? ' (expecting a 4xx JSON error)' : s.jsonPath ? ` (expecting ${s.jsonPath} to match ${s.matches})` : ''}`
+        `Probe ${i + 1} of ${steps.length}: ${s.label}${s.badInput ? ' with malformed JSON (expecting a 4xx JSON error)' : s.body ? ' with body ' + s.body.substring(0, 120) : ''}${!s.badInput && s.jsonPath ? ` (expecting ${s.jsonPath} to match ${s.matches})` : ''}`
       )
       const r = await psm().signer['relay-call']({
         network: S().net,
@@ -419,11 +419,7 @@ export function TestScreen(): React.JSX.Element {
               ) : (
                 <Badge cls="warn">session unknown</Badge>
               )}{' '}
-              {shown.readiness.state === 'waiting' ? (
-                <WarnText>{shown.note}</WarnText>
-              ) : (
-                shown.note
-              )}{' '}
+              {shown.readiness.state === 'waiting' ? <WarnText>{shown.note}</WarnText> : shown.note}{' '}
               <button className="btn small" disabled={sessBusy} onClick={() => void runCheck()}>
                 {sessBusy ? 'Checking' : 'Check again'}
               </button>

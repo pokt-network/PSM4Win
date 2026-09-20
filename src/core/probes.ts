@@ -18,6 +18,19 @@ interface HealthcheckLike {
   notes?: string
 }
 
+/**
+ * The body the synthetic bad-input probe sends: a lone brace, which is not JSON at all.
+ *
+ * It used to be `{}`, on the assumption that an empty object is always missing a
+ * required field. That holds for a service whose POST needs arguments and fails for
+ * one where every field is optional: an empty object is then a legal request, the
+ * backend rightly answers 200, and a correct service is graded red. Input no parser
+ * accepts is the only bad input every JSON service agrees on, and it is what the
+ * Skill's lint_backend.py probes with (references/design-rules.md: 4xx with JSON for
+ * bad input, 5xx only for real failures).
+ */
+export const BAD_INPUT_BODY = '{'
+
 /** The card's serving.healthcheck entries plus a bad-input probe per POST, or two defaults without a card. */
 export function testProbes(card: unknown, id: string): { steps: ProbeStep[]; fromCard: boolean } {
   const steps: ProbeStep[] = []
@@ -51,7 +64,7 @@ export function testProbes(card: unknown, id: string): { steps: ProbeStep[]; fro
         label: 'Bad input POST ' + rq.path,
         method: 'POST',
         path: rq.path,
-        body: '{}',
+        body: BAD_INPUT_BODY,
         expectStatus: 400,
         badInput: true
       })
