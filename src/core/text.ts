@@ -51,3 +51,31 @@ export function renderTemplate(text: string, tokens: Record<string, string>): st
   for (const [k, v] of Object.entries(tokens)) out = out.split(k).join(v)
   return out
 }
+
+/**
+ * The folder name of a service, given the services root and an absolute path
+ * chosen in a folder picker.
+ *
+ * The app addresses a service by its folder name under the services root, so a
+ * picked path counts only when it sits exactly one level below that root.
+ * Returns '' for the root itself, for anything deeper, for a path outside the
+ * root, and for a sibling directory whose name merely starts with the root's.
+ * Separator-agnostic and case-insensitive, because Windows pickers return
+ * either separator and any casing.
+ */
+export function serviceFolderName(root: string, picked: string): string {
+  const SEP = '\\'
+  const norm = (s: string): string =>
+    String(s ?? '')
+      .trim()
+      .replace(/[\\/]+/g, SEP)
+      .replace(/\\+$/, '')
+  const r = norm(root)
+  const p = norm(picked)
+  if (!r || !p) return ''
+  if (p.length <= r.length + 1) return ''
+  if (p.slice(0, r.length).toLowerCase() !== r.toLowerCase()) return ''
+  if (p.charAt(r.length) !== SEP) return ''
+  const rest = p.slice(r.length + 1)
+  return rest.includes(SEP) ? '' : rest
+}

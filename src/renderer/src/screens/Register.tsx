@@ -25,6 +25,7 @@ import {
   recordManifestFor,
   writeManifest,
   setBusy,
+  browseForServiceFolder,
   psm
 } from '../lib/actions'
 import { confirmTx, TxLink } from '../lib/flows'
@@ -53,6 +54,14 @@ export function RegisterScreen(): React.JSX.Element {
   const { lines, log, clear } = useLog()
   const set = (patch: Partial<typeof reg>): void => {
     useStore.setState((s) => ({ reg: { ...s.reg, ...patch } }))
+  }
+  const browseFolder = async (): Promise<void> => {
+    const r = await browseForServiceFolder()
+    if (!r.ok) {
+      if (r.reason) setStatus(r.reason, 'err')
+      return
+    }
+    await selectRegisterFolder(r.folder)
   }
   const form = (): Snapshot => ({
     id: reg.id.trim(),
@@ -446,25 +455,26 @@ export function RegisterScreen(): React.JSX.Element {
       <div className="panel">
         <h2>Register a service</h2>
         <label>Service folder</label>
-        <select
-          id="svcFolder"
-          value={reg.folder}
-          onChange={(e) =>
-            e.target.value ? selectRegisterFolder(e.target.value) : set({ folder: '' })
-          }
-        >
-          <option value="">Choose a folder in services/</option>
-          {local.map((l) => (
-            <option key={l.folder} value={l.folder}>
-              {l.folder}
-            </option>
-          ))}
-        </select>
+        <div className="filerow">
+          <input
+            id="svcFolder"
+            type="text"
+            readOnly
+            value={reg.folder}
+            placeholder="Choose a folder in services/"
+          />
+          <button type="button" className="btn small" onClick={browseFolder}>
+            Browse&hellip;
+          </button>
+          <button type="button" className="btn small" onClick={() => set({ folder: '' })}>
+            Clear
+          </button>
+        </div>
         <div className="hint">
-          Picking a folder fills the form from its service.json and uses its card.json. You can
+          Browsing to a folder fills the form from its service.json and uses its card.json. You can
           still edit every field. No folder yet? Use Create service.
         </div>
-        <div className="row" style={{ marginTop: 6 }}>
+        <div className="row" style={{ marginTop: 12 }}>
           <div>
             <label>Service ID</label>
             <input

@@ -29,6 +29,7 @@ import {
   supplierLookup
 } from '@core/lcd'
 import { lcdTxUrl } from '@core/chain'
+import { serviceFolderName } from '@core/text'
 import type { Settings } from '../../../preload/index'
 import { alertDialog, confirmDialog } from './modal'
 import { isDemo } from './demo'
@@ -259,6 +260,37 @@ export async function loadServiceFolders(): Promise<LocalService[]> {
   })
   useStore.setState({ servicesRoot: r.root, local })
   return local
+}
+
+export type BrowseFolderResult = { ok: true; folder: string } | { ok: false; reason: string }
+
+/**
+ * Picks a service folder with the platform folder dialog and returns its name
+ * under the services root.
+ *
+ * The dialog reads the filesystem when it opens, so a folder created outside
+ * the app, or a moment ago in another window, is always selectable. The list
+ * behind the old dropdown was only built at startup, which is why a new service
+ * folder did not appear until the app was restarted.
+ *
+ * The local list is refreshed before returning, so a caller can look the chosen
+ * folder up in it straight away. An `ok: false` with an empty reason means the
+ * dialog was cancelled and nothing should be said about it.
+ */
+export async function browseForServiceFolder(): Promise<BrowseFolderResult> {
+  if (isDemo()) return { ok: false, reason: 'Folder browsing is not available in demo mode.' }
+  const root = S().servicesRoot
+  if (!root) return { ok: false, reason: 'Choose a services folder in Settings first.' }
+  const picked = await psm().settings.pickDir(root)
+  if (!picked) return { ok: false, reason: '' }
+  const folder = serviceFolderName(root, picked)
+  if (!folder)
+    return {
+      ok: false,
+      reason: `Choose a folder directly inside ${root}. One subfolder per service.`
+    }
+  await loadServiceFolders()
+  return { ok: true, folder }
 }
 
 export async function setNetwork(n: Network): Promise<void> {

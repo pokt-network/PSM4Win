@@ -22,13 +22,13 @@ import {
   type CheckNode
 } from '../components/ui'
 import { confirmDialog } from '../lib/modal'
-import { loadServiceFolders, psm } from '../lib/actions'
+import { browseForServiceFolder, loadServiceFolders, psm } from '../lib/actions'
 import { selectRegisterFolder } from './Services'
 
 type K = keyof CreateForm
 
 export function CreateScreen(): React.JSX.Element {
-  const { cr, crFolder, local, servicesRoot } = useStore()
+  const { cr, crFolder, servicesRoot } = useStore()
   const [status, setStatus] = useStatus()
   const [checks, setChecks] = useState<CheckNode[]>([])
   const [preview, setPreview] = useState<string | null>(null)
@@ -53,6 +53,15 @@ export function CreateScreen(): React.JSX.Element {
       if (k === 'id' || k === 'rpc') form = deriveFromId(form, auto)
       return { cr: form, crAuto: auto }
     })
+  }
+
+  const browseCreateFolder = async (): Promise<void> => {
+    const r = await browseForServiceFolder()
+    if (!r.ok) {
+      if (r.reason) setStatus(r.reason, 'err')
+      return
+    }
+    await loadFromFolder(r.folder)
   }
 
   const loadFromFolder = async (folder: string): Promise<void> => {
@@ -194,19 +203,27 @@ export function CreateScreen(): React.JSX.Element {
           needs). Fields marked optional can be left blank and added later; an update re-publishes
           the card.
         </p>
-        <div className="row" style={{ marginTop: 6 }}>
+        <div className="row" style={{ marginTop: 6, marginBottom: 12 }}>
           <div>
             <label>Load an existing folder (optional)</label>
-            <select id="crFolder" value={crFolder} onChange={(e) => loadFromFolder(e.target.value)}>
-              <option value="">Start from scratch</option>
-              {local.map((l) => (
-                <option key={l.folder} value={l.folder}>
-                  {l.folder}
-                </option>
-              ))}
-            </select>
+            <div className="filerow">
+              <input
+                id="crFolder"
+                type="text"
+                readOnly
+                value={crFolder}
+                placeholder="Start from scratch"
+              />
+              <button type="button" className="btn small" onClick={browseCreateFolder}>
+                Browse&hellip;
+              </button>
+              <button type="button" className="btn small" onClick={() => loadFromFolder('')}>
+                Clear
+              </button>
+            </div>
             <div className="hint">
-              Fills the form from that folder's card.json so you can edit and re-create it.
+              Browse to a folder under <span className="mono">services/</span> to fill the form from
+              its card.json, so you can edit and re-create it.
             </div>
           </div>
           <div />

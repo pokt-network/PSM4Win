@@ -719,13 +719,13 @@ table.services select {
 }
 .filerow {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
+  gap: 8px;
 }
 .filerow input[type='text'],
 .filerow input[type='number'],
 .filerow select {
   flex: 1 1 auto;
-  margin-right: 8px;
 }
 .filerow .btn {
   flex: 0 0 auto;
