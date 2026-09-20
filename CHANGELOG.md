@@ -2,6 +2,10 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`.
 
+## Unreleased
+
+- Stake supplier and Stake application: after the transaction, the app no longer calls a stake wrong when it cannot read the record back. It drops its cached copy, reads again if the node does not answer, and says which of the three things went wrong instead of one message that blamed the service list for all of them. A service scheduled for the next session boundary is reported as scheduled with its block, not as missing.
+
 ## 0.1.2
 
 - Test service: the bad-input probe sends malformed JSON instead of an empty object. An empty object is a legal request to a service whose fields are all optional, so the probe was failing services that answered it correctly.

@@ -7,6 +7,7 @@ import {
   service as lcdService,
   application as lcdApplication,
   gateways as lcdGateways,
+  readAfterTx,
   type ChainApplication,
   type ChainGateway,
   type LcdError
@@ -389,11 +390,23 @@ export function StakeScreen(): React.JSX.Element {
       return setStatus('The transaction did not succeed.', 'err')
     }
     log(`Included in block ${fmtInt(t.height)}.`, 'ok')
-    const a = await appRecordOf(f.address)
+    const a = await readAfterTx(
+      () => appRecordOf(f.address),
+      (x) => !!x
+    )
     let okv = false
-    if (a) {
+    let short = false
+    let listed = false
+    if (!a)
+      log(
+        'The application record could not be read back. The transaction itself is in a block.',
+        'err'
+      )
+    else {
       const ids = appServiceIds(a)
-      okv = ids.includes(f.id) && Number(a.stake.amount) >= f.upokt
+      listed = ids.includes(f.id)
+      short = Number(a.stake.amount) < f.upokt
+      okv = listed && !short
       log(
         `On chain: '${f.from}' staked ${fmtPokt(a.stake.amount)} POKT for '${ids.join(', ')}'.`,
         okv ? 'ok' : 'err'
@@ -402,8 +415,12 @@ export function StakeScreen(): React.JSX.Element {
     setStatus(
       okv
         ? `'${f.from}' is staked as an application for '${f.id}' on ${label}.`
-        : 'Transaction succeeded but verification did not match; check the Activity tab.',
-      okv ? 'ok' : 'err'
+        : !a
+          ? `Staked in block ${fmtInt(t.height)}, but the application record could not be read back just now, so this is unconfirmed. Open Wallets in a moment to check it.`
+          : short
+            ? `Transaction succeeded but '${f.from}' holds ${fmtPokt(a.stake.amount)} POKT on chain, less than the ${fmtPokt(f.upokt)} POKT submitted; check the Activity tab.`
+            : `Transaction succeeded but '${f.from}' is not staked for '${f.id}' on chain; check the Activity tab.`,
+      okv ? 'ok' : a ? 'err' : ''
     )
     if (okv) {
       const folder = folderForId(f.id)

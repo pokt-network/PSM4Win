@@ -73,6 +73,30 @@ export function clearLcdCache(): void {
   cache.clear()
 }
 
+/**
+ * Reads chain state back straight after a transaction.
+ *
+ * Two things make that moment unlike any other read. Every cached answer is stale the
+ * instant a transaction lands, and the node is at its least reliable in the seconds
+ * after one, so a single empty or failed answer is not evidence that the transaction
+ * did not do what it said. This drops the cache, reads, and on an answer the caller
+ * calls unusable waits and reads once more. What comes back is still graded by the
+ * caller: this only makes sure a verification failure is about the chain and not about
+ * one unlucky request.
+ */
+export async function readAfterTx<T>(
+  read: () => Promise<T>,
+  usable: (v: T) => boolean,
+  delayMs = 3000
+): Promise<T> {
+  clearLcdCache()
+  const first = await read()
+  if (usable(first)) return first
+  await new Promise((r) => setTimeout(r, delayMs))
+  clearLcdCache()
+  return read()
+}
+
 function isNotFound(e: unknown): boolean {
   return e instanceof LcdError && (e.status === 404 || /not found/i.test(e.message))
 }

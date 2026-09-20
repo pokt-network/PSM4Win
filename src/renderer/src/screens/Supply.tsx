@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useStore, S, type SupplyRow } from '../store'
 import type { ChainSupplier } from '@core/lcd'
-import { account } from '@core/lcd'
+import { account, readAfterTx } from '@core/lcd'
 import { fmtPokt, fmtInt, fmtDuration, shortAddr, POKT } from '@core/format'
 import { unbondingOf, unbondingNote, nextSessionBoundary, supplierServiceIds } from '@core/chain'
 import { RPC_TYPES } from '@core/validate'
@@ -674,34 +674,52 @@ function SupplierEditor({
       return setStatus('The transaction did not succeed.', 'err')
     }
     log(`Included in block ${fmtInt(t.height)}.`, 'ok')
-    const v = await supplierRecord(f.op)
+    const v = await readAfterTx(
+      () => supplierRecord(f.op),
+      (x) => !!x.rec
+    )
     let okv = false
+    let short = false
     let pendingAt = 0
     const pending: string[] = []
-    if (v.rec) {
+    const missing: string[] = []
+    if (!v.rec)
+      log(
+        `The supplier record could not be read back (${v.status ? 'HTTP ' + v.status : 'the node did not answer'}). The transaction itself is in a block.`,
+        'err'
+      )
+    else {
       const got = supplierServiceIds(v.rec)
       const scheduled: Record<string, number> = {}
       for (const he of v.rec.service_config_history ?? [])
         if (he.service && Number(he.deactivation_height || 0) === 0)
           scheduled[he.service.service_id] = Number(he.activation_height || 0)
-      okv = Number(v.rec.stake.amount) >= f.upokt
+      short = Number(v.rec.stake.amount) < f.upokt
       for (const id of ids) {
         if (got.includes(id)) continue
+        // A stake never adds a service to the session already running: the service sits
+        // in the config history with the next boundary as its activation height and
+        // joins the active list there. Scheduled is success, not a missing service.
         if (scheduled[id] !== undefined) {
           pending.push(id)
           pendingAt = Math.max(pendingAt, scheduled[id])
-        } else okv = false
+        } else missing.push(id)
       }
+      okv = !short && !missing.length
       log(
-        `On chain: supplier ${f.op} staked ${fmtPokt(v.rec.stake.amount)} POKT; active for ${got.join(', ') || 'nothing yet'}${pending.length ? `; ${pending.join(', ')} scheduled from height ${fmtInt(pendingAt)}` : ''}.`,
+        `On chain: supplier ${f.op} staked ${fmtPokt(v.rec.stake.amount)} POKT; active for ${got.join(', ') || 'nothing yet'}${pending.length ? `; ${pending.join(', ')} scheduled, ${pending.length === 1 ? 'activates' : 'activate'} at block ${fmtInt(pendingAt)}` : ''}${missing.length ? `; ${missing.join(', ')} neither active nor scheduled` : ''}.`,
         okv ? 'ok' : 'err'
       )
     }
     setStatus(
       okv
-        ? `Supplier staked on ${label} for ${ids.join(', ')}.${pending.length ? ` New services start serving at height ${fmtInt(pendingAt)} (the next session boundary).` : ''}`
-        : 'Transaction succeeded but the supplier record does not list every service; check the Activity list.',
-      okv ? 'ok' : 'err'
+        ? `Supplier staked on ${label} for ${ids.join(', ')}.${pending.length ? ` ${pending.join(', ')} ${pending.length === 1 ? 'is scheduled and activates' : 'are scheduled and activate'} at block ${fmtInt(pendingAt)}, the next session boundary.` : ''}`
+        : !v.rec
+          ? `Staked in block ${fmtInt(t.height)}, but the supplier record could not be read back just now, so this is unconfirmed. Open Suppliers in a moment to check it.`
+          : short
+            ? `Transaction succeeded but the supplier holds ${fmtPokt(v.rec.stake.amount)} POKT on chain, less than the ${fmtPokt(f.upokt)} POKT submitted; check the Activity list.`
+            : `Transaction succeeded but ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} neither active nor scheduled on the supplier; check the Activity list.`,
+      okv ? 'ok' : v.rec ? 'err' : ''
     )
     if (okv) {
       for (const svc of f.services) {
