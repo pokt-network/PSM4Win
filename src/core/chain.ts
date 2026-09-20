@@ -200,8 +200,48 @@ export type SessionReadiness =
        *  only just started is the one that sometimes has to be sent twice. */
       ageBlocks: number
     }
-  | { state: 'waiting'; reason: 'no-supplier' | 'next-session'; readyAt: number | null }
+  | {
+      state: 'waiting'
+      reason: 'no-supplier' | 'next-session' | 'no-application'
+      readyAt: number | null
+    }
   | { state: 'unknown'; detail: string }
+
+/** The node has no application record for this address, so there is no session to ask about. */
+export function isNoApplicationError(e: unknown): boolean {
+  const m = e instanceof Error ? e.message : String(e ?? '')
+  return /could not find app with address|application for session not found|application not found/i.test(
+    m
+  )
+}
+
+/**
+ * What to show a person when a read failed for a reason this app does not recognise.
+ *
+ * An LCD failure arrives as the status, the whole URL, and up to 300 characters of the
+ * node's JSON body. Put on screen unchanged it is a wall of text with a query string in
+ * the middle of it. This keeps the status and the node's own message and drops the rest.
+ */
+export function shortLcdDetail(e: unknown): string {
+  const raw = (e instanceof Error ? e.message : String(e ?? '')).trim()
+  const status = /HTTP (\d{3})/.exec(raw)
+  let msg = ''
+  const brace = raw.indexOf('{')
+  if (brace >= 0) {
+    try {
+      const body = JSON.parse(raw.slice(brace)) as { message?: unknown }
+      if (typeof body.message === 'string') msg = body.message
+    } catch {
+      // A truncated body will not parse; the text after the URL is the next best thing.
+      const m = /"message":"((?:[^"\\]|\\.)*)"/.exec(raw)
+      if (m) msg = m[1]
+    }
+  }
+  if (!msg) msg = raw.replace(/https?:\/\/\S+/g, '').replace(/^HTTP \d{3} for\s*:?\s*/, '')
+  msg = msg.replace(/\s+/g, ' ').trim()
+  if (msg.length > 160) msg = msg.slice(0, 160).trimEnd() + '\u2026'
+  return (status ? `HTTP ${status[1]}` : 'the read failed') + (msg ? `: ${msg}` : '')
+}
 
 /** The node reports "no suppliers ... not found for session", not an empty list. */
 export function isNoSupplierError(e: unknown): boolean {
@@ -231,11 +271,12 @@ export function classifySession(
       ageBlocks: start && h ? h - start : 0
     }
   }
+  // Not staked as an application is a plain answer, not a failure to read: the node
+  // says it has no record for the address, and no session can exist without one.
+  if (!r.ok && isNoApplicationError(r.error))
+    return { state: 'waiting', reason: 'no-application', readyAt: null }
   if (!r.ok && !isNoSupplierError(r.error))
-    return {
-      state: 'unknown',
-      detail: r.error instanceof Error ? r.error.message : String(r.error)
-    }
+    return { state: 'unknown', detail: shortLcdDetail(r.error) }
   if (supply.staked === 0) return { state: 'waiting', reason: 'no-supplier', readyAt: null }
   const act = Number(supply.activationHeight || 0)
   const next = nextSessionBoundary(p)
@@ -277,9 +318,17 @@ export function sessionNote(p: LiveParams, r: SessionReadiness, serviceId: strin
     )
   if (r.state === 'unknown')
     return (
-      'Could not read the current session from the network (' +
+      'Could not read the current session from the network \u2014 ' +
       r.detail +
-      '). The test will run and show whatever the protocol answers.'
+      '. The test will run and show whatever the protocol answers.'
+    )
+  if (r.reason === 'no-application')
+    return (
+      'This wallet is not staked as an application for ' +
+      serviceId +
+      ', so the protocol has no session for it and a relay has nothing to sign. Stake one for ' +
+      serviceId +
+      ' first, then test from the session after that.'
     )
   if (r.reason === 'no-supplier')
     return (

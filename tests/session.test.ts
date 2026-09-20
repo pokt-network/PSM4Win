@@ -1,7 +1,14 @@
 // Session readiness: the Test screen's preflight (docs/SCREENS.md 3.8). The heights
 // here are fixtures, not chain values; the app reads every one of them live.
 import { describe, it, expect } from 'vitest'
-import { classifySession, sessionNote, isNoSupplierError, type LiveParams } from '@core/chain'
+import {
+  classifySession,
+  sessionNote,
+  isNoSupplierError,
+  isNoApplicationError,
+  shortLcdDetail,
+  type LiveParams
+} from '@core/chain'
 import type { ChainSession } from '@core/lcd'
 
 const ID = 'example-charts'
@@ -26,6 +33,15 @@ const sess = (suppliers: number, end = 663720): ChainSession => ({
 const noSuppliers = new Error(
   'HTTP 500 for .../get_session: rpc error: code = Internal desc = could not find suppliers ' +
     `for service ${ID} at height 663706: no suppliers not found for session`
+)
+
+/** What the node returns when the address has no application record at all. */
+const noApplication = new Error(
+  'HTTP 500 for https://sauron-api.example/pokt-network/poktroll/session/get_session?' +
+    `application_address=pokt1qyqszqgpqyqszqgpqyqszqgpqyqszqgp04723y&service_id=${ID}` +
+    '&block_height=930697: {"code":13,"message":"could not find app with address ' +
+    '\\"pokt1qyqszqgpqyqszqgpqyqszqgpqyqszqgp04723y\\" at height 930681: application for ' +
+    'session not found not found ","details":[]}'
 )
 
 describe('isNoSupplierError', () => {
@@ -111,6 +127,55 @@ describe('classifySession', () => {
       blocksLeft: 0,
       ageBlocks: 0
     })
+  })
+})
+
+describe('a wallet with no application stake', () => {
+  it('is told apart from a read that failed', () => {
+    expect(isNoApplicationError(noApplication)).toBe(true)
+    expect(isNoApplicationError(noSuppliers)).toBe(false)
+    expect(isNoApplicationError(new Error('HTTP 503: upstream connect error'))).toBe(false)
+  })
+
+  it('is a state to act on, not an unknown', () => {
+    const r = classifySession(params, { ok: false, error: noApplication }, { staked: 1 })
+    expect(r).toEqual({ state: 'waiting', reason: 'no-application', readyAt: null })
+  })
+
+  it('says to stake one, and shows none of the node error', () => {
+    const t = sessionNote(
+      params,
+      classifySession(params, { ok: false, error: noApplication }, { staked: 1 }),
+      ID
+    )
+    expect(t).toContain('not staked as an application')
+    expect(t).toContain('Stake one')
+    expect(t).not.toMatch(/HTTP|https?:|\{|"code"/)
+  })
+})
+
+describe('shortLcdDetail', () => {
+  it('keeps the status and the message the node sent, dropping the URL and the JSON', () => {
+    const d = shortLcdDetail(noApplication)
+    expect(d).toContain('HTTP 500')
+    expect(d).toContain('could not find app with address')
+    expect(d).not.toContain('https://')
+    expect(d).not.toContain('"details"')
+    expect(d).not.toContain('block_height')
+  })
+
+  it('caps a long message rather than filling the screen', () => {
+    const d = shortLcdDetail(
+      new Error('HTTP 500 for https://x/y: {"message":"' + 'x'.repeat(400) + '"}')
+    )
+    expect(d.length).toBeLessThan(190)
+    expect(d.endsWith('\u2026')).toBe(true)
+  })
+
+  it('still says something useful when there is no JSON body', () => {
+    expect(shortLcdDetail(new Error('The operation was aborted due to timeout'))).toContain(
+      'aborted due to timeout'
+    )
   })
 })
 

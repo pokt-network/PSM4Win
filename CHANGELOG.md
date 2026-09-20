@@ -2,6 +2,10 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`.
 
+## Unreleased
+
+- Test service: choosing a wallet that is not staked for the service now says so in a sentence, instead of showing the node's raw 500 with the request URL and JSON in it. Any error that genuinely is unexpected is trimmed to the status and the message. The badge and the Check again button sit on their own row so nothing runs together.
+
 ## 0.1.7
 
 - Test service: a relay that never completes is sent once more instead of failing the probe. The first relay into a session that has only just started can come back truncated while the supplier's relayer catches up, which read as a broken service; the log says when it happens.

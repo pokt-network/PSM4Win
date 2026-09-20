@@ -428,25 +428,37 @@ export function TestScreen(): React.JSX.Element {
             </div>
           </div>
         </div>
-        <div className="hint" id="tstSession" style={{ marginTop: 10 }}>
+        <div className="sessionline" id="tstSession">
           {shown ? (
             <>
-              {shown.readiness.state === 'ready' ? (
-                <Badge cls="ok">in session</Badge>
-              ) : shown.readiness.state === 'waiting' ? (
-                <Badge cls="warn">not in session yet</Badge>
-              ) : (
-                <Badge cls="warn">session unknown</Badge>
-              )}{' '}
-              {shown.readiness.state === 'waiting' ? <WarnText>{shown.note}</WarnText> : shown.note}{' '}
-              <button className="btn small" disabled={sessBusy} onClick={() => void runCheck()}>
-                {sessBusy ? 'Checking' : 'Check again'}
-              </button>
+              <div className="sessionline-hd">
+                {shown.readiness.state === 'ready' ? (
+                  <Badge cls="ok">in session</Badge>
+                ) : shown.readiness.state === 'waiting' ? (
+                  <Badge cls="warn">not ready</Badge>
+                ) : (
+                  <Badge cls="warn">session unknown</Badge>
+                )}
+                <button className="btn small" disabled={sessBusy} onClick={() => void runCheck()}>
+                  {sessBusy ? 'Checking' : 'Check again'}
+                </button>
+              </div>
+              <div className="hint">
+                {shown.readiness.state === 'waiting' ? (
+                  <WarnText>{shown.note}</WarnText>
+                ) : (
+                  shown.note
+                )}
+              </div>
             </>
           ) : sessBusy ? (
-            <Busy>Checking which suppliers are in the current session</Busy>
+            <div className="hint">
+              <Busy>Checking which suppliers are in the current session</Busy>
+            </div>
           ) : (
-            'Choose a service and a wallet staked for it to check the current session.'
+            <div className="hint">
+              Choose a service and a wallet staked for it to check the current session.
+            </div>
           )}
         </div>
         <div className="btnrow">

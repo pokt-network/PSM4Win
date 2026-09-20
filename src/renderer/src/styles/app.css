@@ -736,6 +736,22 @@ table.services select {
   margin: 0 0 10px 0;
 }
 
+/* The Test screen's session line (docs/SCREENS.md 3.8): a badge and a button on one
+   row, the sentence under them, so a long one does not wrap around either. */
+.sessionline {
+  margin: 10px 0 0 0;
+}
+.sessionline-hd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.sessionline .hint {
+  margin-top: 0;
+  max-width: 90ch;
+}
+
 /* The folded preflight (docs/SCREENS.md 4.7): a heading that is a button. */
 .foldhd {
   margin: 0 0 6px 0;
