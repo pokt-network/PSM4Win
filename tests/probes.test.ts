@@ -4,6 +4,8 @@ import {
   testProbes,
   gradeStep,
   relayIncomplete,
+  relayLatencyMs,
+  gradeLatency,
   BAD_INPUT_BODY,
   type ProbeStep
 } from '@core/probes'
@@ -144,5 +146,34 @@ describe('grading the bad-input probe', () => {
     const g = gradeStep(badStep, answer({ http: 400, body: '<html>Bad Request</html>' }))
     expect(g.ok).toBe(false)
     expect(g.note).toContain('not a JSON object')
+  })
+})
+
+describe('latency against gateway timeouts', () => {
+  it('reads the supplier round trip of the attempt that answered', () => {
+    expect(
+      relayLatencyMs('session: 1a2b3c4d\nattempt 1: pokt1abc in 812ms via https://x -> ok')
+    ).toBe(812)
+    expect(
+      relayLatencyMs(
+        'attempt 1: pokt1abc in 6021ms via https://x -> error\nattempt 2: pokt1def in 1400ms via https://y -> ok'
+      )
+    ).toBe(1400)
+    expect(relayLatencyMs('no attempt line here')).toBeNull()
+    expect(relayLatencyMs(undefined)).toBeNull()
+  })
+
+  it('passes a quick answer, warns past 10 s, fails past 30 s', () => {
+    expect(gradeLatency(null)).toEqual({ level: 'ok', note: '' })
+    expect(gradeLatency(9_999).level).toBe('ok')
+    expect(gradeLatency(10_000).level).toBe('ok')
+    const slow = gradeLatency(12_300)
+    expect(slow.level).toBe('warn')
+    expect(slow.note).toContain('12.3 s')
+    expect(slow.note).toContain('job ID')
+    expect(gradeLatency(30_000).level).toBe('warn')
+    const tooSlow = gradeLatency(31_000)
+    expect(tooSlow.level).toBe('fail')
+    expect(tooSlow.note).toContain('every gateway')
   })
 })

@@ -2,6 +2,10 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`.
 
+## Unreleased
+
+- Test service: each probe is also timed against how long gateways wait. An answer that takes more than 10 seconds still passes but shows in yellow, since gateways set to 10 seconds will cut it off; one that takes more than 30 seconds fails, because no gateway waits that long. The time is the supplier's own round trip, not the few seconds the test spends starting up.
+
 ## 0.1.9
 
 - Deploy service: a service can ask for extra public addresses on the supplier's hostname in `deploy/routes.json`, for example a path its own copies use to talk to each other. Deploy installs them after connecting the RelayMiner, checks Caddy accepts them before anything changes (a refused route is taken back out, so the hostname keeps serving relays), and lists the web addresses they answer on. Everything else on the hostname still goes to the relayer. A server provisioned by an earlier version needs Re-provision under Settings first; Deploy says so.

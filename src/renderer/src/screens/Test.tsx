@@ -6,6 +6,8 @@ import { appServiceIds, checkSession, type SessionCheck } from '@core/chain'
 import {
   testProbes,
   gradeStep,
+  gradeLatency,
+  relayLatencyMs,
   relayIncomplete,
   type ProbeStep,
   type TestLogEntry
@@ -203,6 +205,8 @@ export function TestScreen(): React.JSX.Element {
     if (ready?.readiness.state === 'waiting') return setStatus(ready.note, 'err')
     const steps: ProbeStep[] = testProbes(await readCardFor(id), id).steps
     const results: TestLogEntry['steps'] = []
+    // Per probe: a slow answer passes but shows as a warning in the checklist.
+    const levels: ('ok' | 'warn' | 'fail')[] = []
     setBusy(true)
     setLogRows(null)
     setLogNote(null)
@@ -262,8 +266,11 @@ export function TestScreen(): React.JSX.Element {
             `Supplier ${att[1].substring(0, 14)}… answered in ${att[2]} via ${att[3]} (${att[4]})${sess ? `, session ${sess[1]}…` : ''}.`
           )
         const g = gradeStep(s, r)
-        res.ok = g.ok
-        res.note = g.note
+        // Graded on the supplier's round trip, the part a gateway's timeout applies to.
+        const lat = gradeLatency(relayLatencyMs(diag))
+        res.ok = g.ok && lat.level !== 'fail'
+        res.note = lat.note ? `${g.note}; ${lat.note}` : g.note
+        if (res.ok && lat.level === 'warn') levels[i] = 'warn'
         const preview = String(r.body || '')
           .trim()
           .replace(/\s+/g, ' ')
@@ -287,14 +294,15 @@ export function TestScreen(): React.JSX.Element {
       }
       results.push(res)
       setChecks(
-        results.map((x) => ({
-          level: x.ok ? 'ok' : 'fail',
+        results.map((x, k) => ({
+          level: !x.ok ? 'fail' : (levels[k] ?? 'ok'),
           text: x.label + (x.ms ? ` (${x.ms} ms)` : ''),
           sub: x.note
         }))
       )
     }
     const passed = results.filter((x) => x.ok).length
+    const slow = levels.filter((l) => l === 'warn').length
     const entry: TestLogEntry = {
       time: new Date().toISOString(),
       network: S().net,
@@ -313,7 +321,9 @@ export function TestScreen(): React.JSX.Element {
     )
     setStatus(
       passed === results.length
-        ? 'All probes passed. The service answers through the protocol.'
+        ? slow
+          ? `All probes passed, but ${slow === 1 ? 'one answered' : `${slow} answered`} slowly enough that some gateways will cut ${slow === 1 ? 'it' : 'them'} off. See the checklist.`
+          : 'All probes passed. The service answers through the protocol.'
         : `${passed} of ${results.length} probes passed.`,
       passed === results.length ? 'ok' : 'err'
     )

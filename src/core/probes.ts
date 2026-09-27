@@ -201,6 +201,44 @@ export function gradeStep(step: ProbeStep, r: RelayCallResult): Grade {
   return out
 }
 
+/**
+ * How long gateways give a relay (design rule 7). Not chain values: they are what
+ * gateway operators set. SAGE bounds each attempt by its per-service relay_timeout,
+ * typically 10 to 30 s, and PATH's default was 10 s. The RelayMiner's own `fast`
+ * profile allows 30 s, so past that nothing on the path waits.
+ */
+export const GATEWAY_TIMEOUT_LOW_S = 10
+export const GATEWAY_TIMEOUT_HIGH_S = 30
+
+/**
+ * The supplier's round trip for the attempt that produced the answer, from pocket-ap's
+ * diagnostics ("attempt 1: pokt1... in 6021ms via ..."). This is what a gateway's
+ * timeout applies to; the wall time of the whole call also counts starting the client
+ * container and looking up the session, so it would overstate the service. Null when
+ * the diagnostics carry no attempt line.
+ */
+export function relayLatencyMs(diagnostics: string | undefined): number | null {
+  const all = [...String(diagnostics ?? '').matchAll(/attempt \d+: \S+ in (\d+)ms/g)]
+  return all.length ? Number(all[all.length - 1][1]) : null
+}
+
+/** How a probe's latency sits against gateway timeouts: fine, slow (warn), or too slow (fail). */
+export function gradeLatency(ms: number | null): { level: 'ok' | 'warn' | 'fail'; note: string } {
+  if (ms === null) return { level: 'ok', note: '' }
+  const s = (ms / 1000).toFixed(1)
+  if (ms > GATEWAY_TIMEOUT_HIGH_S * 1000)
+    return {
+      level: 'fail',
+      note: `took ${s} s, longer than any gateway waits (${GATEWAY_TIMEOUT_HIGH_S} s at most), so every gateway will cut this request off. Answer quickly, or hand back a job ID and let the caller ask for the result.`
+    }
+  if (ms > GATEWAY_TIMEOUT_LOW_S * 1000)
+    return {
+      level: 'warn',
+      note: `took ${s} s. Gateways set to wait ${GATEWAY_TIMEOUT_LOW_S} s will cut this request off, and many are. Answer within ${GATEWAY_TIMEOUT_LOW_S} s, or hand back a job ID and let the caller ask for the result.`
+    }
+  return { level: 'ok', note: '' }
+}
+
 export interface TestLogEntry {
   time: string
   network: string

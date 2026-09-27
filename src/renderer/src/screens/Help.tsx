@@ -146,7 +146,9 @@ function BeforeYouStart(): React.JSX.Element {
         <span className="mono">Dockerfile</span> under <span className="mono">backend</span>. It
         runs on your server once deployed; this PC only holds the code. It must answer every request
         with a JSON object, answer <span className="mono">GET /</span> with success, and have a
-        version path and a health path. No app yet? Ask Claude Code; see chapter 4.
+        version path and a health path. It should also answer within about ten seconds, because
+        gateways stop waiting after that; work that takes longer can hand back a job number and let
+        the caller ask for the result later. No app yet? Ask Claude Code; see chapter 4.
       </p>
       <h3>4. A server</h3>
       <p>
@@ -198,9 +200,10 @@ function TheSteps(): React.JSX.Element {
         </li>
         <li>
           <b>Test.</b> <Go screen="test">Test service</Go> sends real requests through the network.
-          All probes green means your service is live. Straight after staking, the screen will say
-          your service is not in a session yet and name the block to wait for: that is the pause in
-          step 5, not a fault, and the button turns on by itself once the session starts.
+          All probes green means your service is live; a yellow one answered, but slowly enough that
+          some gateways will give up on it. Straight after staking, the screen will say your service
+          is not in a session yet and name the block to wait for: that is the pause in step 5, not a
+          fault, and the button turns on by itself once the session starts.
         </li>
       </ol>
       <p>
