@@ -11,7 +11,8 @@
 #   supplier.sh start                        start the shared Caddy, then redis and the miner (relayer too once a service exists)
 #   supplier.sh deploy <id> <deploy-root>    build and start a service's backend on the shared network
 #   supplier.sh add-service <id> <backend-url> <health-path>   add to this stack's relayer, recreate relayer
-#   supplier.sh remove-service <id>          drop from this stack's relayer, recreate relayer
+#   supplier.sh remove-service <id>          drop from this stack's relayer, recreate relayer; drop the
+#                                            service's routes once no other network's stack serves it
 #   supplier.sh add-routes <id> <path> <port> [<path> <port> ...]
 #                                            route https://<hostname><path>/* to <id>-backend:<port>, prefix stripped
 #   supplier.sh remove-routes <id>           drop a service's extra routes
@@ -84,6 +85,19 @@ caddy_reload() { docker exec pocket-caddy caddy reload --config /etc/caddy/Caddy
 caddy_running() { docker ps --format '{{.Names}}' | grep -qx pocket-caddy; }
 # Puts back what was there before a change ($1 the route file, $2 its saved copy or "").
 routes_restore() { if [ -n "$2" ] && [ -f "$2" ]; then mv -f "$2" "$1"; else rm -f "$1"; fi; }
+# The networks whose stacks installed a service's routes: the file's "# networks:" line.
+routes_networks() { if [ -f "$1" ]; then sed -n 's/^# networks: //p' "$1" | head -1; fi; }
+# Removes a service's route file and reloads Caddy, putting the file back if that fails.
+routes_drop() {
+  local F="$ROUTES_DIR/$1.route" OLD="$ROUTES_DIR/.$1.route.old"
+  if [ ! -f "$F" ]; then echo "routes: $1 has none"; return 0; fi
+  mv -f "$F" "$OLD"
+  if caddy_running && ! caddy_reload; then
+    mv -f "$OLD" "$F"; caddy_reload || true
+    echo "error: Caddy did not reload without the routes; they are still in place"; return 1
+  fi
+  rm -f "$OLD"; echo "routes: removed for $1"
+}
 
 case "$step" in
   prepare)
@@ -192,9 +206,18 @@ PY
     cd "$D"
     if relayer_has_services; then docker compose -p "$PROJECT" up -d --force-recreate relayer 2>&1 | tail -2; wait_health || true
     else docker compose -p "$PROJECT" stop relayer >/dev/null 2>&1 || true; echo "relayer: stopped (no services left)"; fi
-    # Routes belong to the backend, which keeps running and may serve another network's
-    # relayer on this server, so they stay until remove-routes.
-    if [ -f "$ROUTES_DIR/$ID.route" ]; then echo "routes: $ID keeps its extra routes; remove-routes $ID drops them"; fi
+    # Routes answer on every network's hostname here, so they go only when the last
+    # network whose stack installed them stops serving the service.
+    RF="$ROUTES_DIR/$ID.route"
+    if [ -f "$RF" ]; then
+      LEFT=""; for n in $(routes_networks "$RF"); do [ "$n" = "$NET" ] || LEFT="${LEFT:+$LEFT }$n"; done
+      if [ -n "$LEFT" ]; then
+        sed -i "s/^# networks: .*/# networks: $LEFT/" "$RF"
+        echo "routes: $ID keeps its extra routes while $LEFT still serves it"
+      else
+        routes_drop "$ID" || exit 1
+      fi
+    fi
     ;;
   add-routes)
     ID="${1:?service id}"; shift
@@ -205,7 +228,9 @@ PY
     grep -q 'sites/routes/' "$SITE" 2>/dev/null || { echo "error: $NET.caddy predates service routes; provision this stack again, then deploy again"; exit 1; }
     mkdir -p "$ROUTES_DIR"
     F="$ROUTES_DIR/$ID.route"
-    BODY="# $ID: routes from the service's deploy/routes.json, written by the Pocket Service Manager."$'\n'
+    # Which stacks installed these routes, so remove-service knows when the last one goes.
+    NETS=$(routes_networks "$F"); case " $NETS " in *" $NET "*) ;; *) NETS="${NETS:+$NETS }$NET" ;; esac
+    BODY="# $ID: routes from the service's deploy/routes.json, written by the Pocket Service Manager."$'\n'"# networks: $NETS"$'\n'
     SEEN=" "; PAIRS=()
     while [ $# -gt 0 ]; do
       P="$1"; PORT="$2"; shift 2
@@ -248,15 +273,7 @@ PY
   remove-routes)
     ID="${1:?service id}"
     [[ "$ID" =~ ^[A-Za-z0-9_-]{1,42}$ ]] || { echo "error: bad service id"; exit 2; }
-    F="$ROUTES_DIR/$ID.route"
-    if [ ! -f "$F" ]; then echo "routes: $ID has none"; exit 0; fi
-    OLD="$ROUTES_DIR/.$ID.route.old"; mv -f "$F" "$OLD"
-    if caddy_running && ! caddy_reload; then
-      mv -f "$OLD" "$F"; caddy_reload || true
-      echo "error: Caddy did not reload without the routes; they are still in place"; exit 1
-    fi
-    rm -f "$OLD"
-    echo "routes: removed for $ID"
+    routes_drop "$ID" || exit 1
     ;;
   status)
     echo "dir: $D"

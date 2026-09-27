@@ -1,6 +1,6 @@
 // Title bar, top bar, sidebar (owner wallet card and accordion nav), footer.
 import { useEffect, useState } from 'react'
-import { showUpdateDialog } from '../lib/update'
+import { showUpdateDialog, showChanges } from '../lib/update'
 import mark from '../assets/pocket-mark-40.png'
 import { useStore } from '../store'
 import { fmtPokt } from '@core/format'
@@ -192,6 +192,15 @@ export function TopBar(): React.JSX.Element {
             title="A newer version is on the releases page"
           >
             Update available: {update.latest}. Click to install.
+          </a>
+        ) : null}
+        {update?.available ? (
+          <a
+            id="updateChanges"
+            onClick={() => showChanges(update)}
+            title="Opens the list of changes in your browser"
+          >
+            See what changed
           </a>
         ) : null}
         <div id="dockerState" className={dockerCls}>

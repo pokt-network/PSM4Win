@@ -5,7 +5,7 @@ import { useStore } from '../store'
 import { openModal, closeModal, setModalBody, useModal } from './modal'
 import { openUrl } from './actions'
 import { Busy } from '../components/ui'
-import type { UpdateStatus } from '@core/update'
+import { changesUrl, type UpdateStatus } from '@core/update'
 
 function installLabel(u: UpdateStatus): string {
   switch (u.installKind) {
@@ -75,7 +75,7 @@ function render(u: UpdateStatus): void {
   const busy = u.state === 'downloading' || u.state === 'installing'
   setModalBody(body(u), [
     { label: 'Later', onClick: closeModal, disabled: busy },
-    { label: 'Release notes', onClick: () => u.url && openUrl(u.url), disabled: !u.url },
+    { label: 'See what changed', onClick: () => showChanges(u) },
     {
       label: installLabel(u),
       cls: 'primary',
@@ -83,6 +83,11 @@ function render(u: UpdateStatus): void {
       onClick: () => void window.psm.update.install()
     }
   ])
+}
+
+/** Opens the changelog for the latest version in the browser. */
+export function showChanges(u: UpdateStatus | null = useStore.getState().update): void {
+  if (u?.latest) openUrl(changesUrl(u.latest))
 }
 
 export function showUpdateDialog(): void {

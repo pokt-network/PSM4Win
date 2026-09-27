@@ -5,6 +5,8 @@ One line per user-visible change. Versions are tags `v<version>`; compat strings
 ## 0.1.9
 
 - Deploy service: a service can ask for extra public addresses on the supplier's hostname in `deploy/routes.json`, for example a path its own copies use to talk to each other. Deploy installs them after connecting the RelayMiner, checks Caddy accepts them before anything changes (a refused route is taken back out, so the hostname keeps serving relays), and lists the web addresses they answer on. Everything else on the hostname still goes to the relayer. A server provisioned by an earlier version needs Re-provision under Settings first; Deploy says so.
+- Deploy service: taking a service off a supplier also takes its extra addresses off the server once no network on that server serves it any more. While the other network still does, they stay, since they answer on both.
+- Updates: the update notice in the header, the update dialog, and the Updates panel have a "See what changed" link that opens the list of changes for the new version. Releases now carry their notes too, so the dialog shows them.
 
 ## 0.1.8
 

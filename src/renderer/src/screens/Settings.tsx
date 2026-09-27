@@ -43,7 +43,7 @@ import {
 import { confirmDialog } from '../lib/modal'
 import { confirmTx } from '../lib/flows'
 import { showWelcome } from '../lib/welcome'
-import { showUpdateDialog } from '../lib/update'
+import { showUpdateDialog, showChanges } from '../lib/update'
 import { account } from '@core/lcd'
 
 const SETTINGS_TABS: Array<[SettingsTab, string]> = [
@@ -1258,6 +1258,11 @@ function UpdatesPanel(): React.JSX.Element {
         {u?.available ? (
           <button className="btn small primary" onClick={showUpdateDialog}>
             Install version {u.latest}
+          </button>
+        ) : null}
+        {u?.available ? (
+          <button className="btn small" id="btnUpdateChanges" onClick={() => showChanges(u)}>
+            See what changed
           </button>
         ) : null}
       </div>

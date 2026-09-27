@@ -2,7 +2,7 @@
 
 Windows only. The macOS app is a separate effort outside this repository; nothing here should pre-empt it beyond the existing `# phase 3` markers.
 
-> The in-app updater (docs/ARCHITECTURE.md section 8) reads the latest GitHub release and depends on three asset names staying exactly as the workflow produces them: `PocketServiceManager-Setup-<version>.exe`, `PocketServiceManager-<version>-win-x64.zip`, and `SHA256SUMS`. Tags are `v<version>` and must match `package.json`.
+> The in-app updater (docs/ARCHITECTURE.md section 8) reads the latest GitHub release and depends on three asset names staying exactly as the workflow produces them: `PocketServiceManager-Setup-<version>.exe`, `PocketServiceManager-<version>-win-x64.zip`, and `SHA256SUMS`. Tags are `v<version>` and must match `package.json`. The release notes are written from that version's `## <version>` section of `CHANGELOG.md` (`scripts/release-notes.mjs`, which warns rather than fails when the section is missing), and the app's "See what changed" links open `CHANGELOG.md` at the tag on that heading, so the heading must be in place before tagging.
 
 ## 1. electron-builder
 

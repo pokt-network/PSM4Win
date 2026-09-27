@@ -28,10 +28,15 @@ jobs:
             release/*.exe
             release/*.zip
             release/SHA256SUMS
+      - name: Release notes from the changelog
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: node scripts/release-notes.mjs "${GITHUB_REF_NAME#v}" release/NOTES.md "${{ github.repository }}"
       - name: Attach to the GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v3
         with:
+          body_path: release/NOTES.md
           files: |
             release/*.exe
             release/*.zip

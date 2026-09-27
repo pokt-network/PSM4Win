@@ -1177,7 +1177,19 @@ table.services .svcid {
   cursor: pointer;
   white-space: nowrap;
 }
-#updateLink + #dockerState {
+#updateLink + #updateChanges {
+  margin-left: -4px;
+}
+#updateChanges {
+  margin-right: 14px;
+  font-size: 13px;
+  color: var(--fg-muted);
+  text-decoration: underline;
+  cursor: pointer;
+  white-space: nowrap;
+}
+#updateLink + #dockerState,
+#updateChanges + #dockerState {
   margin-left: 0;
 }
 .update-notes {

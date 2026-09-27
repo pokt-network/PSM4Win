@@ -38,6 +38,19 @@ export function parseVersion(v: string): [number, number, number] | null {
   return [Number(m[1]), Number(m[2]), Number(m[3])]
 }
 
+/**
+ * What changed up to a version: CHANGELOG.md as tagged for that release, opened at the
+ * version's own heading (GitHub drops the dots from "## 0.1.9", giving #019). The file
+ * is newest first, so every version since the user's own is on the page from there down.
+ * A version that is not plain semver gets the releases page instead.
+ */
+export function changesUrl(version: string | null | undefined): string {
+  const p = parseVersion(String(version ?? ''))
+  if (!p) return RELEASES_PAGE
+  const v = p.join('.')
+  return `https://github.com/${UPDATE_REPO}/blob/v${v}/CHANGELOG.md#${p.join('')}`
+}
+
 /** -1, 0, or 1 for a < b, a == b, a > b. Unparseable versions compare as older. */
 export function compareVersions(a: string, b: string): -1 | 0 | 1 {
   const pa = parseVersion(a)

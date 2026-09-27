@@ -6,8 +6,14 @@ import {
   parseChecksums,
   detectInstallKind,
   plainNotes,
-  DOWNLOAD_PREFIX
+  changesUrl,
+  DOWNLOAD_PREFIX,
+  RELEASES_PAGE
 } from '../src/core/update'
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 describe('updater: versions', () => {
   it('parses plain and v-prefixed semver, rejects the rest', () => {
@@ -86,5 +92,44 @@ describe('updater: install kind', () => {
     expect(
       detectInstallKind('Z:\\repo\\node_modules\\electron\\dist\\electron.exe', false, false)
     ).toBe('dev')
+  })
+})
+
+describe('updater: what changed', () => {
+  it('opens the changelog at the tag, on the version heading', () => {
+    expect(changesUrl('0.1.9')).toBe(
+      'https://github.com/pokt-network/PSM4Win/blob/v0.1.9/CHANGELOG.md#019'
+    )
+    expect(changesUrl('v0.10.2')).toBe(
+      'https://github.com/pokt-network/PSM4Win/blob/v0.10.2/CHANGELOG.md#0102'
+    )
+  })
+  it('falls back to the releases page for anything else', () => {
+    expect(changesUrl(null)).toBe(RELEASES_PAGE)
+    expect(changesUrl('latest')).toBe(RELEASES_PAGE)
+    expect(changesUrl('1.2.3/../x')).toBe(RELEASES_PAGE)
+  })
+  it('release notes come from the version section of CHANGELOG.md', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'psm-notes-'))
+    try {
+      const out = join(dir, 'NOTES.md')
+      const run = (v: string): string => {
+        const r = spawnSync(
+          process.execPath,
+          ['scripts/release-notes.mjs', v, out, 'pokt-network/PSM4Win'],
+          { encoding: 'utf8' }
+        )
+        expect(r.status).toBe(0)
+        return readFileSync(out, 'utf8')
+      }
+      const n = run('0.1.8')
+      expect(n).toMatch(/^- Test service: choosing a wallet that is not staked/)
+      expect(n).not.toContain('## ')
+      expect(n).not.toContain('0.1.7')
+      expect(n).toContain('https://github.com/pokt-network/PSM4Win/blob/v0.1.8/CHANGELOG.md#018')
+      expect(run('9.9.9')).toMatch(/^No notes were written for this version\./)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
