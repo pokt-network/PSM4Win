@@ -1,11 +1,18 @@
 {
   "app": "Pocket Service Manager",
-  "updated": "2026-09-26",
+  "updated": "2026-09-27",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.9",
+  "latest": "electron-0.1.10",
   "minimum_supported": "hta-2026-09-14",
   "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.10": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.9",
+      "changes": [
+        "Test service times each probe by the supplier's own round trip and grades it against gateway timeouts: over 10 s it passes as a warning (gateways set to 10 s cut it off), over 30 s it fails (no gateway waits that long). A slow service should answer within about 10 s or return a job handle for the client to poll (design rule 7); the RelayMiner timeout profile is not the limit"
+      ]
+    },
     "electron-0.1.9": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.5",

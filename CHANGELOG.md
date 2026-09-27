@@ -2,7 +2,7 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`.
 
-## Unreleased
+## 0.1.10
 
 - Test service: each probe is also timed against how long gateways wait. An answer that takes more than 10 seconds still passes but shows in yellow, since gateways set to 10 seconds will cut it off; one that takes more than 30 seconds fails, because no gateway waits that long. The time is the supplier's own round trip, not the few seconds the test spends starting up.
 
