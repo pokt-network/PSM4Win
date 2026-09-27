@@ -13,7 +13,7 @@ This document maps every piece of the Windows HTML Application in `reference/hta
 | `runner.cmd` | 7 | Runs the signer hidden and leaves `.out`, `.err`, `.done` files that `app.js` polls every 300 ms with a 240 s default timeout. | Gone. `ipcMain.handle` awaits a spawned child; progress streams back as events. |
 | `winshell.ps1` | ~250 | Win32 surgery: strips the native title bar mshta will not drop, sets the app identity and icon, implements minimise and maximise, stays resident so Windows keeps the icon. | Gone. `new BrowserWindow({ frame: false, icon })`, `-webkit-app-region: drag`, `win.minimize()` / `maximize()` over IPC. |
 | `install-shortcut.*` | | Desktop and Start menu shortcuts with the icon. | Gone. The NSIS installer creates them. |
-| `server/` | | Templates and `supplier.sh` shipped to a supplier host by Provision. | `resources/server/`, byte-identical, bundled as `extraResources`. |
+| `server/` | | Templates and `supplier.sh` shipped to a supplier host by Provision. | `resources/server/`, byte-identical with service-builder's `tools/service-manager/server/` (the `reference/` snapshot predates the 0.1.9 service routes), bundled as `extraResources`. |
 | `assets/` | | Rubik (three weights), logos, icon. | `resources/` and `src/renderer/assets/`. |
 
 Runtime dependencies the HTA had and the Electron app drops: Windows PowerShell (all of the signer), Python (card validation via the Skill's `validate_card.py`; the app skipped validation when the script was missing), `mshta`. Dependencies it keeps: Docker Desktop, the `pocketd` and `pocket-ap` images, and the Windows OpenSSH client (`ssh`, `scp`) plus `tar`.
@@ -135,5 +135,6 @@ Keep in `src/core/versions.ts` and update here in the same commit:
 | LCD | `https://sauron-api.infra.pocket.network`, `https://sauron-api.beta.infra.pocket.network` |
 | Explorer | `https://explorer.pocket.network`, `https://explorer.pocket.network/beta` |
 | HTA version string | `hta-2026-09-14` (in `reference/mcp/src/compat.json`) |
-| Electron version string | `APP_VERSION_PREFIX` + `package.json` version, so `electron-0.1.2` at this tag. `reference/mcp/src/compat.json` keys an entry by the version that introduced a capability set and points later versions at it with `capabilities_as`, so every released version resolves. |
+| Electron version string | `APP_VERSION_PREFIX` + `package.json` version, so `electron-0.1.9` at this tag. `reference/mcp/src/compat.json` keys an entry by the version that introduced a capability set and points later versions at it with `capabilities_as`, so every released version resolves. |
+| Supplier Caddy image | `caddy:2` in `resources/server/caddy/docker-compose.yaml`, a floating major tag shared byte for byte with the HTA's copy. Service routes rely on an `import` glob that matches no file being a warning rather than an error, verified with `caddy:2` = v2.11.4 on 2026-09-26. |
 | Bridge default port | `41777` (`BRIDGE_DEFAULT_PORT`) |

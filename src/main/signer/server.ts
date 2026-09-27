@@ -5,18 +5,13 @@ import { promises as fs } from 'node:fs'
 import { fail } from '@core/errors'
 import { CADDY_DIR } from '@core/networks'
 import { measureBlockTime } from '@core/lcd'
-import {
-  RE,
-  requireNetwork,
-  validateServiceId,
-  validateLinuxPath,
-  validateHealthPath,
-  toInt64
-} from '@core/validate'
+import { RE, requireNetwork, validateServiceId, validateLinuxPath, toInt64 } from '@core/validate'
+import { supplierStepArgs } from '@core/supplier'
+import { ROUTES_FILE } from '@core/routes'
 import { renderStack, backendComposeFromTemplate, type StackTemplates } from '@core/stack'
 import { cleanErr, operatorFromOutput, lastErrorLine } from '@core/pocketd-output'
 import { firstLine, nonEmptyLines, tail, toLf } from '@core/text'
-import type { SignerRequests, SignerResults, SupplierStep } from '@core/contract'
+import type { SignerRequests, SignerResults } from '@core/contract'
 import { SUPPLIER_STEP_TIMEOUTS_MS } from '@core/contract'
 import type { OpContext } from './context'
 import { resolveSsh, runSsh, runScp } from './ssh'
@@ -183,54 +178,13 @@ export async function supplierShip(
   })
 }
 
-const STEPS: readonly SupplierStep[] = [
-  'operator',
-  'keys',
-  'start',
-  'status',
-  'publish',
-  'deploy',
-  'add-service',
-  'remove-service'
-]
-
 export async function supplierRun(
   req: Req<'supplier-run'>,
   ctx: OpContext
 ): Promise<Res<'supplier-run'>> {
   const conn = resolveSsh(req)
   const path = validateLinuxPath(req.path, 'Stack directory')
-  const step = String(req.step) as SupplierStep
-  const args: string[] = []
-  switch (step) {
-    case 'operator':
-    case 'keys':
-    case 'start':
-    case 'status':
-      break
-    case 'publish':
-      args.push(requireNetwork(req.network))
-      break
-    case 'deploy': {
-      const sid = validateServiceId(String(req.service_id ?? ''))
-      const root = validateLinuxPath(String(req.deploy_root ?? ''), 'Deploy root')
-      args.push(sid, root, validateHealthPath(req.health_path))
-      break
-    }
-    case 'add-service': {
-      const sid = validateServiceId(String(req.service_id ?? ''))
-      const url = String(req.backend_url ?? '')
-      if (!RE.backendUrl.test(url)) fail('Backend URL must be http://<container>:<port>.')
-      args.push(sid, url, validateHealthPath(req.health_path))
-      break
-    }
-    case 'remove-service':
-      args.push(validateServiceId(String(req.service_id ?? '')))
-      break
-    default:
-      fail(`Unknown supplier step '${step}'.`)
-  }
-  if (!STEPS.includes(step)) fail(`Unknown supplier step '${step}'.`)
+  const { step, args } = supplierStepArgs(req)
   const cmd = `bash '${path}/supplier.sh' ${step}` + args.map((a) => ` '${a}'`).join('')
   ctx.progress('info', `Running supplier.sh ${step} on ${conn.target}`, undefined, step)
   const r = await runSsh(conn, cmd, ctx, Math.min(ctx.timeoutMs, SUPPLIER_STEP_TIMEOUTS_MS[step]))
@@ -302,6 +256,11 @@ export async function deployShip(
       )
       composeFrom = 'the template'
     }
+    // A service's extra public routes travel with it, so the server copy mirrors the folder.
+    const routes = join(folder, ...ROUTES_FILE.split('/'))
+    const hasRoutes = exists(routes)
+    if (hasRoutes)
+      await writeText(join(stage, ...ROUTES_FILE.split('/')), toLf((await readText(routes)) ?? ''))
     const bundle = join(work, 'bundle.tar')
     const tr = await runNative(toolPath('tar'), ['-cf', bundle, '-C', stage, 'backend', 'deploy'], {
       timeoutMs: ctx.timeoutMs,
@@ -318,7 +277,7 @@ export async function deployShip(
     if (cp.code !== 0) fail('Could not copy the archive to the server.', cleanErr(cp.err))
     const x = await runSsh(
       conn,
-      `cd '${dest}' && tar -xf bundle.tar && rm -f bundle.tar && find backend deploy -type f | wc -l`,
+      `cd '${dest}' && rm -f '${ROUTES_FILE}' && tar -xf bundle.tar && rm -f bundle.tar && find backend deploy -type f | wc -l`,
       ctx
     )
     if (x.code !== 0)
@@ -329,6 +288,13 @@ export async function deployShip(
       extra: `host=${conn.target} dest=${dest} bytes=${size}`
     })
     await fs.rm(stage, { recursive: true, force: true })
-    return { ok: true, dest, bytes: size, files: firstLine(x.out), compose_from: composeFrom }
+    return {
+      ok: true,
+      dest,
+      bytes: size,
+      files: firstLine(x.out),
+      compose_from: composeFrom,
+      routes: hasRoutes
+    }
   })
 }

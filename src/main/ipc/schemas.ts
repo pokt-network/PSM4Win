@@ -108,7 +108,11 @@ export const requestSchemas: Record<SignerOp, z.ZodTypeAny> = {
     service_id: sid.optional(),
     deploy_root: z.string().max(512).optional(),
     health_path: z.string().max(256).optional(),
-    backend_url: z.string().max(256).optional()
+    backend_url: z.string().max(256).optional(),
+    routes: z
+      .array(z.object({ path: z.string().max(64), port: z.coerce.number().int() }))
+      .max(8)
+      .optional()
   }),
   'deploy-ship': ssh.extend({
     deploy_root: z.string().max(512),

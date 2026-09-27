@@ -353,7 +353,7 @@ export const BRIDGE_TOOLS: readonly BridgeTool[] = [
   {
     name: 'psm_supplier_run',
     description:
-      'Run one supplier.sh step on a server: operator (create the operator key there), keys, publish (signs a 1 uPOKT self-transfer; confirmed in the app), start, status, deploy, add-service, remove-service.',
+      'Run one supplier.sh step on a server: operator (create the operator key there), keys, publish (signs a 1 uPOKT self-transfer; confirmed in the app), start, status, deploy, add-service, remove-service, add-routes (install the extra public routes a service declares in deploy/routes.json: each path on the stack hostname goes to <service_id>-backend:<port> with the prefix stripped), remove-routes.',
     inputSchema: obj(
       {
         server,
@@ -367,7 +367,9 @@ export const BRIDGE_TOOLS: readonly BridgeTool[] = [
             'status',
             'deploy',
             'add-service',
-            'remove-service'
+            'remove-service',
+            'add-routes',
+            'remove-routes'
           ]
         },
         network,
@@ -378,7 +380,17 @@ export const BRIDGE_TOOLS: readonly BridgeTool[] = [
         service_id: { type: 'string' },
         deploy_root: { type: 'string' },
         health_path: { type: 'string' },
-        backend_url: { type: 'string' }
+        backend_url: { type: 'string' },
+        routes: {
+          type: 'array',
+          description:
+            'add-routes: the routes from deploy/routes.json. path is one lowercase segment such as /peer; port is the backend container port (1024-65535, not 8080).',
+          items: {
+            type: 'object',
+            properties: { path: { type: 'string' }, port: { type: 'integer' } },
+            required: ['path', 'port']
+          }
+        }
       },
       ['server', 'step', 'network']
     ),

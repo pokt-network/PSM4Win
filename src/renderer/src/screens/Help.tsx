@@ -187,7 +187,10 @@ function TheSteps(): React.JSX.Element {
         </li>
         <li>
           <b>Deploy.</b> <Go screen="deploy">Deploy service</Go> builds your app on the server and
-          connects it to the RelayMiner.
+          connects it to the RelayMiner. Some apps also need an address of their own on your server,
+          for example so copies of the app can talk to each other. If yours asks for one, Deploy
+          opens it too and shows you the web address it answers on. Everything else on your
+          server&apos;s address still goes to the RelayMiner.
         </li>
         <li>
           <b>Stake the supplier.</b> <Go screen="supply">Suppliers</Go>, Manage, tick the service,

@@ -19,7 +19,7 @@ files:
   - package.json
 extraResources:
   - from: resources/server
-    to: server         # what Provision ships; byte-identical to reference/hta-app/server
+    to: server         # what Provision ships; byte-identical to service-builder tools/service-manager/server
   - from: resources/fonts
     to: fonts
 win:

@@ -47,13 +47,24 @@ describe('supplier-ship rendering', () => {
     ).replace(/\r\n/g, '\n')
     expect(r.stack['stack.env']).toBe(ref)
   })
-  it('reproduces the beta site file on the reference host', () => {
+  it('reproduces the beta site file on the reference host, plus the service routes import', () => {
+    // The reference host predates service routes (0.1.9) and reference/ is a snapshot that
+    // is never edited, so the expected file is the reference with exactly the two lines
+    // the template gained. Any other drift from the reference still fails here.
     const ref = readFileSync(
       join(process.cwd(), 'reference', 'servers', 'example-host', 'caddy', 'sites', 'beta.caddy'),
       'utf8'
     ).replace(/\r\n/g, '\n')
+    const relayer = '\treverse_proxy pocket-supplier-relayer:8080\n'
+    expect(ref).toContain(relayer)
+    const expected = ref.replace(
+      relayer,
+      '\t# Extra routes services declare (sites/routes/<id>.route); matching none is fine.\n' +
+        '\timport /etc/caddy/sites/routes/*.route\n' +
+        relayer
+    )
     expect(r.site.name).toBe('beta.caddy')
-    expect(r.site.text).toBe(ref)
+    expect(r.site.text).toBe(expected)
   })
   it('renders the miner config with the beta chain id and block time', () => {
     expect(r.stack['miner-config.yaml']).toContain('pocket-lego-testnet')

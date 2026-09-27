@@ -12,6 +12,9 @@
 #   supplier.sh deploy <id> <deploy-root>    build and start a service's backend on the shared network
 #   supplier.sh add-service <id> <backend-url> <health-path>   add to this stack's relayer, recreate relayer
 #   supplier.sh remove-service <id>          drop from this stack's relayer, recreate relayer
+#   supplier.sh add-routes <id> <path> <port> [<path> <port> ...]
+#                                            route https://<hostname><path>/* to <id>-backend:<port>, prefix stripped
+#   supplier.sh remove-routes <id>           drop a service's extra routes
 #   supplier.sh status                       one line per fact the app shows
 set -euo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"
@@ -45,7 +48,7 @@ wait_health() { for i in $(seq 1 45); do curl -fs "http://127.0.0.1:$HEALTH_PORT
 # from the first layout carried its own Caddy; its certificates are carried over
 # and the old container removed before the shared one takes ports 80 and 443.
 caddy_up() {
-  mkdir -p "$CADDY_DIR/sites"
+  mkdir -p "$CADDY_DIR/sites/routes"
   [ -f "$CADDY_DIR/docker-compose.yaml" ] || { echo "error: $CADDY_DIR/docker-compose.yaml missing; provision again"; return 1; }
   if docker ps -a --format '{{.Names}}' | grep -qx "$PROJECT-caddy"; then
     if docker volume inspect "${PROJECT}_caddy_data" >/dev/null 2>&1 && ! docker volume inspect pocket-caddy_data >/dev/null 2>&1; then
@@ -67,12 +70,24 @@ caddy_up() {
   fi
   docker volume create pocket-caddy_data >/dev/null; docker volume create pocket-caddy_config >/dev/null
   (cd "$CADDY_DIR" && docker compose -p pocket-caddy up -d 2>&1 | tail -2)
-  if docker exec pocket-caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1; then echo "caddy: serving $(ls "$CADDY_DIR/sites" | sed 's/\.caddy$//' | tr '\n' ' ')"; else echo "caddy: started"; fi
+  if docker exec pocket-caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1; then echo "caddy: serving $(ls "$CADDY_DIR/sites" | grep '\.caddy$' | sed 's/\.caddy$//' | tr '\n' ' ')"; else echo "caddy: started"; fi
 }
+
+# Extra routes a service declares in its deploy/routes.json: one file per service in
+# sites/routes/, imported inside every stack's site block, so a route answers on each
+# network's hostname on this server (one backend serves both networks' relayers).
+# A file Caddy refuses is taken back out, and the previous one restored, before
+# anything is reloaded, so a bad route never takes a hostname down.
+ROUTES_DIR="$CADDY_DIR/sites/routes"
+caddy_validate() { docker exec pocket-caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile 2>&1; }
+caddy_reload() { docker exec pocket-caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1; }
+caddy_running() { docker ps --format '{{.Names}}' | grep -qx pocket-caddy; }
+# Puts back what was there before a change ($1 the route file, $2 its saved copy or "").
+routes_restore() { if [ -n "$2" ] && [ -f "$2" ]; then mv -f "$2" "$1"; else rm -f "$1"; fi; }
 
 case "$step" in
   prepare)
-    mkdir -p "$D/pocket-home" "$CADDY_DIR/sites"
+    mkdir -p "$D/pocket-home" "$CADDY_DIR/sites/routes"
     sudo chown 1025:1025 "$D/pocket-home"
     chmod +x "$D/supplier.sh"
     docker network inspect "$NET_NAME" >/dev/null 2>&1 || docker network create "$NET_NAME" >/dev/null
@@ -177,6 +192,71 @@ PY
     cd "$D"
     if relayer_has_services; then docker compose -p "$PROJECT" up -d --force-recreate relayer 2>&1 | tail -2; wait_health || true
     else docker compose -p "$PROJECT" stop relayer >/dev/null 2>&1 || true; echo "relayer: stopped (no services left)"; fi
+    # Routes belong to the backend, which keeps running and may serve another network's
+    # relayer on this server, so they stay until remove-routes.
+    if [ -f "$ROUTES_DIR/$ID.route" ]; then echo "routes: $ID keeps its extra routes; remove-routes $ID drops them"; fi
+    ;;
+  add-routes)
+    ID="${1:?service id}"; shift
+    [[ "$ID" =~ ^[A-Za-z0-9_-]{1,42}$ ]] || { echo "error: bad service id"; exit 2; }
+    if [ $# -eq 0 ] || [ $(($# % 2)) -ne 0 ]; then echo "error: add-routes takes <path> <port> pairs"; exit 2; fi
+    caddy_running || { echo "error: the shared Caddy is not running; provision this stack again"; exit 1; }
+    SITE="$CADDY_DIR/sites/$NET.caddy"
+    grep -q 'sites/routes/' "$SITE" 2>/dev/null || { echo "error: $NET.caddy predates service routes; provision this stack again, then deploy again"; exit 1; }
+    mkdir -p "$ROUTES_DIR"
+    F="$ROUTES_DIR/$ID.route"
+    BODY="# $ID: routes from the service's deploy/routes.json, written by the Pocket Service Manager."$'\n'
+    SEEN=" "; PAIRS=()
+    while [ $# -gt 0 ]; do
+      P="$1"; PORT="$2"; shift 2
+      [[ "$P" =~ ^/[a-z0-9][a-z0-9-]{0,40}$ ]] || { echo "error: bad route path $P"; exit 2; }
+      [[ "$PORT" =~ ^[0-9]{4,5}$ ]] && [ "$PORT" -ge 1024 ] && [ "$PORT" -le 65535 ] && [ "$PORT" -ne 8080 ] || { echo "error: bad route port $PORT"; exit 2; }
+      case "$SEEN" in *" $P "*) echo "error: $P is listed twice"; exit 2 ;; esac
+      SEEN="$SEEN$P "
+      # Paths are single segments, so two services collide only on the same path.
+      for o in "$ROUTES_DIR"/*.route; do
+        [ -f "$o" ] && [ "$o" != "$F" ] || continue
+        if grep -qxF "handle_path $P/* {" "$o"; then echo "error: $P is already routed to $(basename "$o" .route) on this server"; exit 1; fi
+      done
+      BODY="${BODY}handle_path $P/* {"$'\n\t'"reverse_proxy $ID-backend:$PORT"$'\n'"}"$'\n'
+      PAIRS+=("$P $PORT")
+    done
+    OLD=""; if [ -f "$F" ]; then OLD="$ROUTES_DIR/.$ID.route.old"; cp -f "$F" "$OLD"; fi
+    printf '%s' "$BODY" > "$ROUTES_DIR/.$ID.route.new" && mv -f "$ROUTES_DIR/.$ID.route.new" "$F"
+    if ! V=$(caddy_validate); then
+      routes_restore "$F" "$OLD"
+      echo "error: Caddy refused the routes, nothing changed: $(echo "$V" | grep -v '^{' | tail -1)"; exit 1
+    fi
+    if ! caddy_reload; then
+      routes_restore "$F" "$OLD"; caddy_reload || true
+      echo "error: Caddy did not reload with the routes; the previous routes are back"; exit 1
+    fi
+    rm -f "$OLD"
+    for f in "$CADDY_DIR"/sites/*.caddy; do
+      [ -f "$f" ] && ! grep -q 'sites/routes/' "$f" || continue
+      echo "warning: $(basename "$f") predates service routes, so they do not answer on its hostname until that stack is provisioned again"
+    done
+    for pp in "${PAIRS[@]}"; do
+      P="${pp% *}"; PORT="${pp#* }"
+      echo "route: $P/ -> $ID-backend:$PORT"
+      # From Caddy's side of the network: any HTTP answer, even a 404, means the port is up.
+      W=$(docker exec pocket-caddy wget -S -O /dev/null -T 5 "http://$ID-backend:$PORT/" 2>&1 || true)
+      if echo "$W" | grep -q 'HTTP/'; then echo "route: $ID-backend:$PORT answers"
+      else echo "warning: nothing answers on $ID-backend:$PORT yet"; fi
+    done
+    ;;
+  remove-routes)
+    ID="${1:?service id}"
+    [[ "$ID" =~ ^[A-Za-z0-9_-]{1,42}$ ]] || { echo "error: bad service id"; exit 2; }
+    F="$ROUTES_DIR/$ID.route"
+    if [ ! -f "$F" ]; then echo "routes: $ID has none"; exit 0; fi
+    OLD="$ROUTES_DIR/.$ID.route.old"; mv -f "$F" "$OLD"
+    if caddy_running && ! caddy_reload; then
+      mv -f "$OLD" "$F"; caddy_reload || true
+      echo "error: Caddy did not reload without the routes; they are still in place"; exit 1
+    fi
+    rm -f "$OLD"
+    echo "routes: removed for $ID"
     ;;
   status)
     echo "dir: $D"

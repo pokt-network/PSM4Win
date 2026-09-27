@@ -49,6 +49,8 @@ export interface NetManifest {
   deploy_host?: string
   deploy_path?: string
   deployed_at?: string
+  /** Route paths add-routes installed on deploy_host, comma-separated; '' when none. */
+  deploy_routes?: string
 }
 export interface Manifest {
   service_id?: string

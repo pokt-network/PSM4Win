@@ -30,6 +30,7 @@ import {
 } from '@core/lcd'
 import { lcdTxUrl } from '@core/chain'
 import { serviceFolderName } from '@core/text'
+import { ROUTES_FILE, parseRoutesFile, type ParsedRoutes } from '@core/routes'
 import type { Settings } from '../../../preload/index'
 import { alertDialog, confirmDialog } from './modal'
 import { isDemo } from './demo'
@@ -452,6 +453,14 @@ export async function readCardFor(id: string): Promise<unknown | null> {
   } catch {
     return null
   }
+}
+
+/** The extra public routes a service declares in deploy/routes.json; no file is no routes. */
+export async function readRoutesFor(id: string): Promise<ParsedRoutes> {
+  const l = localById(id)
+  if (!l || isDemo()) return { ok: true, routes: [] }
+  const t = await psm().files.readServiceFile(l.folder, ROUTES_FILE)
+  return t === null ? { ok: true, routes: [] } : parseRoutesFile(t)
 }
 
 export async function writeManifest(folder: string, m: Manifest): Promise<void> {

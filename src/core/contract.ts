@@ -121,7 +121,23 @@ export interface StakeService {
 }
 
 export type SupplierStep =
-  'operator' | 'keys' | 'publish' | 'start' | 'status' | 'deploy' | 'add-service' | 'remove-service'
+  | 'operator'
+  | 'keys'
+  | 'publish'
+  | 'start'
+  | 'status'
+  | 'deploy'
+  | 'add-service'
+  | 'remove-service'
+  | 'add-routes'
+  | 'remove-routes'
+
+/** One extra public route for supplier-run add-routes: https://<hostname><path>/* to
+ *  <service_id>-backend:<port>, prefix stripped. The host is never a request field. */
+export interface RouteSpec {
+  path: string
+  port: number
+}
 
 /** Every operation's request type. */
 export interface SignerRequests {
@@ -205,6 +221,8 @@ export interface SignerRequests {
     deploy_root?: string
     health_path?: string
     backend_url?: string
+    /** add-routes only. */
+    routes?: RouteSpec[]
   }
   'deploy-ship': SshConn & { deploy_root: string; service_id: string; folder: string }
   'relay-call': {
@@ -248,7 +266,15 @@ export interface SignerResults {
   'ssh-test': { ok: true; hostname: string; docker: string; keyring: boolean }
   'supplier-ship': { ok: true; files: string[]; relayer_kept: boolean; out: string }
   'supplier-run': SupplierRunResult
-  'deploy-ship': { ok: true; dest: string; bytes: number; files: string; compose_from: string }
+  'deploy-ship': {
+    ok: true
+    dest: string
+    bytes: number
+    files: string
+    compose_from: string
+    /** Whether deploy/routes.json was shipped with the backend. */
+    routes: boolean
+  }
   'relay-call': RelayCallResult
   'validate-card': ValidateCardResult
   history: { ok: true; entries: HistoryEntry[] }
@@ -308,7 +334,9 @@ export const SUPPLIER_STEP_TIMEOUTS_MS: Record<SupplierStep, number> = {
   status: 120_000,
   deploy: 600_000,
   'add-service': 240_000,
-  'remove-service': 240_000
+  'remove-service': 240_000,
+  'add-routes': 120_000,
+  'remove-routes': 120_000
 }
 
 /**

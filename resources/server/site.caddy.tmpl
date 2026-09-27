@@ -5,6 +5,8 @@
 # point at this server.
 
 {{HOSTNAME}} {
+	# Extra routes services declare (sites/routes/<id>.route); matching none is fine.
+	import /etc/caddy/sites/routes/*.route
 	reverse_proxy {{PROJECT}}-relayer:8080
 	request_body {
 		max_size 20MB

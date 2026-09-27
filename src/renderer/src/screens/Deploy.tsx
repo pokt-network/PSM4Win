@@ -1,9 +1,11 @@
-// Deploy service (docs/SCREENS.md 3.7): ship the backend, build, start, add to the relayer.
+// Deploy service (docs/SCREENS.md 3.7): ship the backend, build, start, add to the relayer,
+// and install any extra public routes the service declares in deploy/routes.json.
 import { useEffect, useState } from 'react'
 import { useStore, S } from '../store'
 import { fmtInt } from '@core/format'
 import { activationNote } from '@core/chain'
 import { readinessPathOf } from '@core/probes'
+import { routeUrl, type ParsedRoutes } from '@core/routes'
 import {
   Checks,
   LogBox,
@@ -23,6 +25,7 @@ import {
   netManifest,
   localById,
   readCardFor,
+  readRoutesFor,
   recordManifestFor,
   refreshNetwork,
   supplyMap,
@@ -41,6 +44,7 @@ export function DeployScreen(): React.JSX.Element {
   const [status, setStatus] = useStatus()
   const [checks, setChecks] = useState<CheckNode[]>([])
   const [served, setServed] = useState<boolean | null>(null)
+  const [routes, setRoutes] = useState<ParsedRoutes>({ ok: true, routes: [] })
   const { lines, log, clear } = useLog()
   const label = netLabel(net)
   useEffect(() => {
@@ -64,12 +68,29 @@ export function DeployScreen(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [local, settings, net])
 
+  useEffect(() => {
+    let live = true
+    void readRoutesFor(dep.id).then((r) => {
+      if (live) setRoutes(r)
+    })
+    return () => {
+      live = false
+    }
+  }, [dep.id, local])
+
   const l = localById(dep.id)
   const nm = netManifest(l)
   const idHint =
     dep.id && l
       ? `Builds ${l.folder}\\backend${l.hasCompose ? " with the service's own deploy compose file." : ' with the standard backend-only compose file.'}${nm.deploy_host ? ` Last deployed to ${nm.deploy_host}.` : ''}`
       : ''
+  const routesHint = !dep.id
+    ? ''
+    : !routes.ok
+      ? routes.error
+      : routes.routes.length
+        ? `Also opens ${routes.routes.map((r) => `${r.path}/ to port ${r.port}`).join(', ')} on the server's public hostname (deploy\\routes.json).`
+        : ''
 
   const run = async (): Promise<void> => {
     if (S().busy) return
@@ -83,6 +104,9 @@ export function DeployScreen(): React.JSX.Element {
     const conn = connOf(s)
     const root = s.deployRoot || '/opt/pocket/services'
     const hp = readinessPathOf(await readCardFor(id), id)
+    const declared = await readRoutesFor(id)
+    setRoutes(declared)
+    if (!declared.ok) return setStatus(declared.error, 'err')
     const results: CheckNode[] = []
     setBusy(true)
     useStore.setState({ deployed: null })
@@ -186,6 +210,53 @@ export function DeployScreen(): React.JSX.Element {
       return fail('The relayer did not come up.')
     }
     mark('Connect to the RelayMiner', true, r4.lines.join(' | '))
+    const hosts = Object.values(s.suppliers ?? {})
+      .map((st) => st?.url || '')
+      .filter(Boolean)
+    if (declared.routes.length) {
+      log(
+        `Opening ${declared.routes.map((r) => r.path + '/').join(', ')} on the server's public hostname and checking Caddy accepts it.`
+      )
+      const r5 = await sg['supplier-run']({
+        ...conn,
+        step: 'add-routes',
+        service_id: id,
+        routes: declared.routes.map((r) => ({ path: r.path, port: r.port }))
+      })
+      if (!r5.ok) {
+        mark(
+          'Extra routes',
+          false,
+          `${r5.err || (r5 as { error?: string }).error || ''} ${r5.lines.slice(-3).join(' | ')}`
+        )
+        return fail(
+          /unknown step/.test(r5.out)
+            ? 'This server was provisioned by an older version. Re-provision it under Settings, then deploy again.'
+            : 'The extra routes were not installed; the hostname still serves relays as before.'
+        )
+      }
+      mark('Extra routes', true, r5.lines.join(' | '))
+      for (const r of declared.routes)
+        for (const h of hosts)
+          log(
+            <>
+              {r.purpose ? `${r.purpose} ` : ''}Public at{' '}
+              <span className="mono">{routeUrl(h, r)}</span>
+            </>,
+            'ok'
+          )
+      await recordManifestFor(folder, 'deploy_routes', declared.routes.map((r) => r.path).join(','))
+    } else if (nm.deploy_routes && nm.deploy_host === s.name) {
+      log('The service no longer declares extra routes; removing the ones it had on this server.')
+      const r5 = await sg['supplier-run']({ ...conn, step: 'remove-routes', service_id: id })
+      mark(
+        'Remove old routes',
+        r5.ok,
+        r5.ok ? r5.lines.join(' | ') : `${r5.err || (r5 as { error?: string }).error || ''}`
+      )
+      if (!r5.ok) return fail('The old routes could not be removed.')
+      await recordManifestFor(folder, 'deploy_routes', '')
+    }
     await recordManifestFor(folder, 'deploy_host', s.name)
     await recordManifestFor(folder, 'deploy_path', conn.path)
     await recordManifestFor(folder, 'deployed_at', new Date().toISOString())
@@ -237,6 +308,11 @@ export function DeployScreen(): React.JSX.Element {
           <div className="hint" id="depIdHint">
             {idHint}
           </div>
+          {routesHint ? (
+            <div className={routes.ok ? 'hint' : 'hint hint-err'} id="depRoutesHint">
+              {routesHint}
+            </div>
+          ) : null}
         </div>
         <div>
           <label>Server</label>

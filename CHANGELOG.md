@@ -2,6 +2,10 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`.
 
+## 0.1.9
+
+- Deploy service: a service can ask for extra public addresses on the supplier's hostname in `deploy/routes.json`, for example a path its own copies use to talk to each other. Deploy installs them after connecting the RelayMiner, checks Caddy accepts them before anything changes (a refused route is taken back out, so the hostname keeps serving relays), and lists the web addresses they answer on. Everything else on the hostname still goes to the relayer. A server provisioned by an earlier version needs Re-provision under Settings first; Deploy says so.
+
 ## 0.1.8
 
 - Test service: choosing a wallet that is not staked for the service now says so in a sentence, instead of showing the node's raw 500 with the request URL and JSON in it. Any error that genuinely is unexpected is trimmed to the status and the message. The badge and the Check again button sit on their own row so nothing runs together.

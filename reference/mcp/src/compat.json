@@ -1,11 +1,22 @@
 {
   "app": "Pocket Service Manager",
-  "updated": "2026-09-20",
+  "updated": "2026-09-26",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.8",
+  "latest": "electron-0.1.9",
   "minimum_supported": "hta-2026-09-14",
   "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.9": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.5",
+      "capabilities_added": [
+        "service routes: a service folder may declare extra public paths in deploy/routes.json ({\"routes\": [{\"path\": \"/<segment>\", \"port\": <backend port>, \"purpose\": \"...\"}]}); Deploy service installs them on the supplier's hostname so https://<hostname>/<segment>/* reaches <service_id>-backend:<port> with the prefix stripped, while everything else still goes to the relayer. path is one lowercase segment (letters, digits, hyphens, at most 41 characters), port is 1024-65535 and never 8080 (the relay port), the target host is always the service's own backend, and a path another service on the server already uses is refused. A route answers on every network's hostname on that server. Over the bridge: psm_supplier_run steps add-routes (with routes) and remove-routes",
+        "a server provisioned by an earlier version must be provisioned again (Settings, Servers, Re-provision) for each network before routes answer on its hostname; Deploy says so when it is needed"
+      ],
+      "changes": [
+        "deploy-ship carries deploy/routes.json with the backend when the folder has one"
+      ]
+    },
     "electron-0.1.8": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.5",
