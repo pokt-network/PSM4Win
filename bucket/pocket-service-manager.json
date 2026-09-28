@@ -6,7 +6,7 @@
   "architecture": {
     "64bit": {
       "url": "https://github.com/pokt-network/PSM4Win/releases/download/v0.1.14/PocketServiceManager-0.1.14-win-x64.zip",
-      "hash": "sha256:94dcb9ef6025df41775563407277822d0910e7cd410be6c9462ec406a0345041"
+      "hash": "sha256:58b1ec69d96b50b8f8cc66da79b4fa1114f7a503d45f0df8d1d6edc0abb60551"
     }
   },
   "shortcuts": [
