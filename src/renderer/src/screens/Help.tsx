@@ -192,7 +192,9 @@ function TheSteps(): React.JSX.Element {
           connects it to the RelayMiner. Some apps also need an address of their own on your server,
           for example so copies of the app can talk to each other. If yours asks for one, Deploy
           opens it too and shows you the web address it answers on. Everything else on your
-          server&apos;s address still goes to the RelayMiner.
+          server&apos;s address still goes to the RelayMiner. An app that keeps its Beta TestNet
+          data apart from its MainNet data can also ask for each network&apos;s RelayMiner to reach
+          it on its own port; Deploy does that for you and shows the ports under the service.
         </li>
         <li>
           <b>Stake the supplier.</b> <Go screen="supply">Suppliers</Go>, Manage, tick the service,

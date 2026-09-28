@@ -380,7 +380,16 @@ export const BRIDGE_TOOLS: readonly BridgeTool[] = [
         service_id: { type: 'string' },
         deploy_root: { type: 'string' },
         health_path: { type: 'string' },
-        backend_url: { type: 'string' },
+        backend_port: {
+          type: 'integer',
+          description:
+            "deploy: the backend container port this network's relayer calls (deploy/relayer.json backend_port for the network; 1024-65535, default 8080). The health check polls it."
+        },
+        backend_url: {
+          type: 'string',
+          description:
+            'add-service: http://<service_id>-backend:<port>, the port being the one deploy/relayer.json gives this network (default 8080). An existing entry with a different URL or health path is replaced.'
+        },
         routes: {
           type: 'array',
           description:

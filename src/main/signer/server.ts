@@ -8,6 +8,7 @@ import { measureBlockTime } from '@core/lcd'
 import { RE, requireNetwork, validateServiceId, validateLinuxPath, toInt64 } from '@core/validate'
 import { supplierStepArgs } from '@core/supplier'
 import { ROUTES_FILE } from '@core/routes'
+import { RELAYER_FILE } from '@core/relayer'
 import { renderStack, backendComposeFromTemplate, type StackTemplates } from '@core/stack'
 import { cleanErr, operatorFromOutput, lastErrorLine } from '@core/pocketd-output'
 import { firstLine, nonEmptyLines, tail, toLf } from '@core/text'
@@ -256,11 +257,16 @@ export async function deployShip(
       )
       composeFrom = 'the template'
     }
-    // A service's extra public routes travel with it, so the server copy mirrors the folder.
-    const routes = join(folder, ...ROUTES_FILE.split('/'))
-    const hasRoutes = exists(routes)
-    if (hasRoutes)
-      await writeText(join(stage, ...ROUTES_FILE.split('/')), toLf((await readText(routes)) ?? ''))
+    // A service's extra public routes and per-network relay ports travel with it, so the
+    // server copy mirrors the folder.
+    const shipOptional = async (rel: string): Promise<boolean> => {
+      const src = join(folder, ...rel.split('/'))
+      if (!exists(src)) return false
+      await writeText(join(stage, ...rel.split('/')), toLf((await readText(src)) ?? ''))
+      return true
+    }
+    const hasRoutes = await shipOptional(ROUTES_FILE)
+    const hasRelayer = await shipOptional(RELAYER_FILE)
     const bundle = join(work, 'bundle.tar')
     const tr = await runNative(toolPath('tar'), ['-cf', bundle, '-C', stage, 'backend', 'deploy'], {
       timeoutMs: ctx.timeoutMs,
@@ -277,7 +283,7 @@ export async function deployShip(
     if (cp.code !== 0) fail('Could not copy the archive to the server.', cleanErr(cp.err))
     const x = await runSsh(
       conn,
-      `cd '${dest}' && rm -f '${ROUTES_FILE}' && tar -xf bundle.tar && rm -f bundle.tar && find backend deploy -type f | wc -l`,
+      `cd '${dest}' && rm -f '${ROUTES_FILE}' '${RELAYER_FILE}' && tar -xf bundle.tar && rm -f bundle.tar && find backend deploy -type f | wc -l`,
       ctx
     )
     if (x.code !== 0)
@@ -294,7 +300,8 @@ export async function deployShip(
       bytes: size,
       files: firstLine(x.out),
       compose_from: composeFrom,
-      routes: hasRoutes
+      routes: hasRoutes,
+      relayer: hasRelayer
     }
   })
 }

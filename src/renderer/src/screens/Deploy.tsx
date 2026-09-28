@@ -1,11 +1,20 @@
 // Deploy service (docs/SCREENS.md 3.7): ship the backend, build, start, add to the relayer,
-// and install any extra public routes the service declares in deploy/routes.json.
+// and install any extra public routes the service declares in deploy/routes.json. The relayer
+// entry calls the port deploy/relayer.json gives this network (8080 by default).
 import { useEffect, useState } from 'react'
 import { useStore, S } from '../store'
 import { fmtInt } from '@core/format'
 import { activationNote } from '@core/chain'
 import { readinessPathOf } from '@core/probes'
-import { routeUrl, type ParsedRoutes } from '@core/routes'
+import { routeUrl, RELAY_PORT, type ParsedRoutes } from '@core/routes'
+import {
+  DEFAULT_RELAYER,
+  backendPortFor,
+  backendUrlFor,
+  relayerSummary,
+  routesRelayClash,
+  type ParsedRelayer
+} from '@core/relayer'
 import {
   Checks,
   LogBox,
@@ -26,6 +35,7 @@ import {
   localById,
   readCardFor,
   readRoutesFor,
+  readRelayerFor,
   recordManifestFor,
   refreshNetwork,
   supplyMap,
@@ -45,6 +55,7 @@ export function DeployScreen(): React.JSX.Element {
   const [checks, setChecks] = useState<CheckNode[]>([])
   const [served, setServed] = useState<boolean | null>(null)
   const [routes, setRoutes] = useState<ParsedRoutes>({ ok: true, routes: [] })
+  const [relayer, setRelayer] = useState<ParsedRelayer>({ ok: true, decl: DEFAULT_RELAYER })
   const { lines, log, clear } = useLog()
   const label = netLabel(net)
   useEffect(() => {
@@ -73,6 +84,9 @@ export function DeployScreen(): React.JSX.Element {
     void readRoutesFor(dep.id).then((r) => {
       if (live) setRoutes(r)
     })
+    void readRelayerFor(dep.id).then((r) => {
+      if (live) setRelayer(r)
+    })
     return () => {
       live = false
     }
@@ -84,13 +98,21 @@ export function DeployScreen(): React.JSX.Element {
     dep.id && l
       ? `Builds ${l.folder}\\backend${l.hasCompose ? " with the service's own deploy compose file." : ' with the standard backend-only compose file.'}${nm.deploy_host ? ` Last deployed to ${nm.deploy_host}.` : ''}`
       : ''
+  const relayerHint = !dep.id
+    ? ''
+    : !relayer.ok
+      ? relayer.error
+      : relayerSummary(relayer.decl, netLabel)
+  const clash = routes.ok && relayer.ok ? routesRelayClash(routes.routes, relayer.decl) : ''
   const routesHint = !dep.id
     ? ''
     : !routes.ok
       ? routes.error
-      : routes.routes.length
-        ? `Also opens ${routes.routes.map((r) => `${r.path}/ to port ${r.port}`).join(', ')} on the server's public hostname (deploy\\routes.json).`
-        : ''
+      : clash
+        ? clash
+        : routes.routes.length
+          ? `Also opens ${routes.routes.map((r) => `${r.path}/ to port ${r.port}`).join(', ')} on the server's public hostname (deploy\\routes.json).`
+          : ''
 
   const run = async (): Promise<void> => {
     if (S().busy) return
@@ -107,6 +129,13 @@ export function DeployScreen(): React.JSX.Element {
     const declared = await readRoutesFor(id)
     setRoutes(declared)
     if (!declared.ok) return setStatus(declared.error, 'err')
+    const relay = await readRelayerFor(id)
+    setRelayer(relay)
+    if (!relay.ok) return setStatus(relay.error, 'err')
+    const relayClash = routesRelayClash(declared.routes, relay.decl)
+    if (relayClash) return setStatus(relayClash, 'err')
+    const port = backendPortFor(relay.decl, net)
+    const backendUrl = backendUrlFor(id, port)
     const results: CheckNode[] = []
     setBusy(true)
     useStore.setState({ deployed: null })
@@ -174,7 +203,7 @@ export function DeployScreen(): React.JSX.Element {
     log(
       <>
         Building the image and starting <span className="mono">{id}-backend</span> on the supplier
-        network; waiting for {hp} to answer.
+        network; waiting for {hp} to answer on port {port}.
       </>
     )
     const r3 = await sg['supplier-run']({
@@ -182,7 +211,8 @@ export function DeployScreen(): React.JSX.Element {
       step: 'deploy',
       service_id: id,
       deploy_root: root,
-      health_path: hp
+      health_path: hp,
+      backend_port: port
     })
     if (!r3.ok) {
       mark(
@@ -192,13 +222,30 @@ export function DeployScreen(): React.JSX.Element {
       )
       return fail('The backend did not start.')
     }
+    // A helper from before per-network relay ports ignores the port and checks 8080, and would
+    // keep an existing relayer entry as it is; stop before the relayer is touched.
+    if (port !== RELAY_PORT && !r3.out.includes(`-backend:${port}`)) {
+      mark(
+        'Build and start the backend',
+        false,
+        `The server's helper checked port ${RELAY_PORT}, not ${port}. ${r3.lines.slice(-1).join('')}`
+      )
+      return fail(
+        'This server was provisioned by an older version. Re-provision it under Settings, then deploy again.'
+      )
+    }
     mark('Build and start the backend', true, r3.lines.slice(-2).join(' | '))
-    log('Adding the service to the RelayMiner and recreating the relayer.')
+    log(
+      <>
+        Adding the service to the RelayMiner (it calls <span className="mono">{backendUrl}</span>)
+        and recreating the relayer.
+      </>
+    )
     const r4 = await sg['supplier-run']({
       ...conn,
       step: 'add-service',
       service_id: id,
-      backend_url: `http://${id}-backend:8080`,
+      backend_url: backendUrl,
       health_path: hp
     })
     if (!r4.ok) {
@@ -308,8 +355,13 @@ export function DeployScreen(): React.JSX.Element {
           <div className="hint" id="depIdHint">
             {idHint}
           </div>
+          {relayerHint ? (
+            <div className={relayer.ok ? 'hint' : 'hint hint-err'} id="depRelayerHint">
+              {relayerHint}
+            </div>
+          ) : null}
           {routesHint ? (
-            <div className={routes.ok ? 'hint' : 'hint hint-err'} id="depRoutesHint">
+            <div className={routes.ok && !clash ? 'hint' : 'hint hint-err'} id="depRoutesHint">
               {routesHint}
             </div>
           ) : null}

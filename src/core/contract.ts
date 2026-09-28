@@ -220,6 +220,9 @@ export interface SignerRequests {
     service_id?: string
     deploy_root?: string
     health_path?: string
+    /** deploy only: the backend port this network's relayer calls, for the health check
+     *  (deploy/relayer.json); 8080 when absent. */
+    backend_port?: number
     backend_url?: string
     /** add-routes only. */
     routes?: RouteSpec[]
@@ -274,6 +277,8 @@ export interface SignerResults {
     compose_from: string
     /** Whether deploy/routes.json was shipped with the backend. */
     routes: boolean
+    /** Whether deploy/relayer.json was shipped with the backend. */
+    relayer: boolean
   }
   'relay-call': RelayCallResult
   'validate-card': ValidateCardResult

@@ -11,6 +11,7 @@ import {
   validateHealthPath
 } from './validate'
 import { validateRoutes, routeArgs } from './routes'
+import { validateBackendPort } from './relayer'
 import type { SignerRequests, SupplierStep } from './contract'
 
 export const SUPPLIER_STEPS: readonly SupplierStep[] = [
@@ -46,7 +47,12 @@ export function supplierStepArgs(req: SignerRequests['supplier-run']): {
     case 'deploy': {
       const sid = validateServiceId(String(req.service_id ?? ''))
       const root = validateLinuxPath(String(req.deploy_root ?? ''), 'Deploy root')
-      args.push(sid, root, validateHealthPath(req.health_path))
+      args.push(
+        sid,
+        root,
+        validateHealthPath(req.health_path),
+        String(validateBackendPort(req.backend_port))
+      )
       break
     }
     case 'add-service': {

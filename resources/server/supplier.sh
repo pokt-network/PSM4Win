@@ -9,8 +9,11 @@
 #   supplier.sh keys                         write supplier-keys.yaml from the keyring (mode 400)
 #   supplier.sh publish <network>            send 1 uPOKT to self so the public key is on chain
 #   supplier.sh start                        start the shared Caddy, then redis and the miner (relayer too once a service exists)
-#   supplier.sh deploy <id> <deploy-root>    build and start a service's backend on the shared network
-#   supplier.sh add-service <id> <backend-url> <health-path>   add to this stack's relayer, recreate relayer
+#   supplier.sh deploy <id> <deploy-root> [<health-path>] [<port>]
+#                                            build and start a service's backend on the shared network;
+#                                            wait for <health-path> on the port this network's relayer calls
+#   supplier.sh add-service <id> <backend-url> <health-path>   add to this stack's relayer (replacing an
+#                                            entry whose URL or health path differs), recreate relayer
 #   supplier.sh remove-service <id>          drop from this stack's relayer, recreate relayer; drop the
 #                                            service's routes once no other network's stack serves it
 #   supplier.sh add-routes <id> <path> <port> [<path> <port> ...]
@@ -167,11 +170,14 @@ except Exception: print("", "parse")' 2>/dev/null)
     docker network inspect "$NET_NAME" >/dev/null 2>&1 || docker network create "$NET_NAME" >/dev/null
     cd "$SVC/deploy" && docker compose -p "$ID" up -d --build 2>&1 | tail -3
     HP="${3:-/healthz}"
+    # The port this network's relayer calls (the service's deploy/relayer.json; 8080 by default).
+    PORT="${4:-8080}"
+    [[ "$PORT" =~ ^[0-9]{4,5}$ ]] && [ "$PORT" -ge 1024 ] && [ "$PORT" -le 65535 ] || { echo "error: bad backend port $PORT"; exit 2; }
     for i in $(seq 1 60); do
-      if docker run --rm --network "$NET_NAME" alpine:3 wget -qO- "http://$ID-backend:8080$HP" 2>/dev/null | grep -q '"'; then echo "backend: healthy at http://$ID-backend:8080$HP"; exit 0; fi
+      if docker run --rm --network "$NET_NAME" alpine:3 wget -qO- "http://$ID-backend:$PORT$HP" 2>/dev/null | grep -q '"'; then echo "backend: healthy at http://$ID-backend:$PORT$HP"; exit 0; fi
       sleep 2
     done
-    echo "error: backend did not answer $HP within 120 s"; docker logs --tail 20 "$ID-backend" 2>&1 | tail -20; exit 1
+    echo "error: backend did not answer $HP on port $PORT within 120 s"; docker logs --tail 20 "$ID-backend" 2>&1 | tail -20; exit 1
     ;;
   add-service)
     ID="${1:?service id}"; URL="${2:?backend url}"; HP="${3:-/healthz}"
@@ -180,8 +186,17 @@ import sys, re
 cfg, sid, url, hp = sys.argv[1:5]
 t = open(cfg).read()
 block = f"  {sid}:\n    timeout_profile: fast\n    max_body_size_bytes: 20971520\n    default_backend: rest\n    backends:\n      rest:\n        url: \"{url}\"\n        health_check:\n          endpoint: \"{hp}\"\n          interval_seconds: 10\n          timeout_seconds: 5\n"
-if re.search(rf'^  {re.escape(sid)}:', t, re.M):
-    print("relayer: already lists", sid); sys.exit(0)
+# An existing entry keeps its place. When its URL or health path differs (a redeploy that
+# changed this network's relay port or the readiness path) it is replaced.
+old = re.search(rf'^  {re.escape(sid)}:\n(?:    .*\n|\n)*', t, re.M)
+if old:
+    u = re.search(r'^\s+url:\s*"?([^"\n]*)"?\s*$', old.group(0), re.M)
+    e = re.search(r'^\s+endpoint:\s*"?([^"\n]*)"?\s*$', old.group(0), re.M)
+    was = (u.group(1) if u else "?") + " " + (e.group(1) if e else "?")
+    if was == url + " " + hp:
+        print("relayer: already lists", sid, "at", url); sys.exit(0)
+    open(cfg, "w").write(t[:old.start()] + block + t[old.end():])
+    print("relayer: updated", sid, "to", url, hp, "(was " + was + ")"); sys.exit(0)
 t = re.sub(r'^services:\s*\{\}\s*$', 'services:', t, count=1, flags=re.M)
 m = re.search(r'^services:\s*$', t, re.M)
 if not m: sys.exit("error: no services: line in " + cfg)
@@ -232,10 +247,14 @@ PY
     NETS=$(routes_networks "$F"); case " $NETS " in *" $NET "*) ;; *) NETS="${NETS:+$NETS }$NET" ;; esac
     BODY="# $ID: routes from the service's deploy/routes.json, written by the Pocket Service Manager."$'\n'"# networks: $NETS"$'\n'
     SEEN=" "; PAIRS=()
+    # Ports a relayer calls this backend on, from this stack's relayer config and its sibling
+    # stacks' (one directory per network, side by side); 8080 is refused below regardless.
+    RELAY_PORTS=" $(cat "$CFG" "$(dirname "$D")"/*/relayer-config.yaml 2>/dev/null | grep -o "http://$ID-backend:[0-9]*" | sed 's/.*://' | sort -u | tr '\n' ' ' || true)"
     while [ $# -gt 0 ]; do
       P="$1"; PORT="$2"; shift 2
       [[ "$P" =~ ^/[a-z0-9][a-z0-9-]{0,40}$ ]] || { echo "error: bad route path $P"; exit 2; }
       [[ "$PORT" =~ ^[0-9]{4,5}$ ]] && [ "$PORT" -ge 1024 ] && [ "$PORT" -le 65535 ] && [ "$PORT" -ne 8080 ] || { echo "error: bad route port $PORT"; exit 2; }
+      case "$RELAY_PORTS" in *" $PORT "*) echo "error: port $PORT is where a relayer on this server calls $ID-backend; a public route to it would serve relays without the relayer"; exit 1 ;; esac
       case "$SEEN" in *" $P "*) echo "error: $P is listed twice"; exit 2 ;; esac
       SEEN="$SEEN$P "
       # Paths are single segments, so two services collide only on the same path.

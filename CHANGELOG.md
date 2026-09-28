@@ -2,6 +2,11 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`.
 
+## 0.1.11
+
+- Deploy service: a service that keeps separate data for each network can say which port each network's RelayMiner calls, in `deploy/relayer.json`. Deploy connects the RelayMiner for the chosen network to that port and checks the service answers there, so Beta test traffic can never reach the MainNet copy. Services without the file keep using port 8080 on both networks. An extra address from `deploy/routes.json` can never point at one of these ports, since it would bypass the RelayMiner. A server provisioned by an earlier version needs Re-provision under Settings first; Deploy says so.
+- Deploy service: deploying again now updates the RelayMiner's entry for the service when its port or its readiness check changed, instead of keeping the old one.
+
 ## 0.1.10
 
 - Test service: each probe is also timed against how long gateways wait. An answer that takes more than 10 seconds still passes but shows in yellow, since gateways set to 10 seconds will cut it off; one that takes more than 30 seconds fails, because no gateway waits that long. The time is the supplier's own round trip, not the few seconds the test spends starting up.

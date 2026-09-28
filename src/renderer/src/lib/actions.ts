@@ -31,6 +31,7 @@ import {
 import { lcdTxUrl } from '@core/chain'
 import { serviceFolderName } from '@core/text'
 import { ROUTES_FILE, parseRoutesFile, type ParsedRoutes } from '@core/routes'
+import { RELAYER_FILE, DEFAULT_RELAYER, parseRelayerFile, type ParsedRelayer } from '@core/relayer'
 import type { Settings } from '../../../preload/index'
 import { alertDialog, confirmDialog } from './modal'
 import { isDemo } from './demo'
@@ -461,6 +462,14 @@ export async function readRoutesFor(id: string): Promise<ParsedRoutes> {
   if (!l || isDemo()) return { ok: true, routes: [] }
   const t = await psm().files.readServiceFile(l.folder, ROUTES_FILE)
   return t === null ? { ok: true, routes: [] } : parseRoutesFile(t)
+}
+
+/** The per-network relay ports a service declares in deploy/relayer.json; no file is 8080 everywhere. */
+export async function readRelayerFor(id: string): Promise<ParsedRelayer> {
+  const l = localById(id)
+  if (!l || isDemo()) return { ok: true, decl: DEFAULT_RELAYER }
+  const t = await psm().files.readServiceFile(l.folder, RELAYER_FILE)
+  return t === null ? { ok: true, decl: DEFAULT_RELAYER } : parseRelayerFile(t)
 }
 
 export async function writeManifest(folder: string, m: Manifest): Promise<void> {

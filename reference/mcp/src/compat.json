@@ -1,11 +1,23 @@
 {
   "app": "Pocket Service Manager",
-  "updated": "2026-09-27",
+  "updated": "2026-09-28",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.10",
+  "latest": "electron-0.1.11",
   "minimum_supported": "hta-2026-09-14",
   "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.11": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.10",
+      "capabilities_added": [
+        "per-network relay port: a service folder may declare, in deploy/relayer.json ({\"backend_port\": {\"main\": <port>, \"beta\": <port>}, \"purpose\": \"...\"}), which port of <service_id>-backend each network's relayer calls, so one backend container can keep a separate state per network (Beta traffic never reaching MainNet state). Keys are the app's network ids, main and beta; an unlisted network uses 8080; ports are 1024-65535; the host is always the service's own backend. Deploy service writes the relayer entry for the chosen network as http://<service_id>-backend:<port> and waits for the health path on that port. A route in deploy/routes.json may not use any port in backend_port (the app refuses the declaration, and supplier.sh add-routes refuses a port any relayer on that server calls the backend on). Over the bridge: psm_supplier_run deploy takes backend_port; add-service takes the backend_url built from it",
+        "a server provisioned by an earlier version must be provisioned again (Settings, Servers, Re-provision) for each network before a non-default relay port takes effect; Deploy stops before touching the relayer and says so"
+      ],
+      "changes": [
+        "supplier.sh add-service replaces an existing relayer entry whose URL or health path differs from the requested one (a redeploy after the relay port or the readiness path changed) instead of leaving it as it was; an identical entry is still kept",
+        "deploy-ship carries deploy/relayer.json with the backend when the folder has one"
+      ]
+    },
     "electron-0.1.10": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.9",
