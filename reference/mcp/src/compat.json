@@ -2,10 +2,19 @@
   "app": "Pocket Service Manager",
   "updated": "2026-09-28",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.15",
+  "latest": "electron-0.1.16",
   "minimum_supported": "hta-2026-09-14",
   "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.16": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.12",
+      "changes": [
+        "Edit card saves a card back to the folder it was loaded from; before, it wrote to a new folder named after the service ID, so a service whose folder has another name was listed twice. My services shows one entry per service ID (the folder with the backend) and names any other folder that claims it; Deploy and Test use that folder. Create refuses a new service whose ID another folder already holds",
+        "My services re-reads the service folders when it opens and on Refresh, so folders changed outside the app appear without a restart",
+        "the Dashboard refreshes the chain panel and the services table about once a block while it is open, so a pending supply turns active on its own"
+      ]
+    },
     "electron-0.1.15": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.12",

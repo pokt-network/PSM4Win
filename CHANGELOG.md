@@ -2,7 +2,7 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
-## Unreleased
+## 0.1.16
 
 - My services, Edit card: saving an edited card now writes it back to the folder it came from. Before, it went to a new folder named after the service ID, so a service whose folder had a different name ended up listed twice, with the edit in the new copy and no way to remove it from the app.
 - My services shows one entry per service even when two folders say they are the same service. The entry uses the folder with the service's code in it and names the other folder, which can be deleted. Deploy and Test use that same folder.
