@@ -15,6 +15,7 @@ import {
   refreshBalance,
   catalogEntry,
   folderForId,
+  loadServiceFolders,
   netManifest,
   servers,
   serverByName,
@@ -81,6 +82,12 @@ export function ServicesScreen(): React.JSX.Element {
     }
     setRows(out)
     setSupply(sup)
+  }, [])
+
+  // Folders can change outside the app (Explorer, an editor, Claude), so read them
+  // again whenever the screen opens; the list follows through `local`.
+  useEffect(() => {
+    void loadServiceFolders()
   }, [])
 
   useEffect(() => {
@@ -262,6 +269,7 @@ export function ServicesScreen(): React.JSX.Element {
         <button
           className="btn small"
           onClick={() => {
+            void loadServiceFolders()
             void refreshNetwork()
             void refreshBalance()
           }}
