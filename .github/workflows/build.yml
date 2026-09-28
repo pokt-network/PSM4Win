@@ -5,6 +5,12 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+# One run per tag at a time. GitHub has delivered a tag push twice (v0.1.14); two runs
+# at once each uploaded their own zip and left the bucket with the other one's hash.
+# Serialised, the second run finds the release published and skips it (see below).
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   windows:
     runs-on: windows-latest
@@ -32,8 +38,24 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
         run: node scripts/release-notes.mjs "${GITHUB_REF_NAME#v}" release/NOTES.md "${{ github.repository }}"
-      - name: Attach to the GitHub release
+      # A release that already carries SHA256SUMS was published by an earlier run for
+      # this tag. Uploading again would replace its files with a new build whose hashes
+      # differ from the bucket's. To rebuild a release on purpose, delete its assets first.
+      - name: Check whether the release is already published
+        id: published
         if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "${{ github.repository }}" --json assets --jq '.assets[].name' 2>/dev/null | grep -qx SHA256SUMS; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::$GITHUB_REF_NAME already has its files; skipping the upload and the bucket update."
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Attach to the GitHub release
+        if: startsWith(github.ref, 'refs/tags/v') && steps.published.outputs.already != 'true'
         uses: softprops/action-gh-release@v3
         with:
           body_path: release/NOTES.md
@@ -42,7 +64,7 @@ jobs:
             release/*.zip
             release/SHA256SUMS
       - name: Update the Scoop bucket
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && steps.published.outputs.already != 'true'
         shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
