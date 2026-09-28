@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { useStore } from './store'
 import { TitleBar, TopBar, OwnerWalletCard, Nav, Footer, BackTrail } from './components/Shell'
 import { ModalHost } from './lib/modal'
+import { ToastHost } from './lib/toast'
 import { dockerCycle, loadSettings, loadServiceFolders, tab } from './lib/actions'
 import { showWelcome } from './lib/welcome'
 import { BridgeHost } from './lib/bridge'
@@ -98,6 +99,7 @@ export default function App(): React.JSX.Element {
       <ModalHost />
       <BridgeHost />
       <UpdateHost />
+      <ToastHost />
     </div>
   )
 }

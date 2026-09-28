@@ -1,7 +1,7 @@
 // Settings (docs/SCREENS.md 3.11): services folder, servers, Provision, welcome.
 import { useEffect, useRef, useState } from 'react'
 import { useStore, S, type SettingsTab } from '../store'
-import { copy, goTo } from '../lib/actions'
+import { copy, goTo, openFolder } from '../lib/actions'
 import type { Network } from '@core/networks'
 import type { RemoteClaudeStatus } from '../../../preload/index'
 import { RE } from '@core/validate'
@@ -17,8 +17,10 @@ import {
   useStatus,
   netLabel,
   NetBadge,
+  RunButton,
   type CheckNode
 } from '../components/ui'
+import { toast } from '../lib/toast'
 import {
   servers,
   serverByName,
@@ -152,13 +154,20 @@ function ServicesRootPanel(): React.JSX.Element {
         <button
           className="btn small"
           disabled={!servicesRoot}
-          onClick={() => servicesRoot && psm().app.openPath(servicesRoot)}
+          onClick={() => servicesRoot && openFolder(servicesRoot)}
         >
           Open folder
         </button>
-        <button className="btn small" onClick={() => loadServiceFolders()}>
+        <RunButton
+          done={null}
+          failText="Could not read the services folder"
+          onRun={async () => {
+            const n = new Set((await loadServiceFolders()).map((l) => l.id)).size
+            toast(`Found ${n} service${n === 1 ? '' : 's'} in the folder.`, 'info')
+          }}
+        >
           Rescan
-        </button>
+        </RunButton>
         <button
           className="btn small"
           onClick={async () => {
@@ -439,9 +448,9 @@ function ServersPanel(): React.JSX.Element {
         <button className="btn primary" onClick={save}>
           Save server
         </button>
-        <button className="btn" onClick={test}>
+        <RunButton className="btn" done={null} failText="Test connection failed" onRun={test}>
           Test connection
-        </button>
+        </RunButton>
         <button
           className="btn"
           onClick={() => {
@@ -578,11 +587,23 @@ function ProvisionPanel(): React.JSX.Element {
           ? 'Re-provision'
           : 'Start provisioning'
 
+  // Busy from the first click, so a second click cannot start another provisioning while this one
+  // reads its files; and cleared however the run ends, with the reason shown, so a failed
+  // call can never leave the app greyed out.
   const run = async (): Promise<void> => {
-    if (S().busy || !s) {
-      if (!s) setStatus('Choose a server.', 'err')
-      return
+    if (S().busy) return
+    setBusy(true)
+    try {
+      await provision()
+    } catch (e) {
+      setStatus(`The provisioning stopped: ${e instanceof Error ? e.message : String(e)}`, 'err')
+    } finally {
+      setBusy(false)
     }
+  }
+
+  const provision = async (): Promise<void> => {
+    if (!s) return setStatus('Choose a server.', 'err')
     const net = appNet
     const host = prov.host.trim()
     const topup = parseFloat(prov.fund)
@@ -906,13 +927,29 @@ function ClaudeIntegrationPanel(): React.JSX.Element {
   const [remote, setRemote] = useState<RemoteClaudeStatus | null>(null)
   const [busy, setBusyLocal] = useState(false)
   useEffect(() => {
-    void psm().claudeCode.remoteStatus().then(setRemote)
+    psm()
+      .claudeCode.remoteStatus()
+      .then(setRemote)
+      .catch((e: unknown) =>
+        toast(
+          `Could not read Claude Code's settings: ${e instanceof Error ? e.message : String(e)}`,
+          'err'
+        )
+      )
   }, [])
-  const addRemote = async (): Promise<void> => {
+  // Busy for the call, and never left busy: a failed call is shown and the buttons return.
+  const guard = async (fail: string, f: () => Promise<void>): Promise<void> => {
     setBusyLocal(true)
-    setRemote(await psm().claudeCode.addRemote())
-    setBusyLocal(false)
+    try {
+      await f()
+    } catch (e) {
+      toast(`${fail}: ${e instanceof Error ? e.message : String(e)}`, 'err')
+    } finally {
+      setBusyLocal(false)
+    }
   }
+  const addRemote = (): Promise<void> =>
+    guard('Could not add to Claude Code', async () => setRemote(await psm().claudeCode.addRemote()))
   const removeRemote = async (): Promise<void> => {
     if (
       !(await confirmDialog(
@@ -923,9 +960,9 @@ function ClaudeIntegrationPanel(): React.JSX.Element {
       ))
     )
       return
-    setBusyLocal(true)
-    setRemote(await psm().claudeCode.removeRemote())
-    setBusyLocal(false)
+    await guard('Could not remove from Claude Code', async () =>
+      setRemote(await psm().claudeCode.removeRemote())
+    )
   }
   return (
     <div className="panel" id="claudePanel">
@@ -1051,13 +1088,23 @@ function BridgePanel(): React.JSX.Element {
   const token = st?.token ?? ''
   const cc = st?.claudeCode
   const [ccError, setCcError] = useState<string | null>(null)
-  const addToClaude = async (): Promise<void> => {
+  // Busy for the call, and never left busy: a failed call is shown and the buttons return.
+  const guard = async (fail: string, f: () => Promise<void>): Promise<void> => {
     setBusyLocal(true)
-    const next = await psm().bridge.addToClaudeCode()
-    setCcError(next.error)
-    useStore.setState({ bridge: next })
-    setBusyLocal(false)
+    try {
+      await f()
+    } catch (e) {
+      toast(`${fail}: ${e instanceof Error ? e.message : String(e)}`, 'err')
+    } finally {
+      setBusyLocal(false)
+    }
   }
+  const addToClaude = (): Promise<void> =>
+    guard('Could not add the bridge to Claude Code', async () => {
+      const next = await psm().bridge.addToClaudeCode()
+      setCcError(next.error)
+      useStore.setState({ bridge: next })
+    })
   const removeFromClaude = async (): Promise<void> => {
     if (
       !(await confirmDialog(
@@ -1068,20 +1115,26 @@ function BridgePanel(): React.JSX.Element {
       ))
     )
       return
-    setBusyLocal(true)
-    const next = await psm().bridge.removeFromClaudeCode()
-    setCcError(next.error)
-    useStore.setState({ bridge: next })
-    setBusyLocal(false)
+    await guard('Could not remove the bridge from Claude Code', async () => {
+      const next = await psm().bridge.removeFromClaudeCode()
+      setCcError(next.error)
+      useStore.setState({ bridge: next })
+    })
   }
   const toggle = async (): Promise<void> => {
     if (!st) return
-    setBusyLocal(true)
-    const p = parseInt(port, 10)
-    const next = await psm().bridge.setEnabled(!st.running, p >= 1024 && p <= 65535 ? p : undefined)
-    useStore.setState({ bridge: next })
-    await loadSettingsIntoStore()
-    setBusyLocal(false)
+    await guard(
+      st.running ? 'Could not turn the bridge off' : 'Could not turn the bridge on',
+      async () => {
+        const p = parseInt(port, 10)
+        const next = await psm().bridge.setEnabled(
+          !st.running,
+          p >= 1024 && p <= 65535 ? p : undefined
+        )
+        useStore.setState({ bridge: next })
+        await loadSettingsIntoStore()
+      }
+    )
   }
   const rotate = async (): Promise<void> => {
     if (
@@ -1093,7 +1146,10 @@ function BridgePanel(): React.JSX.Element {
       ))
     )
       return
-    useStore.setState({ bridge: await psm().bridge.rotateToken() })
+    await guard('Could not rotate the token', async () => {
+      useStore.setState({ bridge: await psm().bridge.rotateToken() })
+      toast('New token issued. Claude Code has it too, if this app added the bridge there.', 'ok')
+    })
   }
   return (
     <div style={{ marginTop: 14 }} id="bridgePanel">
@@ -1224,8 +1280,16 @@ function UpdatesPanel(): React.JSX.Element {
   const [busy, setBusyLocal] = useState(false)
   const check = async (): Promise<void> => {
     setBusyLocal(true)
-    useStore.setState({ update: await psm().update.check() })
-    setBusyLocal(false)
+    try {
+      const r = await psm().update.check()
+      useStore.setState({ update: r })
+      if (r.error) toast(`Could not check for updates: ${r.error}`, 'err')
+      else if (!r.available) toast(`You have the latest version (${r.current}).`, 'info')
+    } catch (e) {
+      toast(`Could not check for updates: ${(e as Error).message}`, 'err')
+    } finally {
+      setBusyLocal(false)
+    }
   }
   const when = u?.checkedAt ? new Date(u.checkedAt).toLocaleString() : 'not yet'
   return (

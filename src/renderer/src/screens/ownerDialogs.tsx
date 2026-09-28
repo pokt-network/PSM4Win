@@ -13,7 +13,8 @@ import { S, useStore } from '../store'
 import {
   dockerReady,
   walletStatus,
-  foot,
+  notify,
+  signerFailed,
   copy,
   loadSettings,
   loadServiceFolders,
@@ -108,7 +109,7 @@ export async function importDialog(): Promise<void> {
     hint = 'Importing, this takes a few seconds'
     render(true)
     lockModal(true)
-    const r = await window.psm.signer['wallet-import']({ privateKeyHex: hex })
+    const r = await window.psm.signer['wallet-import']({ privateKeyHex: hex }).catch(signerFailed)
     hex = ''
     raw = ''
     lockModal(false)
@@ -118,7 +119,7 @@ export async function importDialog(): Promise<void> {
       return
     }
     closeModal()
-    foot('Wallet imported: ' + r.address)
+    notify('Wallet imported: ' + r.address)
     void walletStatus()
   }
   openModal('Import the wallet private key', null, [])
@@ -170,7 +171,7 @@ export function revokeDialog(): void {
             []
           )
           lockModal(true)
-          const r = await window.psm.signer['wallet-export']({})
+          const r = await window.psm.signer['wallet-export']({}).catch(signerFailed)
           lockModal(false)
           if (!r.ok) {
             setModalBody(<div className="dangerbox">{`${r.error} ${r.detail ?? ''}`}</div>, [
@@ -215,7 +216,7 @@ function showExported(hex: string): void {
             []
           )
           lockModal(true)
-          const r = await window.psm.signer['wallet-delete']({})
+          const r = await window.psm.signer['wallet-delete']({}).catch(signerFailed)
           lockModal(false)
           if (!r.ok) {
             setModalBody(<div className="dangerbox">{`${r.error} ${r.detail ?? ''}`}</div>, [
@@ -224,7 +225,7 @@ function showExported(hex: string): void {
             return
           }
           closeModal()
-          foot('Wallet key deleted from this machine.')
+          notify('Wallet key deleted from this machine.')
           void walletStatus()
         }
       }
@@ -285,8 +286,11 @@ function offerHtaImportDialog(det: HtaDetection): void {
         <div className="filerow">
           <input
             type="text"
-            defaultValue={servicesRoot}
-            onChange={(e) => (servicesRoot = e.target.value)}
+            value={servicesRoot}
+            onChange={(e) => {
+              servicesRoot = e.target.value
+              render(false, false)
+            }}
             placeholder="C:\path\to\services"
             disabled={busy || done}
           />
@@ -333,18 +337,24 @@ function offerHtaImportDialog(det: HtaDetection): void {
                     render(true, false)
                   }
                 })
-                const r = await window.psm.migration.import({
-                  servicesRoot: servicesRoot || undefined
-                })
+                const r = await window.psm.migration
+                  .import({ servicesRoot: servicesRoot || undefined })
+                  .catch(signerFailed)
                 off()
                 lockModal(false)
                 lines.push(r.ok ? 'Import finished.' : 'Import failed: ' + (r.error ?? ''))
-                await loadSettings()
-                await loadServiceFolders()
-                void loadHistory()
-                void walletStatus()
-                const s = await window.psm.settings.get()
-                useStore.setState({ net: s.network, theme: s.theme })
+                try {
+                  await loadSettings()
+                  await loadServiceFolders()
+                  void loadHistory()
+                  void walletStatus()
+                  const s = await window.psm.settings.get()
+                  useStore.setState({ net: s.network, theme: s.theme })
+                } catch (e) {
+                  lines.push(
+                    'Could not reload the settings: ' + (e instanceof Error ? e.message : String(e))
+                  )
+                }
                 render(false, true)
               }
             }

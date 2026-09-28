@@ -5,6 +5,7 @@ import type { CheckItem } from '@core/card-form'
 import { stamp } from '@core/format'
 import { NETWORK_INFO, type Network } from '@core/networks'
 import { useStore } from '../store'
+import { toast } from '../lib/toast'
 
 export function netLabel(net: Network): string {
   return net === 'main' ? 'MainNet' : 'Beta TestNet'
@@ -216,6 +217,83 @@ export function Mono({
     <span className="mono" title={title}>
       {children}
     </span>
+  )
+}
+
+/**
+ * A button for an action that takes a moment: a refresh, a rescan, a check. While it runs
+ * it shows a spinner and cannot be pressed again; then it says so for a moment (`done`,
+ * or nothing when the result is plain on screen), or shows what went wrong in a toast. A
+ * run that answers from the cache still shows the spinner briefly, so the press is seen.
+ */
+export function RunButton({
+  onRun,
+  children,
+  done = 'Updated',
+  failText = 'That did not work',
+  className = 'btn small',
+  disabled,
+  id,
+  title
+}: {
+  onRun: () => unknown
+  children: ReactNode
+  done?: string | null
+  failText?: string
+  className?: string
+  disabled?: boolean
+  id?: string
+  title?: string
+}): React.JSX.Element {
+  const [phase, setPhase] = useState<'idle' | 'running' | 'done'>('idle')
+  const [minWidth, setMinWidth] = useState<number | undefined>(undefined)
+  const ref = useRef<HTMLButtonElement>(null)
+  const live = useRef(true)
+  useEffect(() => {
+    live.current = true
+    return () => {
+      live.current = false
+    }
+  }, [])
+  const run = async (): Promise<void> => {
+    if (phase === 'running') return
+    setMinWidth(ref.current?.offsetWidth)
+    setPhase('running')
+    const started = Date.now()
+    try {
+      await onRun()
+      const rest = 500 - (Date.now() - started)
+      if (rest > 0) await new Promise((r) => window.setTimeout(r, rest))
+      if (!live.current) return
+      if (!done) return setPhase('idle')
+      setPhase('done')
+      window.setTimeout(() => live.current && setPhase('idle'), 1500)
+    } catch (e) {
+      if (live.current) setPhase('idle')
+      toast(`${failText}: ${e instanceof Error ? e.message : String(e)}`, 'err')
+    }
+  }
+  return (
+    <button
+      ref={ref}
+      id={id}
+      title={title}
+      className={className + (phase === 'done' ? ' done' : '')}
+      disabled={disabled || phase === 'running'}
+      style={minWidth ? { minWidth } : undefined}
+      onClick={() => void run()}
+    >
+      {phase === 'running' ? (
+        <>
+          <span className="btn-spin" aria-hidden="true" />
+          {children}
+        </>
+      ) : phase === 'done' ? (
+        <>&#10003; {done}</>
+      ) : (
+        children
+      )}
+    </button>
   )
 }
 

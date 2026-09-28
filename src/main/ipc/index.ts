@@ -99,8 +99,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       !(root && (target === root || target.startsWith(root + sep)))
     )
       return false
-    await shell.openPath(target)
-    return true
+    // openPath resolves with an error message, or '' when Explorer opened the folder.
+    return (await shell.openPath(target)) === ''
   })
 
   // Reachability probe for a stack or endpoint URL: any HTTP status counts as answering.

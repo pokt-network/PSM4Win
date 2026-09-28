@@ -2,6 +2,14 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
+## Unreleased
+
+- The app now tells you what happened. Copying an address, a token, or a recovery phrase shows a short "Copied to clipboard" message, also inside dialogs, where the bottom bar was hidden. Opening a link or a folder says it opened in your browser or File Explorer, or why it could not. Creating, importing, recovering, or removing a wallet, and approving or declining an assistant's request, say so where you are instead of only in the bottom bar.
+- Refresh, Rescan, Re-check, Requery, and Test connection show a spinner while they work and cannot be pressed twice; then they briefly say "Updated" or show what went wrong, including when the network could not be reached. Check for updates says when you already have the latest version. Rescan says how many services it found.
+- Deploy, Test, and Provision can no longer be started twice by a quick second click, and a step that fails part way now ends with its reason shown instead of leaving the app greyed out until a restart. The same holds for sending POKT, returning POKT to the owner, and the wallet and key dialogs, and for the Claude Integration buttons.
+- Suppliers, supplier editor: Add adds the service the list shows without choosing it first, and the RelayMiner URL at the top now applies to every service below that has not been given its own.
+- Importing from the older app: a folder chosen with Browse now shows in the box.
+
 ## 0.1.16
 
 - My services, Edit card: saving an edited card now writes it back to the folder it came from. Before, it went to a new folder named after the service ID, so a service whose folder had a different name ended up listed twice, with the edit in the new copy and no way to remove it from the app.

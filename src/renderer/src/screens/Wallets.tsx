@@ -10,7 +10,8 @@ import {
   ErrText,
   netLabel,
   useStatus,
-  StatusLine
+  StatusLine,
+  RunButton
 } from '../components/ui'
 import { fmtPokt, shortAddr } from '@core/format'
 import { POKT } from '@core/format'
@@ -24,7 +25,8 @@ import {
   balanceOf,
   appRecordOf,
   copy,
-  foot,
+  notify,
+  signerFailed,
   ownedServices,
   localServices,
   goTo
@@ -211,9 +213,9 @@ export function WalletsScreen(): React.JSX.Element {
         <button className="btn" onClick={() => importAppWalletDialog(refresh)}>
           Import private key
         </button>
-        <button className="btn small" onClick={refresh}>
+        <RunButton onRun={refresh} failText="Could not refresh">
           Refresh
-        </button>
+        </RunButton>
       </div>
       <StatusLine status={status} id="walStatus" />
     </div>
@@ -339,19 +341,21 @@ function WalletDialogBody({ kind, onDone }: WalletDialogProps): React.JSX.Elemen
       mnemonic?: string
     }
     if (kind === 'new')
-      r = await window.psm.signer['wallet-create']({ name: n, service_id: service })
+      r = await window.psm.signer['wallet-create']({ name: n, service_id: service }).catch(
+        signerFailed
+      )
     else if (kind === 'recover')
       r = await window.psm.signer['wallet-recover']({
         name: n,
         service_id: service,
         mnemonic: secret.trim().replace(/\s+/g, ' ').toLowerCase()
-      })
+      }).catch(signerFailed)
     else
       r = await window.psm.signer['wallet-import-app']({
         name: n,
         service_id: service,
         privateKeyHex: secret.trim().replace(/^0[xX]/, '')
-      })
+      }).catch(signerFailed)
     setSecret('')
     lockModal(false)
     if (!r.ok) {
@@ -364,7 +368,7 @@ function WalletDialogBody({ kind, onDone }: WalletDialogProps): React.JSX.Elemen
       return
     }
     closeModal()
-    foot(`Wallet ${r.name} ${kind === 'recover' ? 'recovered' : 'imported'}: ${r.address}`)
+    notify(`Wallet ${r.name} ${kind === 'recover' ? 'recovered' : 'imported'}: ${r.address}`)
     onDone()
   }
   const goRef = useRef(go)
@@ -496,7 +500,7 @@ function MnemonicBody({
           const msg = `Wallet ${r.name} created: ${r.address}`
           r.mnemonic = '' // the HTA nulls its result object here
           closeModal()
-          foot(msg)
+          notify(msg)
           onDone()
         }
       }
@@ -595,7 +599,7 @@ export async function exportWalletDialog(name: string): Promise<void> {
             []
           )
           lockModal(true)
-          const r = await window.psm.signer['wallet-export']({ name })
+          const r = await window.psm.signer['wallet-export']({ name }).catch(signerFailed)
           lockModal(false)
           if (!r.ok) {
             setModalBody(<div className="dangerbox">{`${r.error} ${r.detail ?? ''}`}</div>, [
@@ -679,7 +683,9 @@ export async function removeWalletDialog(name: string, onDone: () => void): Prom
             []
           )
           lockModal(true)
-          const r = await window.psm.signer['wallet-remove']({ name, confirm: name })
+          const r = await window.psm.signer['wallet-remove']({ name, confirm: name }).catch(
+            signerFailed
+          )
           lockModal(false)
           if (!r.ok) {
             setModalBody(<div className="dangerbox">{`${r.error} ${r.detail ?? ''}`}</div>, [
@@ -688,7 +694,7 @@ export async function removeWalletDialog(name: string, onDone: () => void): Prom
             return
           }
           closeModal()
-          foot(`Wallet ${name} removed.`)
+          notify(`Wallet ${name} removed.`)
           onDone()
         }
       }

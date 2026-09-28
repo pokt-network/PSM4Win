@@ -5,13 +5,13 @@ import { useStore, S, type LocalService } from '../store'
 import type { ChainService } from '@core/lcd'
 import { fmtPokt, fmtInt } from '@core/format'
 import { costPerRelayUpokt, activationNote, type SupplyState } from '@core/chain'
-import { Badge, NetBadge, Empty, Busy, WarnText, netLabel } from '../components/ui'
+import { Badge, NetBadge, Empty, Busy, WarnText, netLabel, RunButton } from '../components/ui'
 import {
   ownedServices,
   localServices,
   appStakesByService,
   supplyMap,
-  refreshNetwork,
+  refreshNetworkChecked,
   refreshBalance,
   catalogEntry,
   folderForId,
@@ -266,16 +266,14 @@ export function ServicesScreen(): React.JSX.Element {
         )}
       </div>
       <div className="btnrow">
-        <button
-          className="btn small"
-          onClick={() => {
-            void loadServiceFolders()
-            void refreshNetwork()
-            void refreshBalance()
-          }}
+        <RunButton
+          failText="Could not refresh"
+          onRun={() =>
+            Promise.all([loadServiceFolders(), refreshNetworkChecked(), refreshBalance()])
+          }
         >
           Refresh
-        </button>
+        </RunButton>
         <button className="btn small primary" onClick={() => goTo('create')}>
           Create service
         </button>

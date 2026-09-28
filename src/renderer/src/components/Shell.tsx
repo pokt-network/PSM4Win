@@ -5,14 +5,14 @@ import mark from '../assets/pocket-mark-40.png'
 import { useStore } from '../store'
 import { fmtPokt } from '@core/format'
 import { fmtPoktOrQ } from '@core/chain'
-import { Badge, netLabel, Busy } from './ui'
+import { Badge, netLabel, Busy, RunButton } from './ui'
 import {
   setNetwork,
   toggleTheme,
   startDocker,
   recheckDocker,
   pullImage,
-  refreshNetwork,
+  refreshNetworkChecked,
   refreshBalance,
   copy,
   NAV,
@@ -148,7 +148,9 @@ export function TopBar(): React.JSX.Element {
       dockerText = (
         <>
           Docker: {docker.error} <button onClick={() => startDocker()}>Start Docker Desktop</button>
-          <button onClick={recheckDocker}>Re-check</button>
+          <RunButton className="" onRun={recheckDocker} done="Checked">
+            Re-check
+          </RunButton>
         </>
       )
     } else if (!docker.image) {
@@ -156,7 +158,9 @@ export function TopBar(): React.JSX.Element {
         <>
           Docker {docker.docker}, pocketd not downloaded{' '}
           <button onClick={() => pullImage()}>Download pocketd</button>
-          <button onClick={recheckDocker}>Re-check</button>
+          <RunButton className="" onRun={recheckDocker} done="Checked">
+            Re-check
+          </RunButton>
         </>
       )
     } else {
@@ -287,15 +291,12 @@ export function OwnerWalletCard(): React.JSX.Element {
             </tbody>
           </table>
           <div className="btnrow">
-            <button
-              className="btn small"
-              onClick={() => {
-                void refreshNetwork()
-                void refreshBalance()
-              }}
+            <RunButton
+              onRun={() => Promise.all([refreshNetworkChecked(), refreshBalance()])}
+              failText="Could not refresh"
             >
               Refresh
-            </button>
+            </RunButton>
             <button className="btn small danger" onClick={() => revokeDialog()}>
               Revoke key
             </button>

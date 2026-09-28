@@ -13,7 +13,9 @@ import {
   setBusy,
   psm,
   txUrl,
-  balanceOf
+  balanceOf,
+  openUrl,
+  signerFailed
 } from './actions'
 import type { Status } from '../components/ui'
 
@@ -150,7 +152,9 @@ export async function fundWallet(
   }
   setBusy(true)
   say(`Sending ${fmtPokt(upokt)} POKT to ${name}`)
-  const r = await psm().signer['tx-fund-wallet']({ network: S().net, name, amount_upokt: upokt })
+  const r = await psm()
+    .signer['tx-fund-wallet']({ network: S().net, name, amount_upokt: upokt })
+    .catch(signerFailed)
   if (!r.ok || !('txhash' in r)) {
     setBusy(false)
     return failed(
@@ -230,11 +234,13 @@ export async function returnToOwner(
   }
   setBusy(true)
   say(`Sending ${fmtPokt(upokt)} POKT to the owner wallet`)
-  const r = await psm().signer['tx-return-to-owner']({
-    network: S().net,
-    from: name,
-    amount_upokt: upokt
-  })
+  const r = await psm()
+    .signer['tx-return-to-owner']({
+      network: S().net,
+      from: name,
+      amount_upokt: upokt
+    })
+    .catch(signerFailed)
   if (!r.ok || !('txhash' in r)) {
     setBusy(false)
     return failed(
@@ -302,11 +308,13 @@ export async function fundOperator(
   }
   setBusy(true)
   setStatus(`Sending ${fmtPokt(upokt)} POKT to the operator`, 'busy')
-  const r = await psm().signer['tx-fund-operator']({
-    network: S().net,
-    to: op,
-    amount_upokt: upokt
-  })
+  const r = await psm()
+    .signer['tx-fund-operator']({
+      network: S().net,
+      to: op,
+      amount_upokt: upokt
+    })
+    .catch(signerFailed)
   if (!r.ok || !('txhash' in r)) {
     setBusy(false)
     setStatus(
@@ -331,7 +339,7 @@ export async function fundOperator(
 export function TxLink({ hash }: { hash: string }): React.JSX.Element {
   const net = S().net
   return (
-    <a className="mono" onClick={() => psm().app.openExternal(txUrl(net, hash))}>
+    <a className="mono" onClick={() => openUrl(txUrl(net, hash))}>
       {hash}
     </a>
   )

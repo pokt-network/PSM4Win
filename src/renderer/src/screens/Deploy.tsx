@@ -117,8 +117,22 @@ export function DeployScreen(): React.JSX.Element {
           ? `Also opens ${routes.routes.map((r) => `${r.path}/ to port ${r.port}`).join(', ')} on the server's public hostname (deploy\\routes.json).`
           : ''
 
+  // Busy from the first click, so a second click cannot start another deploy while this one
+  // reads its files; and cleared however the run ends, with the reason shown, so a failed
+  // call can never leave the app greyed out.
   const run = async (): Promise<void> => {
     if (S().busy) return
+    setBusy(true)
+    try {
+      await deploy()
+    } catch (e) {
+      setStatus(`The deploy stopped: ${e instanceof Error ? e.message : String(e)}`, 'err')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const deploy = async (): Promise<void> => {
     const id = dep.id
     const s = serverByName(dep.server)
     const folder = localById(id)?.folder ?? ''

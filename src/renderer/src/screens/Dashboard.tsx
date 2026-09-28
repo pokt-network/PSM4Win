@@ -10,20 +10,22 @@ import {
 } from '@core/chain'
 import { clearLcdCache } from '@core/lcd'
 import { hasProvisionedStack } from '@core/stack'
-import { Badge, NetBadge, Busy, netLabel } from '../components/ui'
+import { Badge, NetBadge, Busy, netLabel, RunButton } from '../components/ui'
 import {
   ownedServices,
   supplierRows,
   supplyMap,
   appStakesByService,
   refreshNetwork,
+  refreshNetworkChecked,
   refreshBalance,
   loadHistory,
   goTo,
-  psm,
   type SupplierRow,
   type AppStakeHolder,
-  txUrl
+  txUrl,
+  openUrl,
+  openFolder
 } from '../lib/actions'
 import { supplierStatusCell } from './Supply'
 import { openSupplier, svcStake } from './Services'
@@ -192,7 +194,7 @@ export function DashboardScreen(): React.JSX.Element {
                 <span className="mono">{servicesRoot}</span>
                 <div className="hint">
                   {/* Product owner (2026-09-15): no folder count here; the services are listed below. */}
-                  <a onClick={() => psm().app.openPath(servicesRoot)}>Open folder</a> or{' '}
+                  <a onClick={() => openFolder(servicesRoot)}>Open folder</a> or{' '}
                   <a onClick={() => goTo('settings')}>change it in Settings</a>.
                 </div>
               </>
@@ -450,7 +452,7 @@ export function DashboardScreen(): React.JSX.Element {
                         {e.txhash ? (
                           <a
                             className="mono"
-                            onClick={() => psm().app.openExternal(txUrl(enet, String(e.txhash)))}
+                            onClick={() => openUrl(txUrl(enet, String(e.txhash)))}
                           >
                             {String(e.txhash).substring(0, 12)}&hellip;
                           </a>
@@ -466,16 +468,16 @@ export function DashboardScreen(): React.JSX.Element {
           </table>
         </div>
         <div className="btnrow">
-          <button
-            className="btn small"
-            onClick={async () => {
+          <RunButton
+            failText="Could not refresh"
+            onRun={async () => {
               clearLcdCache() // the HTA's lcd() has no cache: Refresh re-reads everything
-              await refreshNetwork() // stores a new catalog, which re-runs load() once
-              void refreshBalance()
+              await Promise.all([refreshNetworkChecked(), refreshBalance()])
+              await load()
             }}
           >
             Refresh
-          </button>
+          </RunButton>
         </div>
         {balance === undefined ? null : null}
       </div>

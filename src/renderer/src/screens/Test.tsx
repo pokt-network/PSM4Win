@@ -191,8 +191,22 @@ export function TestScreen(): React.JSX.Element {
     return () => clearTimeout(t)
   }, [shown, runCheck])
 
+  // Busy from the first click, so a second click cannot start another test while this one
+  // reads its files; and cleared however the run ends, with the reason shown, so a failed
+  // call can never leave the app greyed out.
   const run = async (): Promise<void> => {
     if (S().busy) return
+    setBusy(true)
+    try {
+      await runProbes()
+    } catch (e) {
+      setStatus(`The test stopped: ${e instanceof Error ? e.message : String(e)}`, 'err')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const runProbes = async (): Promise<void> => {
     const id = tst.id
     const wallet = tst.wallet
     if (!id) return setStatus('Choose a service.', 'err')

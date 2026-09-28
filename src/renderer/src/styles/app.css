@@ -96,6 +96,8 @@
   --accent-number: #025af2;
   --modal-bg: #fff;
   --scrim: rgba(23, 28, 31, 0.6);
+  --toast-bg: #171c1f;
+  --toast-fg: #f6f6f6;
   --keybox-bg: #fff5f5;
   --warnbox-bg: #fff3d6;
   --dangerbox-bg: #fff0f0;
@@ -141,6 +143,8 @@ body.theme-dark {
   --spinner-head: #6fa0ff;
   --accent-number: #48e5c2;
   --modal-bg: #1e2529;
+  --toast-bg: #f6f6f6;
+  --toast-fg: #171c1f;
   --keybox-bg: #2c1f21;
   --warnbox-bg: #2e2710;
   --dangerbox-bg: #2c1f21;
@@ -973,6 +977,70 @@ table.services .svcid {
 }
 .empty p {
   margin: 0 0 14px 0;
+}
+
+/* ---- toasts (lib/toast.tsx): above the modal layer, clear of the footer ---- */
+#toasts {
+  position: fixed;
+  left: 50%;
+  bottom: 44px;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+.toast {
+  background: var(--toast-bg);
+  color: var(--toast-fg);
+  font-size: 13px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border-left: 4px solid var(--brand-mint);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  max-width: 520px;
+  animation: psm-toast-in 0.15s ease-out;
+  transition: opacity 0.3s ease;
+}
+.toast.info {
+  border-left-color: var(--brand-blue);
+}
+.toast.err {
+  border-left-color: var(--brand-coral);
+}
+.toast.leaving {
+  opacity: 0;
+}
+@keyframes psm-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* ---- a button showing that its action is running (RunButton in components/ui.tsx) ---- */
+.btn-spin {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-right: 6px;
+  vertical-align: -1px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: psm-spin 0.8s linear infinite;
+}
+button.done {
+  color: var(--ok-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  .btn-spin {
+    animation: none;
+  }
 }
 
 /* ---- modal ---- */

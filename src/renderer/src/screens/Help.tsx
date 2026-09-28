@@ -7,8 +7,8 @@ import { useStore, type SettingsTab } from '../store'
 import { fmtPokt } from '@core/format'
 import { NETWORK_INFO } from '@core/networks'
 import { DOCKER_DESKTOP_URL } from '@core/versions'
-import { Badge, netLabel } from '../components/ui'
-import { copy, openUrl, refreshNetwork, tab } from '../lib/actions'
+import { Badge, netLabel, RunButton } from '../components/ui'
+import { copy, openUrl, refreshNetworkChecked, tab } from '../lib/actions'
 
 const FOUNDATION_EMAIL = 'directors@pokt.foundation'
 const LINKS = {
@@ -132,9 +132,9 @@ function BeforeYouStart(): React.JSX.Element {
         </tbody>
       </table>
       <div className="btnrow">
-        <button className="btn small" onClick={() => refreshNetwork()}>
+        <RunButton onRun={refreshNetworkChecked} failText="Could not read the network">
           Requery
-        </button>
+        </RunButton>
       </div>
       <p>
         Stakes are locked, not spent. Add a margin for gas; the app tells you the exact amount at

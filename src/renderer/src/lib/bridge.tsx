@@ -11,7 +11,7 @@ import {
   loadWallets,
   loadServiceFolders,
   loadSettings,
-  foot
+  notify
 } from './actions'
 import { netLabel } from '../components/ui'
 import { useState } from 'react'
@@ -50,7 +50,7 @@ function showConfirm(req: BridgeConfirmRequest): void {
   const reply = (approved: boolean): void => {
     void window.psm.bridge.reply(req.id, approved)
     closeModal()
-    foot(approved ? `Approved ${req.tool} for the assistant.` : `Declined ${req.tool}.`)
+    notify(approved ? `Approved ${req.tool} for the assistant.` : `Declined ${req.tool}.`, 'info')
   }
   const approve = (): void => {
     if (req.token && typed.trim() !== req.token) return
@@ -101,12 +101,12 @@ export function BridgeHost(): null {
     const offExpired = window.psm.bridge.onConfirmExpired(() => {
       if (useModal.getState().open) {
         closeModal()
-        foot('The assistant request expired.')
+        notify('The assistant request expired.', 'info')
       }
     })
     const offStatus = window.psm.bridge.onStatus((st) => useStore.setState({ bridge: st }))
     const offActivity = window.psm.bridge.onActivity(({ tool, ok }) => {
-      foot(`Assistant ran ${tool}${ok ? '' : ' (failed)'}.`)
+      notify(`Assistant ran ${tool}${ok ? '' : ' (failed)'}.`, ok ? 'info' : 'err')
       void loadHistory()
       void refreshBalance()
       void loadWallets()

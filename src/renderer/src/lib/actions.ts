@@ -36,6 +36,7 @@ import { sourceFolderFor } from '@core/service-folders'
 import type { Settings } from '../../../preload/index'
 import { alertDialog, confirmDialog } from './modal'
 import { isDemo } from './demo'
+import { toast, type ToastKind } from './toast'
 
 export const PARENT = OWNER_KEY_NAME
 export const psm = (): Window['psm'] => window.psm
@@ -44,17 +45,37 @@ export function foot(msg: string): void {
   useStore.setState({ foot: msg })
 }
 
+/** A result the user should see where they are: a toast, and the footer keeps it. */
+export function notify(msg: string, kind: ToastKind = 'ok'): void {
+  foot(msg)
+  toast(msg, kind)
+}
+
 export async function copy(text: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(text)
-    foot('Copied to clipboard')
+    notify('Copied to clipboard')
   } catch {
-    await alertDialog('Could not access the clipboard.')
+    notify('Could not copy: the clipboard is not available.', 'err')
   }
 }
 
-export function openUrl(u: string): void {
-  void psm().app.openExternal(u)
+/** Opens an https link in the browser and says so, since the browser may open behind the app. */
+export async function openUrl(u: string): Promise<void> {
+  const ok = await psm()
+    .app.openExternal(u)
+    .catch(() => false)
+  if (ok) toast('Opened in your browser', 'info')
+  else notify('Could not open the link.', 'err')
+}
+
+/** Opens the services folder (or the app's data folder) in File Explorer and says so. */
+export async function openFolder(p: string): Promise<void> {
+  const ok = await psm()
+    .app.openPath(p)
+    .catch(() => false)
+  if (ok) toast('Opened in File Explorer', 'info')
+  else notify(`Could not open ${p}.`, 'err')
 }
 
 export function txUrl(net: Network, hash: string): string {
@@ -124,8 +145,17 @@ export async function dockerCycle(first: boolean): Promise<boolean> {
   return true
 }
 
-export function recheckDocker(): void {
-  void dockerCycle(true)
+/** Re-check from the top bar: checks once and says what it found when nothing changed. */
+export async function recheckDocker(): Promise<boolean> {
+  const ok = await dockerCycle(true)
+  if (!ok)
+    toast(
+      S().docker?.ok
+        ? 'Docker is running; pocketd is not downloaded yet.'
+        : 'Docker Desktop is still not running.',
+      'info'
+    )
+  return ok
 }
 
 export async function startDocker(): Promise<void> {
@@ -231,6 +261,17 @@ export async function walletReady(what: string): Promise<boolean> {
 }
 
 // ---- network ----
+
+/**
+ * refreshNetwork for a Refresh button: the same reads, but a network that could not be
+ * reached is an error the button reports, not an empty catalog it calls up to date.
+ */
+export async function refreshNetworkChecked(): Promise<void> {
+  await refreshNetwork()
+  const { catalog, params } = S()
+  if (catalog === null || !params.height)
+    throw new Error(`could not reach ${S().net === 'main' ? 'MainNet' : 'Beta TestNet'}`)
+}
 
 export async function refreshNetwork(): Promise<void> {
   const net = S().net
@@ -717,7 +758,19 @@ export async function supplyMap(rows?: SupplierRow[]): Promise<Record<string, Su
 // ---- transactions ----
 
 export function pollTx(hash: string): Promise<{ ok: boolean; height?: number; error?: string }> {
-  return waitForTx(S().net, hash)
+  // A read that fails while waiting is reported as such, never thrown past the caller's busy state.
+  return waitForTx(S().net, hash).catch((e: unknown) => ({
+    ok: false,
+    error: `Could not follow transaction ${hash.substring(0, 10)}: ${e instanceof Error ? e.message : String(e)}`
+  }))
+}
+
+/**
+ * A signer call that threw instead of answering becomes an ordinary failed result, so the
+ * flow that made it clears busy and says why instead of stopping half way.
+ */
+export function signerFailed(e: unknown): { ok: false; error: string; detail?: string } {
+  return { ok: false, error: e instanceof Error ? e.message : String(e) }
 }
 
 export function setBusy(b: boolean): void {

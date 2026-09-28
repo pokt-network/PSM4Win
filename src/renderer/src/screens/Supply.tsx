@@ -22,6 +22,7 @@ import {
   useStatus,
   ErrText,
   netLabel,
+  RunButton,
   type CheckNode
 } from '../components/ui'
 import {
@@ -34,6 +35,7 @@ import {
   readCardFor,
   balanceOf,
   refreshNetwork,
+  refreshNetworkChecked,
   refreshBalance,
   loadHistory,
   recordManifestFor,
@@ -205,15 +207,15 @@ function SuppliersList(): React.JSX.Element {
         )}
       </div>
       <div className="btnrow">
-        <button
-          className="btn small"
-          onClick={async () => {
-            await refreshNetwork()
-            void load()
+        <RunButton
+          failText="Could not refresh"
+          onRun={async () => {
+            await refreshNetworkChecked()
+            await load()
           }}
         >
           Refresh
-        </button>
+        </RunButton>
         <button className="btn small" onClick={() => goTo('settings')}>
           Add a server
         </button>
@@ -246,7 +248,11 @@ function SupplierEditor({
   const st = stackOf(s, net)
   const label = netLabel(net)
   const [operator, setOperator] = useState(st?.operator ?? '')
-  const [url, setUrl] = useState(st?.url ?? '')
+  // The RelayMiner URL starts from the server's stack; an edit holds only while that stack is
+  // the one shown, so switching server or network brings back the new stack's URL.
+  const [urlEdit, setUrlEdit] = useState<{ base: string; value: string } | null>(null)
+  const url = urlEdit && urlEdit.base === (st?.url ?? '') ? urlEdit.value : (st?.url ?? '')
+  const setUrl = (value: string): void => setUrlEdit({ base: st?.url ?? '', value })
   const [rec, setRec] = useState<ChainSupplier | null>(null)
   const [recStatus, setRecStatus] = useState(0)
   const [rows, setRows] = useState<SupplyRow[]>([])
@@ -294,7 +300,7 @@ function SupplierEditor({
         out.push({
           id: sc.service_id,
           name: catalogEntry(sc.service_id)?.name ?? '',
-          url: ep.url || st?.url || '',
+          url: ep.url || url || st?.url || '',
           rpc: ep.rpc_type || 'REST',
           checked: true,
           staked: true
@@ -305,7 +311,7 @@ function SupplierEditor({
           out.push({
             id: o.id,
             name: o.name,
-            url: st?.url ?? '',
+            url: url || st?.url || '',
             rpc: await rpcFor(o.id),
             checked: false,
             staked: false
@@ -317,7 +323,7 @@ function SupplierEditor({
           out.push({
             id: pre,
             name: catalogEntry(pre)?.name ?? '',
-            url: st?.url ?? '',
+            url: url || st?.url || '',
             rpc: await rpcFor(pre),
             checked: true,
             staked: false
@@ -384,15 +390,17 @@ function SupplierEditor({
     (c) => !rows.some((r) => r.id === c.id)
   )
   const ownedIds = new Set(owned.map((o) => o.id))
+  // The dropdown shows its first service before anything is picked, so that is the one added.
   const addService = async (): Promise<void> => {
-    if (!addId || rows.some((r) => r.id === addId)) return
-    const c = (await readCardFor(addId)) as { rpc_types?: { type?: string }[] } | null
+    const id = addId || addList[0]?.id || ''
+    if (!id || rows.some((r) => r.id === id)) return
+    const c = (await readCardFor(id)) as { rpc_types?: { type?: string }[] } | null
     setRows((r) => [
       ...r,
       {
-        id: addId,
-        name: catalogEntry(addId)?.name ?? '',
-        url: st?.url ?? '',
+        id,
+        name: catalogEntry(id)?.name ?? '',
+        url: url || st?.url || '',
         rpc: c?.rpc_types?.[0]?.type || 'REST',
         checked: true,
         staked: false
@@ -917,7 +925,14 @@ function SupplierEditor({
               id="supUrl"
               placeholder="https://..."
               value={url}
-              onChange={(e) => setUrl(e.target.value)}
+              onChange={(e) => {
+                // Rows that still carry the old value follow it; a row given its own URL keeps it.
+                const prev = url
+                const next = e.target.value
+                setUrl(next)
+                setRows((rs) => rs.map((r) => (r.url === prev || !r.url ? { ...r, url: next } : r)))
+                invalidate()
+              }}
             />
             <div className="hint">
               From the server entry; used for every service below unless a row overrides it.
@@ -932,7 +947,11 @@ function SupplierEditor({
           <div>
             <label>Add a service</label>
             <div className="filerow">
-              <select id="supAdd" value={addId} onChange={(e) => setAddId(e.target.value)}>
+              <select
+                id="supAdd"
+                value={addId || addList[0]?.id || ''}
+                onChange={(e) => setAddId(e.target.value)}
+              >
                 {!addList.length ? (
                   <option value="">
                     {showAll
