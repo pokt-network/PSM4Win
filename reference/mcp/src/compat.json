@@ -2,10 +2,17 @@
   "app": "Pocket Service Manager",
   "updated": "2026-09-28",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.13",
+  "latest": "electron-0.1.14",
   "minimum_supported": "hta-2026-09-14",
   "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.14": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.12",
+      "changes": [
+        "a service deployed without its own deploy/docker-compose.yaml runs with a 512 MB memory limit (a service that needs more ships its own compose file with a larger mem_limit), and the shared Caddy gets a 256 MB limit when a server is next provisioned; no stack layout change"
+      ]
+    },
     "electron-0.1.13": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.12",

@@ -2,7 +2,7 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
-## Unreleased
+## 0.1.14
 
 - Deploy service: a service deployed without its own compose file now runs with a 512 MB memory limit, so one runaway service can no longer take the memory the supplier's RelayMiner was sized with. A service that needs more says so in its own `deploy/docker-compose.yaml`. The shared Caddy on each server gets a 256 MB limit the next time the server is provisioned.
 
