@@ -2,6 +2,10 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
+## Unreleased
+
+- Deploy service: a service deployed without its own compose file now runs with a 512 MB memory limit, so one runaway service can no longer take the memory the supplier's RelayMiner was sized with. A service that needs more says so in its own `deploy/docker-compose.yaml`. The shared Caddy on each server gets a 256 MB limit the next time the server is provisioned.
+
 ## 0.1.13
 
 - Supplier servers: the RelayMiner now checks each relay before passing it to your service, instead of passing it first and holding the request and the answer in memory until the check is done. On a small server with several services that holding space could outgrow the memory the relayer is allowed, and a burst of traffic would restart it. Suppliers shows "stack update needed" once more for stacks updated with 0.1.12; Update stack applies it and keeps everything else.

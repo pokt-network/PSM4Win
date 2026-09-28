@@ -1,6 +1,9 @@
 # {{SERVICE_ID}} backend, written by the Pocket Service Manager. Starts only the
 # backend container on the supplier stack's network, where the relayer reaches it as
 # http://{{SERVICE_ID}}-backend:8080. Nothing is exposed to the internet.
+# The memory limit keeps one runaway backend from taking the memory the supplier
+# stacks were sized with; a service that needs more ships its own
+# deploy/docker-compose.yaml with a larger mem_limit.
 
 services:
   backend:
@@ -8,6 +11,7 @@ services:
     image: {{SERVICE_ID}}-backend:latest
     container_name: {{SERVICE_ID}}-backend
     restart: unless-stopped
+    mem_limit: 512m
     expose:
       - "8080"
     networks: [supplier]

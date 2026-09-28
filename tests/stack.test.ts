@@ -118,4 +118,10 @@ describe('YAML the transactions mount', () => {
       'a svc\nb svc'
     )
   })
+  it('caps the memory of a templated backend and of the shared Caddy', () => {
+    const backend = backendComposeFromTemplate(rd('backend-compose.yaml.tmpl'), 'svc')
+    expect(backend).toMatch(/^ {4}mem_limit: 512m$/m)
+    expect(backend).not.toMatch(/\{\{[A-Z_]+\}\}/)
+    expect(templates['caddy/docker-compose.yaml']).toMatch(/^ {4}mem_limit: 256m$/m)
+  })
 })

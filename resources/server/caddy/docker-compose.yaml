@@ -10,6 +10,8 @@ services:
     image: caddy:2
     container_name: pocket-caddy
     restart: unless-stopped
+    # Caddy needs a few tens of MB; the limit keeps it out of the stacks' memory.
+    mem_limit: 256m
     ports:
       - "80:80"
       - "443:443"
