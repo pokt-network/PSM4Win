@@ -135,7 +135,7 @@ Keep in `src/core/versions.ts` and update here in the same commit:
 | LCD | `https://sauron-api.infra.pocket.network`, `https://sauron-api.beta.infra.pocket.network` |
 | Explorer | `https://explorer.pocket.network`, `https://explorer.pocket.network/beta` |
 | HTA version string | `hta-2026-09-14` (in `reference/mcp/src/compat.json`) |
-| Electron version string | `APP_VERSION_PREFIX` + `package.json` version, so `electron-0.1.11` at this tag. `reference/mcp/src/compat.json` keys an entry by the version that introduced a capability set and points later versions at it with `capabilities_as`, so every released version resolves. |
+| Electron version string | `APP_VERSION_PREFIX` + `package.json` version, so `electron-0.1.12` at this tag. `reference/mcp/src/compat.json` keys an entry by the version that introduced a capability set and points later versions at it with `capabilities_as`, so every released version resolves. |
 | Supplier RelayMiner | `RELAYMINER_IMAGE` = `ghcr.io/pokt-network/pocket-relay-miner:v0.1.0` (relayer and miner on one exact tag; upstream forbids mixed versions and moving tags). Until 0.1.11 the stack ran the moving `:rc` tag, which upstream rebuilt from v0.1.0 code on 2026-09-28 and so broke new stacks on Redis 8.4. |
 | Supplier Redis | `REDIS_IMAGE` = `redis:8.10.1-alpine`, `maxmemory` sized on the server, `noeviction`: RelayMiner v0.1.0 refuses anything else. AOF data written by 8.4 loads in 8.10.1 (checked 2026-09-28). |
 | pocketd on the server | `POCKETD_IMAGE`, the same pin as on this PC, written into `stack.env` (it was `:latest` in `supplier.sh` before 0.1.12). |

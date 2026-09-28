@@ -2,10 +2,21 @@
   "app": "Pocket Service Manager",
   "updated": "2026-09-28",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.11",
+  "latest": "electron-0.1.12",
   "minimum_supported": "hta-2026-09-14",
   "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.12": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.11",
+      "priority": "The RelayMiner published its first versioned release, and supplier servers set up by earlier versions of the app can no longer start it: new servers fail at once, and existing ones fail the next time the RelayMiner is downloaded again. Update the app, then press Update stack on each supplier (Suppliers screen).",
+      "capabilities_added": [
+        "the supplier stack runs pinned versions: RelayMiner v0.1.0 for relayer and miner, Redis 8.10.1 with noeviction, and the same pocketd on the server as on the PC; memory limits are sized from the server (it needs at least 3 GB), and both RelayMiner configs are validated with the pinned image before anything restarts. Earlier versions ran the moving rc tag, which RelayMiner v0.1.0 broke on 2026-09-28: tell a user on an older version to update, then press Update stack on each supplier",
+        "Suppliers and psm_status (stacks.<net>.update_needed) show a stack provisioned by an older app version; Update stack in the app, or psm_supplier_ship then psm_supplier_run start over the bridge, brings it to the pinned versions, keeping the operator key, services, and stake",
+        "the server comes first: psm_register_service refuses a new service on a network with no provisioned server, and psm_status returns next_step telling the assistant to set up the server in the app. Never provision a server, create an operator key, or stake a supplier with pocketd for someone who uses the app",
+        "priority updates: a release whose notes open with **Priority update.** shows a banner and opens the update dialog in the app until it is installed"
+      ]
+    },
     "electron-0.1.11": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.10",

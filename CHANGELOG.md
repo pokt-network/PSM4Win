@@ -2,7 +2,7 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
-## Unreleased
+## 0.1.12
 
 **Priority update.** The RelayMiner published its first versioned release, and supplier servers set up by earlier versions of the app can no longer start it: new servers fail at once, and existing ones fail the next time the RelayMiner is downloaded again. Update the app, then press Update stack on each supplier (Suppliers screen).
 
