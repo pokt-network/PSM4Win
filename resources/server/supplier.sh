@@ -207,7 +207,7 @@ case "$step" in
   publish)
     NETARG="${1:-$NET}"
     ADDR=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["address"])' "$D/operator-key.json")
-    if pd query auth account "$ADDR" --network="$NETARG" -o json 2>/dev/null | grep -q '"key"'; then echo "published: already on chain"; exit 0; fi
+    if pd query auth account "$ADDR" --network="$NETARG" -o json 2>/dev/null | grep -qE '"(public_)?key"'; then echo "published: already on chain"; exit 0; fi
     OUT=$(pd tx bank send operator "$ADDR" 1upokt --from operator --keyring-backend test --home /home --network="$NETARG" --gas auto --gas-prices 1upokt --gas-adjustment 1.5 -y -o json 2>&1 || true)
     TX=$(echo "$OUT" | python3 -c 'import sys,json
 t=sys.stdin.read(); i=t.find("{")
@@ -218,7 +218,7 @@ except Exception: print("", "parse")' 2>/dev/null)
     CODE="${TX##* }"
     if [ -z "${TX%% *}" ] || [ "$CODE" != "0" ]; then echo "error: the self-transfer was not accepted; is the operator funded? ($(echo "$OUT" | tail -c 300 | tr '\n' ' '))"; exit 1; fi
     # Inclusion takes a block or two; MainNet blocks are about a minute apart.
-    for i in $(seq 1 60); do sleep 5; if pd query auth account "$ADDR" --network="$NETARG" -o json 2>/dev/null | grep -q '"key"'; then echo "published: public key now on chain"; exit 0; fi; done
+    for i in $(seq 1 60); do sleep 5; if pd query auth account "$ADDR" --network="$NETARG" -o json 2>/dev/null | grep -qE '"(public_)?key"'; then echo "published: public key now on chain"; exit 0; fi; done
     echo "error: the self-transfer ${TX%% *} was accepted but its inclusion was not seen within 5 minutes; run provisioning again, it resumes here"; exit 1
     ;;
   start)
