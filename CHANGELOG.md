@@ -2,7 +2,7 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
-## Unreleased
+## 0.1.17
 
 - The app now tells you what happened. Copying an address, a token, or a recovery phrase shows a short "Copied to clipboard" message, also inside dialogs, where the bottom bar was hidden. Opening a link or a folder says it opened in your browser or File Explorer, or why it could not. Creating, importing, recovering, or removing a wallet, and approving or declining an assistant's request, say so where you are instead of only in the bottom bar.
 - Refresh, Rescan, Re-check, Requery, and Test connection show a spinner while they work and cannot be pressed twice; then they briefly say "Updated" or show what went wrong, including when the network could not be reached. Check for updates says when you already have the latest version. Rescan says how many services it found.

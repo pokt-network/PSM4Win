@@ -2,10 +2,19 @@
   "app": "Pocket Service Manager",
   "updated": "2026-09-28",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.16",
+  "latest": "electron-0.1.17",
   "minimum_supported": "hta-2026-09-14",
   "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.17": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.12",
+      "changes": [
+        "visible feedback: copies, opened links and folders, and dialog results show a short toast (also over dialogs); Refresh, Rescan, Re-check, Requery, and Test connection show a spinner, cannot run twice, and say Updated or the error; Check for updates says when current",
+        "Deploy, Test, and Provision cannot be started twice, and a failure part way ends with its reason instead of leaving the app busy; the same for transfers, the wallet and key dialogs, and the Claude Integration buttons",
+        "supplier editor: Add adds the service its list shows, and the RelayMiner URL field applies to every row without its own URL"
+      ]
+    },
     "electron-0.1.16": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.12",
