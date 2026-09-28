@@ -9,6 +9,7 @@
 // land in a model's context. Servers are named by their Settings entry, so SSH key
 // paths never cross the bridge either. See docs/ARCHITECTURE.md section 8.
 import type { SignerOp } from './contract'
+import type { Network } from './networks'
 
 /** Protocol revisions this server speaks; the first is what it answers with. */
 export const MCP_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26'] as const
@@ -72,7 +73,7 @@ export const BRIDGE_TOOLS: readonly BridgeTool[] = [
   {
     name: 'psm_status',
     description:
-      'What the Pocket Service Manager app can do right now: selected network, owner wallet (address only), Docker state, services folder, and the configured servers with their supplier stacks. Call this first.',
+      'What the Pocket Service Manager app can do right now: selected network, owner wallet (address only), Docker state, services folder, and the configured servers with their supplier stacks. Call this first, and when next_step is set, do that before anything else.',
     inputSchema: obj({}),
     op: 'app-status',
     confirm: 'never'
@@ -151,7 +152,7 @@ export const BRIDGE_TOOLS: readonly BridgeTool[] = [
   {
     name: 'psm_register_service',
     description:
-      'Register (add-service) or update a service on chain, signed by the owner wallet. Spends the registration fee on creation plus gas. The user confirms in the app window; on MainNet they type the service ID.',
+      'Register (add-service) or update a service on chain, signed by the owner wallet. Spends the registration fee on creation plus gas. The user confirms in the app window; on MainNet they type the service ID. A new service is refused until a server is provisioned in the app for the network (psm_status next_step says so).',
     inputSchema: obj(
       {
         network,
@@ -478,6 +479,16 @@ export const BRIDGE_EXCLUDED_OPS: readonly SignerOp[] = [
  * owner, 2026-09-20).
  */
 export const BRIDGE_APP_ONLY_OPS: readonly SignerOp[] = ['tx-unstake-app', 'tx-return-to-owner']
+
+/**
+ * What an assistant is told when the network has no provisioned server: set one up in
+ * the app first. A service registered before its server exists got supplied by hand on
+ * the command line once, invisibly to the app (2026-09-27).
+ */
+export function serverFirstNote(net: Network): string {
+  const label = net === 'main' ? 'MainNet' : 'Beta TestNet'
+  return `No server is provisioned for ${label}. Before registering a service or staking a supplier, the user adds their server in the app (Settings, Servers) and provisions it for this network (Settings, Suppliers, or the Provision button on the Suppliers screen); Deploy and Supply then follow in the app. Never provision a server, create an operator key, or stake a supplier with pocketd on the command line: the app cannot see or manage a supplier made that way. If someone else will run the supplier, the user registers in the app window, which asks them to confirm that.`
+}
 
 /** Whether this call needs the user's approval in the app window before it runs. */
 export function needsConfirmation(tool: BridgeTool, args: Record<string, unknown>): boolean {

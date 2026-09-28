@@ -11,6 +11,7 @@ import {
   BRIDGE_TOOLS,
   bridgeTool,
   needsConfirmation,
+  serverFirstNote,
   toolResult,
   type BridgeDispatch,
   type BridgeTool,
@@ -20,6 +21,8 @@ import type { SignerOp, SignerRequests } from '@core/contract'
 import { APP_VERSION_PREFIX, BRIDGE_DEFAULT_PORT, CHAIN_IDS } from '@core/versions'
 import { fmtPokt } from '@core/format'
 import type { Network } from '@core/networks'
+import { hasProvisionedStack } from '@core/stack'
+import { service as lcdService } from '@core/lcd'
 import { requestSchemas } from '../ipc/schemas'
 import { signer } from '../signer'
 import { readSettings, writeSettings, type ServerEntry } from '../state/settings'
@@ -209,6 +212,12 @@ class BridgeService {
         detail: ''
       })
     const data = parsed.data as Record<string, unknown>
+    // A new service needs somewhere to run first. The app window can override this for
+    // a service someone else will supply; an assistant cannot.
+    if (tool.op === 'tx-add-service' && data.dry !== true) {
+      const refusal = await this.serverFirstRefusal(data)
+      if (refusal) return toolResult({ ok: false, error: refusal, detail: '' })
+    }
     if (needsConfirmation(tool, data)) {
       const c = this.describe(tool, data)
       const approved = await confirmInWindow(this.getWindow, c)
@@ -221,6 +230,19 @@ class BridgeService {
     }
     const res = await signer.run(tool.op, data as SignerRequests[SignerOp])
     return toolResult(res)
+  }
+
+  /** Why a new registration is refused, or null: a service already on chain may be updated. */
+  private async serverFirstRefusal(data: Record<string, unknown>): Promise<string | null> {
+    const net = data.network as Network
+    const s = await readSettings()
+    if (hasProvisionedStack(s.servers, net)) return null
+    try {
+      if (await lcdService(net, String(data.service_id ?? ''))) return null
+    } catch {
+      // The network did not answer; treat the service as new rather than let it through.
+    }
+    return serverFirstNote(net)
   }
 
   private async resolveServer(
@@ -387,6 +409,11 @@ class BridgeService {
           ])
         )
       })),
+      next_step: !(wallet.ok && 'imported' in wallet && wallet.imported)
+        ? 'Import the owner wallet in the app first (the card at the left of the window).'
+        : hasProvisionedStack(s.servers, s.network)
+          ? null
+          : serverFirstNote(s.network),
       tools: BRIDGE_TOOLS.map((t) => t.name),
       note: 'Spends and signatures open a confirmation in the app window and wait for the user. Keys and phrases are never available here.'
     }

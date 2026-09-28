@@ -73,16 +73,17 @@ export function showWelcome(): void {
               </span>
             </li>
             <li>
+              Add your server in Settings and provision it.
+              <span className="sub">
+                Installs the RelayMiner and creates the operator key on the server. Register asks
+                for this first.
+              </span>
+            </li>
+            <li>
               Create the service.
               <span className="sub">The form writes the card and validates it.</span>
             </li>
             <li>Register it on chain.</li>
-            <li>
-              Add your server in Settings and provision it.
-              <span className="sub">
-                Installs the RelayMiner and creates the operator key on the server.
-              </span>
-            </li>
             <li>Deploy the backend to that server.</li>
             <li>
               Stake the supplier and stake an application wallet.

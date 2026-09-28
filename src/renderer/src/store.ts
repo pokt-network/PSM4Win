@@ -79,6 +79,8 @@ export interface RegisterForm {
   name: string
   cupr: string
   card: string
+  /** Register without a server of the user's own: someone else will run the supplier. */
+  externalSupplier?: boolean
 }
 export interface StakeForm {
   id: string
@@ -133,6 +135,8 @@ export interface State {
   supOpen: { server: string; preselect?: string } | null
   /** The screen a row action or a fix-this link came from, for the way back. */
   cameFrom: Screen | null
+  /** The Provision form. `net` is the network dir and host were filled for, never chosen:
+   *  the panel follows the network switch at the top of the window. */
   prov: { server: string; net: Network; dir: string; host: string; fund: string }
   deployed: { id: string; server: string } | null
   bridge: BridgeStatus | null

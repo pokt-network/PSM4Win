@@ -9,6 +9,7 @@ import {
   type SupplyState
 } from '@core/chain'
 import { clearLcdCache } from '@core/lcd'
+import { hasProvisionedStack } from '@core/stack'
 import { Badge, NetBadge, Busy, netLabel } from '../components/ui'
 import {
   ownedServices,
@@ -72,9 +73,27 @@ export function DashboardScreen(): React.JSX.Element {
   const ns = nextSessionBoundary(params)
   const min = params.appMinStake || 0
   const alerts: React.ReactNode[] = []
+  // The server comes before the service: Register asks for one, and without it Deploy and
+  // Supply have nothing to work with.
+  const needServer = imported && !hasProvisionedStack(settings?.servers ?? [], net)
 
   return (
     <>
+      {needServer ? (
+        <div className="warnbox" id="dashNeedServer">
+          <b>Next: set up your server.</b> No server is provisioned for {label} yet. Add it under{' '}
+          <a
+            onClick={() => {
+              useStore.setState({ settingsTab: 'servers' })
+              goTo('settings')
+            }}
+          >
+            Settings, Servers
+          </a>{' '}
+          and provision it for this network before registering a service: the app deploys your
+          service there and supplies it from there.
+        </div>
+      ) : null}
       <div className="row">
         <div className="panel">
           <h2>

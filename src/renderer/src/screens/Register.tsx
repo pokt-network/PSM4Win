@@ -4,6 +4,7 @@ import { useStore, S, type Manifest } from '../store'
 import { fmtPokt, fmtInt, POKT } from '@core/format'
 import { costPerRelayUpokt } from '@core/chain'
 import { service as lcdService, type LcdError } from '@core/lcd'
+import { hasProvisionedStack } from '@core/stack'
 import {
   Checks,
   LogBox,
@@ -27,6 +28,8 @@ import {
   writeManifest,
   setBusy,
   browseForServiceFolder,
+  servers,
+  goTo,
   psm
 } from '../lib/actions'
 import { confirmTx, TxLink } from '../lib/flows'
@@ -44,7 +47,9 @@ interface Snapshot {
 }
 
 export function RegisterScreen(): React.JSX.Element {
-  const { reg, local, net, params, busy } = useStore()
+  const { reg, local, net, params, busy, settings } = useStore()
+  // A new service needs somewhere to run; Register asks for a provisioned server first.
+  const serverReady = hasProvisionedStack(settings?.servers ?? [], net)
   const [status, setStatus] = useStatus()
   const [checks, setChecks] = useState<CheckNode[]>([])
   const [plan, setPlan] = useState<string | null>(null)
@@ -207,6 +212,11 @@ export function RegisterScreen(): React.JSX.Element {
     useStore.setState({ foot: `Saved ${folderPath}\\service.json` })
   }
 
+  const openServers = (): void => {
+    useStore.setState({ settingsTab: 'servers' })
+    goTo('settings')
+  }
+
   const preflight = async (rechecked = false): Promise<void> => {
     if (S().busy) return
     const f = form()
@@ -269,6 +279,26 @@ export function RegisterScreen(): React.JSX.Element {
         level: 'fail',
         text: `Could not check the catalog (HTTP ${(e as LcdError).status ?? 0}).`
       })
+    }
+    if (!update && !hasProvisionedStack(servers(), S().net)) {
+      if (S().reg.externalSupplier)
+        items.push({
+          level: 'warn',
+          text: `No server of yours is provisioned for ${label}. Registering anyway, because someone else will run the supplier.`,
+          sub: 'If that changes, untick the box on the form and set up your server under Settings before you register.'
+        })
+      else
+        items.push({
+          level: 'fail',
+          text: (
+            <>
+              No server is provisioned for {label} yet.{' '}
+              <a onClick={openServers}>Set one up under Settings</a> before registering: a service
+              needs somewhere to run, and the app deploys it and supplies it there.
+            </>
+          ),
+          sub: 'If another operator will run the supplier for this service, tick "Someone else will run the supplier" on the form.'
+        })
     }
     const catalog = S().catalog
     if (catalog) {
@@ -553,6 +583,24 @@ export function RegisterScreen(): React.JSX.Element {
             </div>
           </div>
         </div>
+        {!serverReady ? (
+          <div className="hint" id="regServerHint">
+            No server is provisioned for {netLabel(net)} yet.{' '}
+            <a onClick={openServers}>Set one up under Settings</a> first; Register asks for one
+            before a new service goes on chain.
+            <div style={{ marginTop: 4 }}>
+              <input
+                type="checkbox"
+                id="regExternal"
+                checked={!!reg.externalSupplier}
+                onChange={(e) => set({ externalSupplier: e.target.checked })}
+              />{' '}
+              <label htmlFor="regExternal" className="inline">
+                Someone else will run the supplier for this service
+              </label>
+            </div>
+          </div>
+        ) : null}
         <div className="btnrow">
           <button className="btn" onClick={validateOnly}>
             Check card

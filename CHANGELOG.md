@@ -2,6 +2,12 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`.
 
+## Unreleased
+
+- Your server now comes first. Register asks for a provisioned server before a new service goes on chain, with a link to set one up; tick "Someone else will run the supplier" if another operator will supply it. The Dashboard, the welcome message, and Help put setting up the server right after importing the owner wallet.
+- Claude is told the same: the app's status tells an assistant to set up the server in the app when none is provisioned, and never to provision a server or stake a supplier on the command line, and the app refuses to register a new service for an assistant until a server exists.
+- Provision a supplier no longer has its own network choice. It provisions for the network the app is on, and the stack folder and hostname follow the network switch, so a folder meant for one network can no longer be used for the other.
+
 ## 0.1.11
 
 - Deploy service: a service that keeps separate data for each network can say which port each network's RelayMiner calls, in `deploy/relayer.json`. Deploy connects the RelayMiner for the chosen network to that port and checks the service answers there, so Beta test traffic can never reach the MainNet copy. Services without the file keep using port 8080 on both networks. An extra address from `deploy/routes.json` can never point at one of these ports, since it would bypass the RelayMiner. A server provisioned by an earlier version needs Re-provision under Settings first; Deploy says so.

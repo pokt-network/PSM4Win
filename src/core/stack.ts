@@ -80,6 +80,20 @@ export function renderStack(tpl: StackTemplates, t: StackTokens): RenderedStack 
   }
 }
 
+/** The part of a server entry that says whether a network's stack finished provisioning. */
+export interface ServerStacks {
+  suppliers?: Partial<Record<Network, { provisioned_at?: string } | undefined>>
+}
+
+/**
+ * Whether any configured server has a finished stack for the network. Registering a
+ * service before there is anywhere to run it is how a service ends up supplied by hand,
+ * outside the app; Register and the bridge both refuse a new service until this holds.
+ */
+export function hasProvisionedStack(servers: readonly ServerStacks[], net: Network): boolean {
+  return servers.some((s) => !!s.suppliers?.[net]?.provisioned_at)
+}
+
 export function appStakeYaml(stakeUpokt: number, serviceId: string): string {
   return `stake_amount: ${stakeUpokt}upokt\nservice_ids:\n  - ${serviceId}\n`
 }

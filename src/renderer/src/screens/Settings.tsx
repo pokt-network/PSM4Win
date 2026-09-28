@@ -14,6 +14,7 @@ import {
   useLog,
   useStatus,
   netLabel,
+  NetBadge,
   type CheckNode
 } from '../components/ui'
 import {
@@ -519,25 +520,27 @@ function ProvisionPanel(): React.JSX.Element {
   const setProv = (patch: Partial<typeof prov>): void =>
     useStore.setState((s) => ({ prov: { ...s.prov, ...patch } }))
 
-  // Default server and, when the directory is blank, the current network's defaults.
+  // The panel provisions for the network the app is on; there is no choice of network
+  // here. Directory and hostname are refilled from that network's stack whenever the
+  // network or the server changes, so a folder filled for one network is never offered
+  // for the other.
   useEffect(() => {
     if (!list.length) {
       if (prov.server) setProv({ server: '', dir: '', host: '' })
       return
     }
     const server = serverByName(prov.server) ? prov.server : list[0].name
-    if (server !== prov.server || !prov.dir) {
-      const st = stackOf(serverByName(server), prov.net || appNet)
-      const n = prov.dir ? prov.net : appNet
+    if (server !== prov.server || prov.net !== appNet || !prov.dir) {
+      const st = stackOf(serverByName(server), appNet)
       setProv({
         server,
-        net: n,
-        dir: prov.dir || st?.dir || stackDirDefault(n),
-        host: prov.host || (st ? hostOfUrl(st.url) : '')
+        net: appNet,
+        dir: st?.dir || stackDirDefault(appNet),
+        host: st ? hostOfUrl(st.url) : ''
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [list.length, prov.server])
+  }, [list.length, prov.server, appNet])
 
   const provOpenAt = useStore((s) => (s as unknown as { provOpenAt?: number }).provOpenAt)
   useEffect(() => {
@@ -551,19 +554,15 @@ function ProvisionPanel(): React.JSX.Element {
   }, [provOpenAt])
 
   const s = serverByName(prov.server)
-  const st = s ? stackOf(s, prov.net) : null
+  const st = s ? stackOf(s, appNet) : null
   const ss = stackState(st)
-  const onNetChange = (n: Network): void => {
-    const st2 = s ? stackOf(s, n) : null
-    setProv({ net: n, dir: st2?.dir || stackDirDefault(n), host: st2 ? hostOfUrl(st2.url) : '' })
-  }
   const dirHint = !list.length
     ? "Holds this network's RelayMiner, operator keyring, and relayer config."
     : ss === 'ready'
-      ? `This server already has a ${netLabel(prov.net)} stack there; its operator key and relayer config are kept.`
+      ? `This server already has a ${netLabel(appNet)} stack there; its operator key and relayer config are kept.`
       : ss === 'pending'
         ? 'Provisioning of this stack was interrupted after its operator key was created. Start provisioning resumes it; finished steps are not repeated.'
-        : `A new stack for ${netLabel(prov.net)}; a new operator key is created on the server.`
+        : `A new stack for ${netLabel(appNet)}; a new operator key is created on the server.`
   const btnLabel =
     ss === 'pending'
       ? 'Continue provisioning'
@@ -576,7 +575,7 @@ function ProvisionPanel(): React.JSX.Element {
       if (!s) setStatus('Choose a server.', 'err')
       return
     }
-    const net = prov.net
+    const net = appNet
     const host = prov.host.trim()
     const topup = parseFloat(prov.fund)
     const dir = prov.dir.trim()
@@ -800,10 +799,11 @@ function ProvisionPanel(): React.JSX.Element {
             id="provServer"
             value={prov.server}
             onChange={(e) => {
-              const st2 = stackOf(serverByName(e.target.value), prov.net)
+              const st2 = stackOf(serverByName(e.target.value), appNet)
               setProv({
                 server: e.target.value,
-                dir: st2?.dir || stackDirDefault(prov.net),
+                net: appNet,
+                dir: st2?.dir || stackDirDefault(appNet),
                 host: st2 ? hostOfUrl(st2.url) : ''
               })
             }}
@@ -821,16 +821,12 @@ function ProvisionPanel(): React.JSX.Element {
         </div>
         <div>
           <label>Network</label>
-          <select
-            id="provNet"
-            value={prov.net}
-            onChange={(e) => onNetChange(e.target.value as Network)}
-          >
-            <option value="beta">Beta TestNet</option>
-            <option value="main">MainNet</option>
-          </select>
+          <div id="provNet" style={{ padding: '7px 0' }}>
+            <NetBadge />
+          </div>
           <div className="hint">
-            One stack per network; a server can hold both. Must match the network the app is on.
+            The network the app is on. To provision the other one, switch networks at the top of the
+            window; a server can hold a stack for each.
           </div>
         </div>
         <div>

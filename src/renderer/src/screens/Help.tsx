@@ -171,6 +171,16 @@ function TheSteps(): React.JSX.Element {
           <b>Import the owner wallet</b> from the card on the left.
         </li>
         <li>
+          <b>Add and provision your server.</b> In{' '}
+          <Go screen="settings" settingsTab="servers">
+            Settings
+          </Go>
+          , add the server and test the connection, then Start provisioning. This installs the
+          RelayMiner, creates the operator wallet on the server, and starts it. Do this before
+          registering: Register asks for a provisioned server, because a service needs somewhere to
+          run.
+        </li>
+        <li>
           <b>Create and register the service.</b> <Go screen="create">Create service</Go> writes the
           card and folder; <Go screen="register">Register service</Go> checks it, shows the
           transaction, and puts it on the chain.
@@ -178,14 +188,6 @@ function TheSteps(): React.JSX.Element {
         <li>
           <b>Stake an application.</b> On <Go screen="wallets">Wallets</Go>, make a wallet for the
           service and fund it. Then <Go screen="stake">Stake application</Go>.
-        </li>
-        <li>
-          <b>Add and provision your server.</b> In{' '}
-          <Go screen="settings" settingsTab="servers">
-            Settings
-          </Go>
-          , add the server and test the connection, then Start provisioning. This installs the
-          RelayMiner, creates the operator wallet on the server, and starts it.
         </li>
         <li>
           <b>Deploy.</b> <Go screen="deploy">Deploy service</Go> builds your app on the server and
@@ -204,7 +206,7 @@ function TheSteps(): React.JSX.Element {
           <b>Test.</b> <Go screen="test">Test service</Go> sends real requests through the network.
           All probes green means your service is live; a yellow one answered, but slowly enough that
           some gateways will give up on it. Straight after staking, the screen will say your service
-          is not in a session yet and name the block to wait for: that is the pause in step 5, not a
+          is not in a session yet and name the block to wait for: that is the pause in step 6, not a
           fault, and the button turns on by itself once the session starts.
         </li>
       </ol>
