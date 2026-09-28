@@ -12,8 +12,8 @@
 #   supplier.sh deploy <id> <deploy-root> [<health-path>] [<port>]
 #                                            build and start a service's backend on the shared network;
 #                                            wait for <health-path> on the port this network's relayer calls
-#   supplier.sh add-service <id> <backend-url> <health-path>   add to this stack's relayer (replacing an
-#                                            entry whose URL or health path differs), recreate relayer
+#   supplier.sh add-service <id> <backend-url> <health-path>   add to this stack's relayer (or bring an
+#                                            existing entry's URL and health path up to date), recreate relayer
 #   supplier.sh remove-service <id>          drop from this stack's relayer, recreate relayer; drop the
 #                                            service's routes once no other network's stack serves it
 #   supplier.sh add-routes <id> <path> <port> [<path> <port> ...]
@@ -186,17 +186,26 @@ import sys, re
 cfg, sid, url, hp = sys.argv[1:5]
 t = open(cfg).read()
 block = f"  {sid}:\n    timeout_profile: fast\n    max_body_size_bytes: 20971520\n    default_backend: rest\n    backends:\n      rest:\n        url: \"{url}\"\n        health_check:\n          endpoint: \"{hp}\"\n          interval_seconds: 10\n          timeout_seconds: 5\n"
-# An existing entry keeps its place. When its URL or health path differs (a redeploy that
-# changed this network's relay port or the readiness path) it is replaced.
+# An existing entry keeps its place and its other settings. When its URL or health path
+# differs (a redeploy that changed this network's relay port or the readiness path), only
+# those two lines are rewritten. An entry missing either line is replaced whole.
 old = re.search(rf'^  {re.escape(sid)}:\n(?:    .*\n|\n)*', t, re.M)
 if old:
-    u = re.search(r'^\s+url:\s*"?([^"\n]*)"?\s*$', old.group(0), re.M)
-    e = re.search(r'^\s+endpoint:\s*"?([^"\n]*)"?\s*$', old.group(0), re.M)
-    was = (u.group(1) if u else "?") + " " + (e.group(1) if e else "?")
+    body = old.group(0)
+    U = r'^([ \t]+url:[ \t]*)"?([^"\n]*)"?[ \t]*$'
+    E = r'^([ \t]+endpoint:[ \t]*)"?([^"\n]*)"?[ \t]*$'
+    u, e = re.search(U, body, re.M), re.search(E, body, re.M)
+    was = (u.group(2) if u else "?") + " " + (e.group(2) if e else "?")
     if was == url + " " + hp:
         print("relayer: already lists", sid, "at", url); sys.exit(0)
-    open(cfg, "w").write(t[:old.start()] + block + t[old.end():])
-    print("relayer: updated", sid, "to", url, hp, "(was " + was + ")"); sys.exit(0)
+    if u and e:
+        body = re.sub(U, lambda m: m.group(1) + '"' + url + '"', body, count=1, flags=re.M)
+        body = re.sub(E, lambda m: m.group(1) + '"' + hp + '"', body, count=1, flags=re.M)
+        how = "updated"
+    else:
+        body, how = block, "replaced"
+    open(cfg, "w").write(t[:old.start()] + body + t[old.end():])
+    print("relayer:", how, sid, "to", url, hp, "(was " + was + ")"); sys.exit(0)
 t = re.sub(r'^services:\s*\{\}\s*$', 'services:', t, count=1, flags=re.M)
 m = re.search(r'^services:\s*$', t, re.M)
 if not m: sys.exit("error: no services: line in " + cfg)

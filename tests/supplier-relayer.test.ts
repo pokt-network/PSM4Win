@@ -147,7 +147,7 @@ describe.skipIf(!BASH || !HAS_PYTHON)('supplier.sh per-network relay port', () =
     expect(r.calls.some((c) => c.includes('wget'))).toBe(false)
   })
 
-  it('add-service adds, keeps an identical entry, and replaces one whose URL changed', () => {
+  it('add-service adds, keeps an identical entry, and updates one whose URL changed', () => {
     const other = entry('svc-b', 'http://svc-b-backend:8080')
     writeFileSync(
       cfg(beta),
@@ -174,6 +174,44 @@ describe.skipIf(!BASH || !HAS_PYTHON)('supplier.sh per-network relay port', () =
     const hp = sh(beta, ['add-service', 'svc-a', 'http://svc-a-backend:8081', '/ready'])
     expect(hp.out).toContain('relayer: updated svc-a')
     expect(lf(readFileSync(cfg(beta), 'utf8'))).toContain('endpoint: "/ready"')
+  })
+
+  it('add-service changes only the URL and health path lines, keeping hand edits', () => {
+    // An entry someone tuned by hand on the server: its other settings must survive.
+    const tuned = entry('svc-a', 'http://svc-a-backend:8080')
+      .replace('timeout_profile: fast', 'timeout_profile: streaming')
+      .replace('max_body_size_bytes: 20971520', 'max_body_size_bytes: 52428800')
+      .replace('interval_seconds: 10', 'interval_seconds: 30')
+    const other = entry('svc-b', 'http://svc-b-backend:8080')
+    writeFileSync(
+      cfg(beta),
+      lf(readFileSync(cfg(beta), 'utf8')).replace('services: {}\n', `services:\n${tuned}${other}`)
+    )
+    const r = sh(beta, ['add-service', 'svc-a', 'http://svc-a-backend:8081', '/ready'])
+    expect(r.code).toBe(0)
+    expect(r.out).toContain(
+      'relayer: updated svc-a to http://svc-a-backend:8081 /ready (was http://svc-a-backend:8080 /healthz)'
+    )
+    const want = tuned
+      .replace('url: "http://svc-a-backend:8080"', 'url: "http://svc-a-backend:8081"')
+      .replace('endpoint: "/healthz"', 'endpoint: "/ready"')
+    expect(lf(readFileSync(cfg(beta), 'utf8'))).toContain(`services:\n${want}${other}`)
+  })
+
+  it('add-service replaces a broken entry whole', () => {
+    const broken = '  svc-a:\n    timeout_profile: fast\n    backends:\n      rest: {}\n'
+    writeFileSync(
+      cfg(beta),
+      lf(readFileSync(cfg(beta), 'utf8')).replace('services: {}\n', `services:\n${broken}`)
+    )
+    const r = sh(beta, ['add-service', 'svc-a', 'http://svc-a-backend:8081', '/healthz'])
+    expect(r.code).toBe(0)
+    expect(r.out).toContain(
+      'relayer: replaced svc-a to http://svc-a-backend:8081 /healthz (was ? ?)'
+    )
+    expect(lf(readFileSync(cfg(beta), 'utf8'))).toContain(
+      `services:\n${entry('svc-a', 'http://svc-a-backend:8081')}`
+    )
   })
 
   it('add-routes refuses a port a relayer on this server calls the backend on', () => {

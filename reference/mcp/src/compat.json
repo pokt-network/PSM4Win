@@ -14,7 +14,7 @@
         "a server provisioned by an earlier version must be provisioned again (Settings, Servers, Re-provision) for each network before a non-default relay port takes effect; Deploy stops before touching the relayer and says so"
       ],
       "changes": [
-        "supplier.sh add-service replaces an existing relayer entry whose URL or health path differs from the requested one (a redeploy after the relay port or the readiness path changed) instead of leaving it as it was; an identical entry is still kept",
+        "supplier.sh add-service updates the URL and health path of an existing relayer entry when they differ from the requested ones (a redeploy after the relay port or the readiness path changed) instead of leaving the entry as it was; the entry's other settings, including any made by hand on the server, are kept",
         "deploy-ship carries deploy/relayer.json with the backend when the folder has one"
       ]
     },
