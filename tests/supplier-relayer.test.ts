@@ -74,6 +74,9 @@ describe.skipIf(!BASH || !HAS_PYTHON)('supplier.sh per-network relay port', () =
           FAKE_BIN: fwd(join(root, 'bin')),
           MSYS2_ARG_CONV_EXCL: '/healthz;/ready',
           FAKE_LOG: fwd(log),
+          // A server with 8 GB and 4 CPUs, so the stack's memory sizing passes.
+          PSM_MEMINFO: fwd(join(root, 'meminfo')),
+          PSM_NPROC: '4',
           ...env
         }
       }
@@ -95,7 +98,8 @@ describe.skipIf(!BASH || !HAS_PYTHON)('supplier.sh per-network relay port', () =
     )
     writeFileSync(
       join(dir, 'stack.env'),
-      `PROJECT=pocket-supplier-${net}\nNET=${net}\nHEALTH_PORT=8081\nCADDY_DIR=${fwd(caddy)}\nHOSTNAME_PUBLIC=services-${net}.example.org\n`
+      `PROJECT=pocket-supplier-${net}\nNET=${net}\nHEALTH_PORT=8081\nCADDY_DIR=${fwd(caddy)}\nHOSTNAME_PUBLIC=services-${net}.example.org\n` +
+        'STACK_LAYOUT=2\nRELAYMINER_IMAGE=example/relayminer:v0.1.0\nREDIS_IMAGE=redis:8.10.1-alpine\nPOCKETD_IMAGE=example/pocketd:0.1.35\n'
     )
     writeFileSync(cfg(dir), lf(readFileSync(join(serverDir, 'relayer-config.yaml.tmpl'), 'utf8')))
     writeFileSync(
@@ -114,6 +118,7 @@ describe.skipIf(!BASH || !HAS_PYTHON)('supplier.sh per-network relay port', () =
     mkdirSync(join(root, 'bin'))
     writeFileSync(join(root, 'bin', 'docker'), FAKE_DOCKER, { mode: 0o755 })
     writeFileSync(join(root, 'bin', 'curl'), FAKE_CURL, { mode: 0o755 })
+    writeFileSync(join(root, 'meminfo'), 'MemTotal:        8388608 kB\n')
     makeStack(beta, 'beta')
     makeStack(main, 'main')
     mkdirSync(join(root, 'services', 'svc-a', 'deploy'), { recursive: true })

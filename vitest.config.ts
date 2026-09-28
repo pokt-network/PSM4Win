@@ -6,6 +6,8 @@ export default defineConfig({
   test: {
     globals: true,
     include: ['tests/**/*.test.ts'],
-    environment: 'node'
+    environment: 'node',
+    // The supplier.sh suites run the real script through bash, several times per test.
+    testTimeout: 20_000
   }
 })
