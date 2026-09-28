@@ -186,6 +186,27 @@ describe.skipIf(!BASH)('supplier.sh stack steps', () => {
     expect(idx(r.calls, /force-recreate relayer/)).toBe(-1)
   })
 
+  it('prepare switches the kept relayer config to eager validation, once', () => {
+    expect(sh(['prepare']).code).toBe(0)
+    expect(sh(['prepare']).code).toBe(0)
+    const relayer = lf(readFileSync(join(stack, 'relayer-config.yaml'), 'utf8'))
+    expect(relayer.match(/^default_validation_mode:/gm)).toHaveLength(1)
+    expect(relayer).toMatch(/^default_validation_mode: eager$/m)
+    // The service list stays where it was.
+    expect(relayer).toContain('\nservices: {}\n')
+  })
+
+  it('prepare leaves a validation mode already chosen in the kept config', () => {
+    writeFileSync(
+      join(stack, 'relayer-config.yaml'),
+      'listen_addr: "0.0.0.0:8080"\ndefault_validation_mode: optimistic\n\nservices: {}\n'
+    )
+    expect(sh(['prepare']).code).toBe(0)
+    const relayer = lf(readFileSync(join(stack, 'relayer-config.yaml'), 'utf8'))
+    expect(relayer).toContain('default_validation_mode: optimistic')
+    expect(relayer).not.toContain('eager')
+  })
+
   it('prepare drops the chain_id RelayMiner v0.1.0 no longer reads from the kept relayer config', () => {
     const r = sh(['prepare'])
     expect(r.code).toBe(0)

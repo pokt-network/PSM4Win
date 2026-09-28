@@ -2,6 +2,10 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
+## 0.1.13
+
+- Supplier servers: the RelayMiner now checks each relay before passing it to your service, instead of passing it first and holding the request and the answer in memory until the check is done. On a small server with several services that holding space could outgrow the memory the relayer is allowed, and a burst of traffic would restart it. Suppliers shows "stack update needed" once more for stacks updated with 0.1.12; Update stack applies it and keeps everything else.
+
 ## 0.1.12
 
 **Priority update.** The RelayMiner published its first versioned release, and supplier servers set up by earlier versions of the app can no longer start it: new servers fail at once, and existing ones fail the next time the RelayMiner is downloaded again. Update the app, then press Update stack on each supplier (Suppliers screen).

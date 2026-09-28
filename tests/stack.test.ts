@@ -65,6 +65,9 @@ describe('supplier-ship rendering', () => {
     expect(compose).toContain('image: ${RELAYMINER_IMAGE}')
     expect(compose).toMatch(/miner: \{ condition: service_healthy \}/)
   })
+  it('validates relays before they reach the backend (no per-service body queue)', () => {
+    expect(r.stack['relayer-config.yaml']).toMatch(/^default_validation_mode: eager$/m)
+  })
   it('leaves out the config keys RelayMiner v0.1.0 rejects', () => {
     expect(r.stack['miner-config.yaml']).not.toMatch(/^\s+output:/m)
     expect(r.stack['relayer-config.yaml']).not.toMatch(/^\s+chain_id:/m)

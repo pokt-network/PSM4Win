@@ -171,6 +171,12 @@ case "$step" in
     # The relayer config is kept across provisioning because it holds the service list;
     # RelayMiner v0.1.0 no longer reads pocket_node.chain_id in it (only the miner does).
     if [ -f "$D/relayer-config.yaml" ]; then sed -i '/^pocket_node:/,/^[^ ]/{/^  chain_id:/d}' "$D/relayer-config.yaml"; fi
+    # Relays are validated before they reach the backend (layout 3): the optimistic default
+    # queues bodies per service and outgrows a small server's relayer. A mode already set
+    # in the kept config, by hand or by an earlier run, is left as it is.
+    if [ -f "$D/relayer-config.yaml" ] && ! grep -q '^default_validation_mode:' "$D/relayer-config.yaml"; then
+      printf '\n# Validate each relay before it reaches the backend (Pocket Service Manager, stack layout 3).\ndefault_validation_mode: eager\n' >> "$D/relayer-config.yaml"
+    fi
     echo "prepared: $D (stack $PROJECT for $NET)"
     ;;
   operator)

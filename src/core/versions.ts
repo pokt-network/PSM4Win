@@ -15,9 +15,10 @@ export const REDIS_IMAGE = 'redis:8.10.1-alpine'
 /**
  * The stack's layout: raised when what Provision ships changes so that a running stack
  * must be provisioned again to get it. 1: up to 0.1.11 (the moving `rc` tag, Redis 8.4);
- * 2: 0.1.12 (pinned images, noeviction, memory limits sized on the server).
+ * 2: 0.1.12 (pinned images, noeviction, memory limits sized on the server);
+ * 3: 0.1.13 (relays validated before they reach the backend: default_validation_mode eager).
  */
-export const STACK_LAYOUT = 2
+export const STACK_LAYOUT = 3
 
 /** The relay client used by the Test screen. */
 export const POCKET_AP_IMAGE = 'ghcr.io/pokt-network/pocket-ap:v0.1.2'

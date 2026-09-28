@@ -4,6 +4,12 @@
 
 listen_addr: "0.0.0.0:8080"
 
+# Validate each relay before it reaches the backend. The default, optimistic, forwards
+# first and holds request and response bodies until they are validated, up to 128 MiB
+# per service (never below 64), which outgrows the relayer's memory on a small server
+# with several services.
+default_validation_mode: eager
+
 redis:
   url: "redis://{{PROJECT}}-redis:6379"
 
