@@ -2,6 +2,10 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
+## 0.1.15
+
+- Provision a supplier: setting up a new server no longer stops at "Operator public key on chain" after five minutes of waiting. The step had already worked; it was looking for the wrong word in the network's answer, so it never saw its own success. Running Provision again got past it, and now the first run does.
+
 ## 0.1.14
 
 - Deploy service: a service deployed without its own compose file now runs with a 512 MB memory limit, so one runaway service can no longer take the memory the supplier's RelayMiner was sized with. A service that needs more says so in its own `deploy/docker-compose.yaml`. The shared Caddy on each server gets a 256 MB limit the next time the server is provisioned.
