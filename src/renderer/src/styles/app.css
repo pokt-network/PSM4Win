@@ -441,6 +441,28 @@ label.inline {
 body.net-main #mainnetBanner {
   display: block;
 }
+/* A release marked as a priority, until it is installed (or hidden until the next start). */
+#priorityBanner {
+  background: var(--brand-coral);
+  color: #171c1f;
+  padding: 7px 12px;
+  font-weight: 500;
+  flex: 0 0 auto;
+  text-align: center;
+}
+#priorityBanner a {
+  color: #171c1f;
+  text-decoration: underline;
+  cursor: pointer;
+}
+#priorityBanner a.hide {
+  font-weight: 400;
+  margin-left: 8px;
+}
+#updateLink.priority {
+  color: var(--brand-coral);
+  font-weight: 700;
+}
 
 /* ---- layout ---- */
 #layout {

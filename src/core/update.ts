@@ -3,7 +3,9 @@
 // hashing, and spawning; the renderer shows the status.
 
 export const UPDATE_REPO = 'pokt-network/PSM4Win'
-export const RELEASES_API = `https://api.github.com/repos/${UPDATE_REPO}/releases/latest`
+/** Recent releases, newest first: enough to find a priority release the user has not installed
+ *  even when a later, ordinary release came out after it. */
+export const RELEASES_API = `https://api.github.com/repos/${UPDATE_REPO}/releases?per_page=30`
 export const RELEASES_PAGE = `https://github.com/${UPDATE_REPO}/releases`
 /** Downloads are accepted only from the repository's own release assets. */
 export const DOWNLOAD_PREFIX = `https://github.com/${UPDATE_REPO}/releases/download/`
@@ -21,6 +23,11 @@ export interface UpdateStatus {
   url: string | null
   /** Release notes, plain text, trimmed. */
   notes: string | null
+  /**
+   * Why an update is a priority, from the newest release above the running version whose
+   * notes open with the priority marker; null for an ordinary update.
+   */
+  priority: string | null
   checkedAt: string | null
   state: UpdateState
   error: string | null
@@ -122,6 +129,49 @@ export function detectInstallKind(
 }
 
 /** Release notes as plain text for the dialog: no markdown headings or links, bounded length. */
+/**
+ * A priority release opens its CHANGELOG section, and so its release notes, with the
+ * line `**Priority update.** <why, in one sentence>` (docs/PACKAGING.md). Returns the
+ * reason, or null for an ordinary release.
+ */
+export const PRIORITY_MARKER = '**Priority update.**'
+export function priorityReason(body: string | null | undefined): string | null {
+  const m = /^\s*\*\*Priority update\.\*\*\s*(.+)$/m.exec(String(body ?? '').replace(/\r/g, ''))
+  return m ? m[1].trim() || 'This update fixes a problem that needs to be fixed now.' : null
+}
+
+export interface ReleaseSummary {
+  /** The newest published release, or null when there is none. */
+  release: ReleaseInfo | null
+  latest: string | null
+  /** The reason from the newest priority release above `current`, or null. */
+  priority: string | null
+}
+
+/**
+ * The newest published release (drafts, prereleases and unparsable tags ignored), and
+ * whether any release above the running version was a priority. The newest release
+ * alone is not enough: a priority 0.1.11 followed by an ordinary 0.1.12 must still
+ * read as a priority for someone on 0.1.10.
+ */
+export function summarizeReleases(list: ReleaseInfo[], current: string): ReleaseSummary {
+  const usable = list
+    .filter((r) => !r.draft && !r.prerelease && parseVersion(r.tag_name))
+    .sort((a, b) => compareVersions(b.tag_name, a.tag_name))
+  const release = usable[0] ?? null
+  const newer = usable.filter((r) => compareVersions(r.tag_name, current) > 0)
+  let priority: string | null = null
+  for (const r of newer) {
+    priority = priorityReason(r.body)
+    if (priority) break
+  }
+  return {
+    release,
+    latest: release ? parseVersion(release.tag_name)!.join('.') : null,
+    priority
+  }
+}
+
 export function plainNotes(body: string | null | undefined, max = 800): string | null {
   if (!body) return null
   const t = body

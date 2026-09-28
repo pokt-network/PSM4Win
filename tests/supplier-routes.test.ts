@@ -55,6 +55,9 @@ describe.skipIf(!BASH)('supplier.sh service routes', () => {
         ...process.env,
         PATH: join(root, 'bin') + delimiter + process.env.PATH,
         FAKE_LOG: fwd(log),
+        // A server with 8 GB and 4 CPUs, so sizing passes wherever the test runs.
+        PSM_MEMINFO: fwd(join(root, 'meminfo')),
+        PSM_NPROC: '4',
         ...env
       }
     })
@@ -81,7 +84,8 @@ describe.skipIf(!BASH)('supplier.sh service routes', () => {
     )
     writeFileSync(
       join(dir, 'stack.env'),
-      `PROJECT=pocket-supplier-${net}\nNET=${net}\nHEALTH_PORT=8081\nCADDY_DIR=${fwd(caddy)}\nHOSTNAME_PUBLIC=services-${net}.example.org\n`
+      `PROJECT=pocket-supplier-${net}\nNET=${net}\nHEALTH_PORT=8081\nCADDY_DIR=${fwd(caddy)}\nHOSTNAME_PUBLIC=services-${net}.example.org\n` +
+        'STACK_LAYOUT=2\nRELAYMINER_IMAGE=example/relayminer:v0.1.0\nREDIS_IMAGE=redis:8.10.1-alpine\nPOCKETD_IMAGE=example/pocketd:0.1.35\n'
     )
     site(true, net)
   }
@@ -96,6 +100,7 @@ describe.skipIf(!BASH)('supplier.sh service routes', () => {
     mkdirSync(join(root, 'bin'))
     writeFileSync(join(root, 'bin', 'docker'), FAKE_DOCKER, { mode: 0o755 })
     writeFileSync(join(root, 'bin', 'python3'), FAKE_PYTHON, { mode: 0o755 })
+    writeFileSync(join(root, 'meminfo'), 'MemTotal:        8388608 kB\n')
     makeStack(stack, 'beta')
     makeStack(mainStack, 'main')
   })

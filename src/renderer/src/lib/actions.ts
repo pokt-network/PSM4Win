@@ -579,6 +579,8 @@ export interface StackEntry {
   url: string
   operator: string
   provisioned_at?: string
+  /** STACK_LAYOUT of the files Provision last shipped; absent means layout 1. */
+  layout?: number
 }
 
 export function servers(): ServerEntry[] {

@@ -168,7 +168,8 @@ export const settingsPatchSchema = z
                 project: z.string(),
                 url: z.string(),
                 operator: z.string(),
-                provisioned_at: z.string().optional()
+                provisioned_at: z.string().optional(),
+                layout: z.coerce.number().int().optional()
               })
             )
             .default({})

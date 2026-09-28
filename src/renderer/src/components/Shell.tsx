@@ -132,6 +132,10 @@ export function TitleBar(): React.JSX.Element {
 
 export function TopBar(): React.JSX.Element {
   const { net, theme, docker, dockerNote, update } = useStore()
+  // A priority update is shown until it is installed; Hide only puts the banner away
+  // until the app next starts (the header link stays).
+  const [priorityHidden, setPriorityHidden] = useState(false)
+  const priority = update?.available && update.priority ? update.priority : null
   const main = net === 'main'
   // The class reflects the Docker state even while a note ("Starting Docker Desktop") shows,
   // as the HTA keeps #dockerState.className = "bad" during the start.
@@ -188,10 +192,11 @@ export function TopBar(): React.JSX.Element {
         {update?.available ? (
           <a
             id="updateLink"
+            className={priority ? 'priority' : ''}
             onClick={showUpdateDialog}
             title="A newer version is on the releases page"
           >
-            Update available: {update.latest}. Click to install.
+            {priority ? 'Priority update' : 'Update available'}: {update.latest}. Click to install.
           </a>
         ) : null}
         {update?.available ? (
@@ -208,6 +213,18 @@ export function TopBar(): React.JSX.Element {
           <span id="dockerText">{dockerText}</span>
         </div>
       </div>
+      {priority && !priorityHidden ? (
+        <div id="priorityBanner">
+          <b>Priority update: version {update?.latest}.</b> {priority}{' '}
+          <button className="btn small" onClick={showUpdateDialog}>
+            Install now
+          </button>{' '}
+          <a onClick={() => showChanges(update)}>See what changed</a>{' '}
+          <a className="hide" onClick={() => setPriorityHidden(true)}>
+            Hide
+          </a>
+        </div>
+      ) : null}
       <div id="mainnetBanner">
         MAINNET. Transactions here spend real POKT. Every action asks you to confirm.
       </div>

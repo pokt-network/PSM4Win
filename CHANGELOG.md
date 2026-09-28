@@ -1,9 +1,14 @@
 # Changelog
 
-One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`.
+One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
 ## Unreleased
 
+**Priority update.** The RelayMiner published its first versioned release, and supplier servers set up by earlier versions of the app can no longer start it: new servers fail at once, and existing ones fail the next time the RelayMiner is downloaded again. Update the app, then press Update stack on each supplier (Suppliers screen).
+
+- Supplier servers run a fixed RelayMiner version (v0.1.0) instead of one that could change underneath the app, with Redis 8.10 set never to throw away relays that have not been claimed yet. The memory each part may use is worked out from the server's own memory, so a server needs at least 3 GB. Before anything restarts, the new version checks both of its configuration files; if either check fails, nothing changes and the app says why.
+- Suppliers and Settings mark a server whose supplier stack is older than this version of the app with "stack update needed" and an Update stack button. Updating keeps the operator key, the services and the stake.
+- Priority updates: a release marked as a priority shows a banner with an Install now button and opens the update dialog once each time the app starts, until it is installed. This is the first version that can show one, so this release itself arrives as an ordinary update.
 - Your server now comes first. Register asks for a provisioned server before a new service goes on chain, with a link to set one up; tick "Someone else will run the supplier" if another operator will supply it. The Dashboard, the welcome message, and Help put setting up the server right after importing the owner wallet.
 - Claude is told the same: the app's status tells an assistant to set up the server in the app when none is provisioned, and never to provision a server or stake a supplier on the command line, and the app refuses to register a new service for an assistant until a server exists.
 - Provision a supplier no longer has its own network choice. It provisions for the network the app is on, and the stack folder and hostname follow the network switch, so a folder meant for one network can no longer be used for the other.

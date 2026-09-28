@@ -15,7 +15,7 @@ import {
   compareVersions,
   detectInstallKind,
   parseChecksums,
-  parseVersion,
+  summarizeReleases,
   pickReleaseAssets,
   plainNotes,
   type ReleaseInfo,
@@ -39,6 +39,7 @@ class UpdateService {
     available: false,
     url: null,
     notes: null,
+    priority: null,
     checkedAt: null,
     state: 'idle',
     error: null,
@@ -96,25 +97,33 @@ class UpdateService {
           available: false,
           url: RELEASES_PAGE,
           notes: null,
+          priority: null,
           checkedAt: new Date().toISOString()
         })
         return this.st
       }
       if (!res.ok) throw new Error(`GitHub answered HTTP ${res.status}.`)
-      const rel = (await res.json()) as ReleaseInfo
-      const latestV = parseVersion(rel.tag_name)
-      if (!latestV || rel.draft) throw new Error(`Unexpected release tag '${rel.tag_name}'.`)
-      const latest = latestV.join('.')
+      const list = (await res.json()) as ReleaseInfo[]
+      if (!Array.isArray(list)) throw new Error('GitHub did not return a list of releases.')
+      const { release: rel, latest, priority } = summarizeReleases(list, this.st.current)
+      if (!rel || !latest) throw new Error('No published release was found.')
       this.release = rel
+      const available = compareVersions(latest, this.st.current) > 0
       this.set({
         state: 'idle',
         latest,
-        available: compareVersions(latest, this.st.current) > 0,
+        available,
         url: rel.html_url,
         notes: plainNotes(rel.body),
+        priority: available ? priority : null,
         checkedAt: new Date().toISOString()
       })
-      log.info('update check', { current: this.st.current, latest, available: this.st.available })
+      log.info('update check', {
+        current: this.st.current,
+        latest,
+        available: this.st.available,
+        priority: !!this.st.priority
+      })
     } catch (e) {
       this.set({ state: 'error', error: (e as Error).message, checkedAt: new Date().toISOString() })
       log.error('update check failed', { error: (e as Error).message })

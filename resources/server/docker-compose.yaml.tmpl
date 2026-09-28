@@ -8,15 +8,23 @@
 # Redis and the miner stay on this stack's private network. Nothing here is exposed
 # to the internet. The relayer starts once the first service is added (it refuses an
 # empty list).
+#
+# Images and memory limits come from compose.env, which supplier.sh writes from
+# stack.env (the versions the app pinned) and from this server's own memory and CPUs,
+# so this file is always run as `docker compose --env-file compose.env`. Redis must be
+# 8.10 or newer with maxmemory and noeviction: the RelayMiner refuses anything else,
+# because an evicted key is a claim that cannot be proved. The miner starts first; the
+# relayer is not ready until the miner has published its service manifest.
 
 name: {{PROJECT}}
 
 services:
   redis:
-    image: redis:8.4-alpine
+    image: ${REDIS_IMAGE}
     container_name: {{PROJECT}}-redis
     restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory ${REDIS_MAXMEMORY} --maxmemory-policy noeviction --io-threads 1
+    mem_limit: ${REDIS_MEM_LIMIT}
     volumes:
       - redis-data:/data
     healthcheck:
@@ -27,7 +35,7 @@ services:
     networks: [internal]
 
   miner:
-    image: ghcr.io/pokt-network/pocket-relay-miner:rc
+    image: ${RELAYMINER_IMAGE}
     container_name: {{PROJECT}}-miner
     restart: unless-stopped
     command: ["miner", "--config", "/config/config.yaml"]
@@ -36,12 +44,21 @@ services:
       - ./supplier-keys.yaml:/keys/supplier-keys.yaml:ro
     ports:
       - "127.0.0.1:{{MINER_METRICS_PORT}}:9092"
+    mem_limit: ${MINER_MEM_LIMIT}
+    environment:
+      GOMEMLIMIT: ${MINER_GOMEMLIMIT}
+      GOMAXPROCS: "${GOMAXPROCS}"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9092/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
     depends_on:
       redis: { condition: service_healthy }
     networks: [internal]
 
   relayer:
-    image: ghcr.io/pokt-network/pocket-relay-miner:rc
+    image: ${RELAYMINER_IMAGE}
     container_name: {{PROJECT}}-relayer
     restart: unless-stopped
     command: ["relayer", "--config", "/config/config.yaml"]
@@ -53,8 +70,13 @@ services:
     ports:
       - "127.0.0.1:{{HEALTH_PORT}}:8081"
       - "127.0.0.1:{{RELAYER_METRICS_PORT}}:9090"
+    mem_limit: ${RELAYER_MEM_LIMIT}
+    environment:
+      GOMEMLIMIT: ${RELAYER_GOMEMLIMIT}
+      GOMAXPROCS: "${GOMAXPROCS}"
     depends_on:
       redis: { condition: service_healthy }
+      miner: { condition: service_healthy }
     networks: [internal, supplier]
 
 networks:

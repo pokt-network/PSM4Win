@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useStore, S, type SupplyRow } from '../store'
 import type { ChainSupplier } from '@core/lcd'
 import { account, readAfterTx } from '@core/lcd'
+import { stackNeedsUpdate } from '@core/stack'
 import { fmtPokt, fmtInt, fmtDuration, shortAddr, POKT } from '@core/format'
 import { unbondingOf, unbondingNote, nextSessionBoundary, supplierServiceIds } from '@core/chain'
 import { RPC_TYPES } from '@core/validate'
@@ -135,7 +136,14 @@ function SuppliersList(): React.JSX.Element {
                       {x.server.name}
                       <div className="hint mono">{st?.operator ? shortAddr(st.operator) : ''}</div>
                     </td>
-                    <td>{supplierStatusCell(x, params, net)}</td>
+                    <td>
+                      {supplierStatusCell(x, params, net)}
+                      {stackNeedsUpdate(st) ? (
+                        <div>
+                          <Badge cls="warn">stack update needed</Badge>
+                        </div>
+                      ) : null}
+                    </td>
                     <td>{ids.length ? ids.join(', ') : <span className="hint">none</span>}</td>
                     <td>
                       {x.gas === null ? (
@@ -158,7 +166,20 @@ function SuppliersList(): React.JSX.Element {
                       )}
                     </td>
                     <td className="actions">
-                      {x.state === 'ready' ? (
+                      {x.state === 'ready' && stackNeedsUpdate(st) ? (
+                        <>
+                          <button
+                            className="btn small primary"
+                            title="The server runs an older RelayMiner stack than this version of the app ships. Updating keeps the operator key, the services, and the stake."
+                            onClick={() => provisionOn(x.server.name, net)}
+                          >
+                            Update stack
+                          </button>
+                          <button className="btn small" onClick={() => openSupplier(x.server.name)}>
+                            {x.rec ? 'Manage' : 'Stake'}
+                          </button>
+                        </>
+                      ) : x.state === 'ready' ? (
                         <button
                           className="btn small primary"
                           onClick={() => openSupplier(x.server.name)}

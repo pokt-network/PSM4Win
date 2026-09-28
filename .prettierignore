@@ -10,6 +10,6 @@ tsconfig.*.json
 # valid YAML and make prettier fail outright.
 reference/
 
-# Shipped to a supplier host and kept byte-identical to the HTA's copy in the
-# service-builder repository, tools/service-manager/server (CLAUDE.md).
+# Shipped to a supplier host as they are: templates with {{TOKENS}} that are not valid
+# YAML, and a shell script whose exact text supplier-ship copies.
 resources/server/

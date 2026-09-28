@@ -7,6 +7,10 @@ import {
   detectInstallKind,
   plainNotes,
   changesUrl,
+  priorityReason,
+  summarizeReleases,
+  RELEASES_API,
+  type ReleaseInfo,
   DOWNLOAD_PREFIX,
   RELEASES_PAGE
 } from '../src/core/update'
@@ -131,5 +135,59 @@ describe('updater: what changed', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
+  })
+})
+
+describe('updater: priority updates', () => {
+  const rel = (v: string, body = '', extra: Partial<ReleaseInfo> = {}): ReleaseInfo => ({
+    tag_name: 'v' + v,
+    html_url: 'https://github.com/pokt-network/PSM4Win/releases/tag/v' + v,
+    body,
+    ...extra
+  })
+  const P =
+    '**Priority update.** Servers provisioned now cannot start their miner; update and re-provision.'
+
+  it('reads the reason from the marker line at the top of the notes', () => {
+    expect(priorityReason(P + '\n\n- Something else.')).toBe(
+      'Servers provisioned now cannot start their miner; update and re-provision.'
+    )
+    expect(priorityReason('- An ordinary change.\n\nEvery change, all versions: x')).toBeNull()
+    expect(priorityReason('Mentions **Priority update.** mid-line')).toBeNull()
+    expect(priorityReason(null)).toBeNull()
+  })
+
+  it('reads the release list, not just the latest release', () => {
+    expect(RELEASES_API).toMatch(/\/releases\?per_page=\d+$/)
+  })
+
+  it('picks the newest published release and ignores drafts, prereleases and odd tags', () => {
+    const s = summarizeReleases(
+      [
+        rel('0.1.10'),
+        rel('0.1.12', '', { draft: true }),
+        rel('0.1.13', '', { prerelease: true }),
+        { tag_name: 'nightly', html_url: '', body: '' },
+        rel('0.1.11')
+      ],
+      '0.1.9'
+    )
+    expect(s.latest).toBe('0.1.11')
+    expect(s.priority).toBeNull()
+  })
+
+  it('keeps a priority release visible after a later ordinary one', () => {
+    const list = [rel('0.1.12', '- Ordinary.'), rel('0.1.11', P), rel('0.1.10')]
+    expect(summarizeReleases(list, '0.1.10')).toMatchObject({
+      latest: '0.1.12',
+      priority: 'Servers provisioned now cannot start their miner; update and re-provision.'
+    })
+    // Already on the priority release or past it: nothing urgent left.
+    expect(summarizeReleases(list, '0.1.11').priority).toBeNull()
+    expect(summarizeReleases(list, '0.1.12').priority).toBeNull()
+  })
+
+  it('has nothing to offer with no published release', () => {
+    expect(summarizeReleases([], '0.1.10')).toEqual({ release: null, latest: null, priority: null })
   })
 })

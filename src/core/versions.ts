@@ -4,6 +4,21 @@
 export const POCKETD_IMAGE = 'ghcr.io/pokt-network/pocketd:0.1.35'
 export const POCKETD_VERSION = '0.1.35'
 
+/**
+ * The supplier stack Provision ships. Relayer and miner run one exact RelayMiner tag
+ * (upstream: mixed versions are unsupported, never a moving tag); v0.1.0 refuses Redis
+ * below 8.10 and any eviction policy but noeviction. Verified together on 2026-09-28.
+ */
+export const RELAYMINER_VERSION = 'v0.1.0'
+export const RELAYMINER_IMAGE = `ghcr.io/pokt-network/pocket-relay-miner:${RELAYMINER_VERSION}`
+export const REDIS_IMAGE = 'redis:8.10.1-alpine'
+/**
+ * The stack's layout: raised when what Provision ships changes so that a running stack
+ * must be provisioned again to get it. 1: up to 0.1.11 (the moving `rc` tag, Redis 8.4);
+ * 2: 0.1.12 (pinned images, noeviction, memory limits sized on the server).
+ */
+export const STACK_LAYOUT = 2
+
 /** The relay client used by the Test screen. */
 export const POCKET_AP_IMAGE = 'ghcr.io/pokt-network/pocket-ap:v0.1.2'
 export const POCKET_AP_VERSION = 'v0.1.2'

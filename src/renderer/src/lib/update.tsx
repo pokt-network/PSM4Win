@@ -36,6 +36,11 @@ function installNote(u: UpdateStatus): string {
 function body(u: UpdateStatus): React.JSX.Element {
   return (
     <>
+      {u.priority ? (
+        <div className="dangerbox">
+          <b>This is a priority update.</b> {u.priority}
+        </div>
+      ) : null}
       <table className="kv">
         <tbody>
           <tr>
@@ -70,6 +75,7 @@ function body(u: UpdateStatus): React.JSX.Element {
 }
 
 let dialogOpen = false
+let priorityShown = false
 
 function render(u: UpdateStatus): void {
   const busy = u.state === 'downloading' || u.state === 'installing'
@@ -94,7 +100,11 @@ export function showUpdateDialog(): void {
   const u = useStore.getState().update
   if (!u || !u.available) return
   dialogOpen = true
-  openModal(`Version ${u.latest} is available`, null, [])
+  openModal(
+    u.priority ? `Priority update: version ${u.latest}` : `Version ${u.latest} is available`,
+    null,
+    []
+  )
   render(u)
 }
 
@@ -104,6 +114,12 @@ export function UpdateHost(): null {
     const off = window.psm.update.onStatus((u) => {
       useStore.setState({ update: u })
       if (dialogOpen) render(u)
+      // A priority update opens its dialog by itself, once per start, unless another
+      // dialog is showing; the banner and the header link stay either way.
+      else if (u.available && u.priority && !priorityShown && !useModal.getState().open) {
+        priorityShown = true
+        showUpdateDialog()
+      }
     })
     void window.psm.update.status().then((u) => useStore.setState({ update: u }))
     // Later, Escape, or another dialog replacing this one ends the dialog's updates.

@@ -20,18 +20,71 @@
 #                                            route https://<hostname><path>/* to <id>-backend:<port>, prefix stripped
 #   supplier.sh remove-routes <id>           drop a service's extra routes
 #   supplier.sh status                       one line per fact the app shows
+#
+# The stack's images are pinned in stack.env by the app release that provisioned it
+# (STACK_LAYOUT 2 and later); `start` sizes memory from this server and validates both
+# configs with the pinned image before anything restarts.
 set -euo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"
-IMG=ghcr.io/pokt-network/pocketd:latest
 # Per-stack settings written by the app at provision time (stack.env). The defaults
 # match the first layout, one stack per server, so an older directory keeps working.
 PROJECT=pocket-supplier; NET=beta; HEALTH_PORT=8081; CADDY_DIR=/opt/pocket/caddy; HOSTNAME_PUBLIC=""
+STACK_LAYOUT=1; RELAYMINER_IMAGE=""; REDIS_IMAGE=""; POCKETD_IMAGE=""
 if [ -f "$D/stack.env" ]; then . "$D/stack.env"; fi
+IMG="${POCKETD_IMAGE:-ghcr.io/pokt-network/pocketd:latest}"
 NET_NAME=pocket-supplier
 CFG="$D/relayer-config.yaml"
 step="${1:-status}"; shift || true
 
 pd() { docker run --rm -v "$D/pocket-home:/home" "$IMG" "$@"; }
+# This stack's compose, always with compose.env (pinned images and sized limits).
+dc() { (cd "$D" && docker compose -p "$PROJECT" --env-file "$D/compose.env" "$@"); }
+
+# Memory and CPUs for this stack, from the server's own. A quarter of the memory, and
+# at least 1 GiB, stays for the system, Caddy and the service backends; the rest is
+# split between the two stacks a server can hold (one per network) whether or not the
+# other exists yet, so adding the second network never starves the first. Within a
+# stack Redis, the miner and the relayer get 40/40/20 of it, upstream's proportions;
+# Redis's maxmemory is 80% of its limit and each Go process's GOMEMLIMIT 90% of its.
+MEMINFO="${PSM_MEMINFO:-/proc/meminfo}"
+STACK_MIN_MB=1024
+size_stack() {
+  local total cpus reserve per rl rmax ml ll gmp
+  total=$(awk '/^MemTotal:/ {print int($2/1024)}' "$MEMINFO")
+  cpus="${PSM_NPROC:-$(nproc)}"
+  reserve=$(( total / 4 )); [ "$reserve" -lt 1024 ] && reserve=1024
+  per=$(( (total - reserve) / 2 ))
+  if [ "$per" -lt "$STACK_MIN_MB" ]; then
+    echo "error: this server has ${total} MB of memory; each network's supplier stack needs ${STACK_MIN_MB} MB after ${reserve} MB is kept for the system and the service backends, so the server needs at least $(( STACK_MIN_MB * 2 + 1024 )) MB"
+    return 1
+  fi
+  rl=$(( per * 40 / 100 )); rmax=$(( rl * 80 / 100 )); ml=$(( per * 40 / 100 )); ll=$(( per * 20 / 100 ))
+  gmp=$(( cpus / 2 )); [ "$gmp" -lt 1 ] && gmp=1
+  {
+    grep -E '^[A-Z_]+=' "$D/stack.env" 2>/dev/null || true
+    printf 'REDIS_MEM_LIMIT=%sm\nREDIS_MAXMEMORY=%smb\n' "$rl" "$rmax"
+    printf 'MINER_MEM_LIMIT=%sm\nMINER_GOMEMLIMIT=%sMiB\n' "$ml" $(( ml * 90 / 100 ))
+    printf 'RELAYER_MEM_LIMIT=%sm\nRELAYER_GOMEMLIMIT=%sMiB\n' "$ll" $(( ll * 90 / 100 ))
+    printf 'GOMAXPROCS=%s\n' "$gmp"
+  } > "$D/compose.env"
+  echo "resources: ${total} MB and ${cpus} CPUs on this server; this stack gets redis ${rl} MB (maxmemory ${rmax} MB), miner ${ml} MB, relayer ${ll} MB"
+}
+
+# Both processes' configs, checked by the pinned image itself before anything restarts.
+# A relayer with no services yet is not checked: it refuses an empty list by design.
+validate_stack() {
+  local which out rc=0
+  for which in miner relayer; do
+    if [ "$which" = relayer ] && ! relayer_has_services; then continue; fi
+    if ! out=$(docker run --rm -v "$D/$which-config.yaml:/config/config.yaml:ro" -v "$D/supplier-keys.yaml:/keys/supplier-keys.yaml:ro" "$RELAYMINER_IMAGE" "$which" validate --config /config/config.yaml 2>&1); then
+      rc=1
+      echo "error: the $which config does not pass the check of RelayMiner ${RELAYMINER_IMAGE##*:}: $(echo "$out" | grep -v 'maxprocs' | tr '\n' ' ' | cut -c1-600)"
+    fi
+  done
+  return "$rc"
+}
+need_pins() { [ -n "$RELAYMINER_IMAGE" ] && [ -n "$REDIS_IMAGE" ] || { echo "error: this stack predates pinned versions; provision it again from the app"; exit 1; }; }
+versions_line() { echo "versions: relayminer ${RELAYMINER_IMAGE##*:}, redis ${REDIS_IMAGE##*:}, pocketd ${IMG##*:}, layout ${STACK_LAYOUT}"; }
 # Service ids listed under `services:` in the relayer config (the block ends at the next top-level key).
 list_services() { python3 - "$CFG" <<'PY'
 import sys, re
@@ -46,7 +99,9 @@ print(",".join(re.findall(r'^  ([A-Za-z0-9_-]+):', block, re.M)))
 PY
 }
 relayer_has_services() { [ -n "$(list_services)" ]; }
-wait_health() { for i in $(seq 1 45); do curl -fs "http://127.0.0.1:$HEALTH_PORT/health" >/dev/null 2>&1 && { echo "relayer: healthy"; return 0; }; sleep 2; done; echo "relayer: not healthy after 90 s"; return 1; }
+# /ready answers 503 until the miner has published its service manifest, so ready means
+# the whole stack is serving.
+wait_health() { for i in $(seq 1 60); do curl -fs "http://127.0.0.1:$HEALTH_PORT/ready" >/dev/null 2>&1 && { echo "relayer: healthy"; return 0; }; sleep 2; done; echo "relayer: not ready after 120 s"; return 1; }
 
 # The shared Caddy: one per server, in CADDY_DIR, importing sites/*.caddy. A stack
 # from the first layout carried its own Caddy; its certificates are carried over
@@ -113,6 +168,9 @@ case "$step" in
     for f in "$D/relayer-config.yaml" "$D/miner-config.yaml"; do
       if [ -f "$f" ]; then sed -i "s#redis://redis:6379#redis://$PROJECT-redis:6379#" "$f"; fi
     done
+    # The relayer config is kept across provisioning because it holds the service list;
+    # RelayMiner v0.1.0 no longer reads pocket_node.chain_id in it (only the miner does).
+    if [ -f "$D/relayer-config.yaml" ]; then sed -i '/^pocket_node:/,/^[^ ]/{/^  chain_id:/d}' "$D/relayer-config.yaml"; fi
     echo "prepared: $D (stack $PROJECT for $NET)"
     ;;
   operator)
@@ -158,10 +216,16 @@ except Exception: print("", "parse")' 2>/dev/null)
     echo "error: the self-transfer ${TX%% *} was accepted but its inclusion was not seen within 5 minutes; run provisioning again, it resumes here"; exit 1
     ;;
   start)
+    need_pins
+    size_stack
+    # Download first, while anything already running keeps serving; then check both
+    # configs with the new image. Nothing is restarted unless both pass.
+    dc pull --quiet >/dev/null 2>&1 || { echo "error: could not download the stack's images: $(dc pull 2>&1 | tail -2 | tr '\n' ' ')"; exit 1; }
+    validate_stack
     caddy_up
-    cd "$D"
-    if relayer_has_services; then docker compose -p "$PROJECT" up -d --remove-orphans 2>&1 | tail -4; wait_health || true
-    else docker compose -p "$PROJECT" up -d --remove-orphans redis miner 2>&1 | tail -3; echo "relayer: waiting for the first service"; fi
+    if relayer_has_services; then dc up -d --remove-orphans 2>&1 | tail -4; wait_health || true
+    else dc up -d --remove-orphans redis miner 2>&1 | tail -3; echo "relayer: waiting for the first service"; fi
+    versions_line
     ;;
   deploy)
     ID="${1:?service id}"; ROOT="${2:-/opt/pocket/services}"
@@ -181,6 +245,9 @@ except Exception: print("", "parse")' 2>/dev/null)
     ;;
   add-service)
     ID="${1:?service id}"; URL="${2:?backend url}"; HP="${3:-/healthz}"
+    need_pins
+    [ -f "$D/compose.env" ] || size_stack >/dev/null
+    cp -f "$CFG" "$CFG.before"
     python3 - "$CFG" "$ID" "$URL" "$HP" <<'PY'
 import sys, re
 cfg, sid, url, hp = sys.argv[1:5]
@@ -214,7 +281,11 @@ t = t[:i] + block + t[i:]
 open(cfg, "w").write(t)
 print("relayer: added", sid)
 PY
-    cd "$D" && docker compose -p "$PROJECT" up -d --force-recreate relayer 2>&1 | tail -2
+    # A config the RelayMiner rejects would stop the relayer for every service; keep the
+    # one that worked instead.
+    if ! validate_stack; then mv -f "$CFG.before" "$CFG"; echo "error: the relayer config was put back as it was"; exit 1; fi
+    rm -f "$CFG.before"
+    dc up -d --force-recreate relayer 2>&1 | tail -2
     wait_health
     ;;
   remove-service)
@@ -227,9 +298,10 @@ t2 = re.sub(rf'^  {re.escape(sid)}:\n(?:    .*\n|\n)*', '', t, count=1, flags=re
 open(cfg, "w").write(t2)
 print("relayer: removed" if t2 != t else "relayer: did not list", sid)
 PY
-    cd "$D"
-    if relayer_has_services; then docker compose -p "$PROJECT" up -d --force-recreate relayer 2>&1 | tail -2; wait_health || true
-    else docker compose -p "$PROJECT" stop relayer >/dev/null 2>&1 || true; echo "relayer: stopped (no services left)"; fi
+    need_pins
+    [ -f "$D/compose.env" ] || size_stack >/dev/null
+    if relayer_has_services; then dc up -d --force-recreate relayer 2>&1 | tail -2; wait_health || true
+    else dc stop relayer >/dev/null 2>&1 || true; echo "relayer: stopped (no services left)"; fi
     # Routes answer on every network's hostname here, so they go only when the last
     # network whose stack installed them stops serving the service.
     RF="$ROUTES_DIR/$ID.route"
@@ -311,7 +383,9 @@ PY
     S=$(list_services); echo "services: ${S:-none}"
     docker ps --filter "name=$PROJECT-" --format 'container: {{.Names}} {{.Status}}'
     docker ps --filter "name=pocket-caddy" --format 'container: {{.Names}} {{.Status}}'
-    curl -fs "http://127.0.0.1:$HEALTH_PORT/health" >/dev/null 2>&1 && echo "relayer: healthy" || echo "relayer: not answering"
+    if [ -n "$RELAYMINER_IMAGE" ]; then versions_line; else echo "versions: layout 1 (unpinned images); provision again to update"; fi
+    if [ -f "$D/compose.env" ]; then echo "limits: $(grep -E '^(REDIS_MEM_LIMIT|MINER_MEM_LIMIT|RELAYER_MEM_LIMIT)=' "$D/compose.env" | tr '\n' ' ')"; fi
+    curl -fs "http://127.0.0.1:$HEALTH_PORT/ready" >/dev/null 2>&1 && echo "relayer: healthy" || echo "relayer: not answering"
     ;;
   *)
     echo "error: unknown step $step"; exit 2

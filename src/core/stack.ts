@@ -3,6 +3,7 @@
 import { NETWORK_INFO, type Network } from './networks'
 import { renderTemplate, toLf } from './text'
 import type { StakeService } from './contract'
+import { POCKETD_IMAGE, RELAYMINER_IMAGE, REDIS_IMAGE, STACK_LAYOUT } from './versions'
 
 export interface StackTokens {
   network: Network
@@ -56,7 +57,11 @@ export function stackTokenMap(t: StackTokens): Record<string, string> {
     '{{HEALTH_PORT}}': String(t.healthPort),
     '{{RELAYER_METRICS_PORT}}': String(t.relayerMetricsPort),
     '{{MINER_METRICS_PORT}}': String(t.minerMetricsPort),
-    '{{CADDY_DIR}}': t.caddyDir
+    '{{CADDY_DIR}}': t.caddyDir,
+    '{{RELAYMINER_IMAGE}}': RELAYMINER_IMAGE,
+    '{{REDIS_IMAGE}}': REDIS_IMAGE,
+    '{{POCKETD_IMAGE}}': POCKETD_IMAGE,
+    '{{STACK_LAYOUT}}': String(STACK_LAYOUT)
   }
 }
 
@@ -78,6 +83,17 @@ export function renderStack(tpl: StackTemplates, t: StackTokens): RenderedStack 
     },
     site: { name: `${t.network}.caddy`, text: r(tpl['site.caddy.tmpl']) }
   }
+}
+
+/**
+ * Whether a provisioned stack runs older files than this app ships (STACK_LAYOUT), so
+ * provisioning it again is due: it gets the pinned images and whatever else changed.
+ * A stack recorded before layouts were tracked is layout 1.
+ */
+export function stackNeedsUpdate(
+  st: { provisioned_at?: string; layout?: number } | null | undefined
+): boolean {
+  return !!st?.provisioned_at && (st.layout ?? 1) < STACK_LAYOUT
 }
 
 /** The part of a server entry that says whether a network's stack finished provisioning. */

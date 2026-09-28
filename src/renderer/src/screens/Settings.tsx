@@ -5,6 +5,8 @@ import { copy, goTo } from '../lib/actions'
 import type { Network } from '@core/networks'
 import type { RemoteClaudeStatus } from '../../../preload/index'
 import { RE } from '@core/validate'
+import { STACK_LAYOUT } from '@core/versions'
+import { stackNeedsUpdate } from '@core/stack'
 import { fmtPokt, fmtInt, shortAddr, POKT } from '@core/format'
 import {
   Badge,
@@ -462,7 +464,9 @@ function StackCell({ s, net }: { s: ServerEntry; net: Network }): React.JSX.Elem
   if (ss === 'none') return <Badge cls="muted">not provisioned</Badge>
   return (
     <>
-      {ss === 'ready' ? (
+      {ss === 'ready' && stackNeedsUpdate(st) ? (
+        <Badge cls="warn">stack update needed</Badge>
+      ) : ss === 'ready' ? (
         <Badge cls="ok">provisioned</Badge>
       ) : (
         <Badge cls="warn">provisioning pending</Badge>
@@ -558,17 +562,21 @@ function ProvisionPanel(): React.JSX.Element {
   const ss = stackState(st)
   const dirHint = !list.length
     ? "Holds this network's RelayMiner, operator keyring, and relayer config."
-    : ss === 'ready'
-      ? `This server already has a ${netLabel(appNet)} stack there; its operator key and relayer config are kept.`
-      : ss === 'pending'
-        ? 'Provisioning of this stack was interrupted after its operator key was created. Start provisioning resumes it; finished steps are not repeated.'
-        : `A new stack for ${netLabel(appNet)}; a new operator key is created on the server.`
+    : ss === 'ready' && stackNeedsUpdate(st)
+      ? `This server runs an older ${netLabel(appNet)} stack than this version of the app ships. Updating downloads the pinned RelayMiner and Redis, checks both configs with them before anything restarts, and keeps the operator key, the services, and the stake.`
+      : ss === 'ready'
+        ? `This server already has a ${netLabel(appNet)} stack there; its operator key and relayer config are kept.`
+        : ss === 'pending'
+          ? 'Provisioning of this stack was interrupted after its operator key was created. Start provisioning resumes it; finished steps are not repeated.'
+          : `A new stack for ${netLabel(appNet)}; a new operator key is created on the server.`
   const btnLabel =
     ss === 'pending'
       ? 'Continue provisioning'
-      : ss === 'ready'
-        ? 'Re-provision'
-        : 'Start provisioning'
+      : ss === 'ready' && stackNeedsUpdate(st)
+        ? 'Update stack'
+        : ss === 'ready'
+          ? 'Re-provision'
+          : 'Start provisioning'
 
   const run = async (): Promise<void> => {
     if (S().busy || !s) {
@@ -625,7 +633,8 @@ function ProvisionPanel(): React.JSX.Element {
         project,
         url: 'https://' + host,
         operator,
-        provisioned_at: new Date().toISOString()
+        provisioned_at: new Date().toISOString(),
+        layout: STACK_LAYOUT
       })
       log(
         `Server ${s.name} now has a ${netLabel(net)} supplier stack at ${dir}. Deploy a service to it next (Services, Deploy service).`,
@@ -716,7 +725,11 @@ function ProvisionPanel(): React.JSX.Element {
           mark('Start the stack', false, r6.err || (r6 as { error?: string }).error || '')
           return fail('Start failed.')
         }
-        mark('Start the stack', true, r6.lines.slice(-3).join(' | '))
+        mark(
+          'Start the stack',
+          true,
+          r6.lines.filter((l) => /^(resources|versions|relayer|caddy):/.test(l)).join(' | ')
+        )
         const r7 = await sg['supplier-run']({ ...conn, step: 'status' })
         if (r7.ok) mark('Status', true, r7.lines.join(' | '))
         await done()
@@ -1219,7 +1232,9 @@ function UpdatesPanel(): React.JSX.Element {
     <div className="panel" id="updatesPanel">
       <h2>
         Updates{' '}
-        {u?.available ? (
+        {u?.available && u.priority ? (
+          <Badge cls="bad">priority update {u.latest}</Badge>
+        ) : u?.available ? (
           <Badge cls="warn">version {u.latest} available</Badge>
         ) : u?.latest ? (
           <Badge cls="ok">up to date</Badge>

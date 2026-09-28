@@ -9,6 +9,7 @@ import {
   backendComposeFromTemplate,
   type StackTemplates
 } from '@core/stack'
+import { POCKETD_IMAGE, RELAYMINER_IMAGE, REDIS_IMAGE, STACK_LAYOUT } from '@core/versions'
 
 const dir = join(process.cwd(), 'resources', 'server')
 const rd = (n: string): string => readFileSync(join(dir, n), 'utf8')
@@ -40,12 +41,34 @@ describe('supplier-ship rendering', () => {
       expect(text).not.toContain('\r')
     }
   })
-  it('reproduces the stack.env the HTA wrote on the reference host', () => {
-    const ref = readFileSync(
-      join(process.cwd(), 'reference', 'servers', 'example-host', 'supplier-beta', 'stack.env'),
-      'utf8'
-    ).replace(/\r\n/g, '\n')
-    expect(r.stack['stack.env']).toBe(ref)
+  it('writes stack.env with the versions this app release pins', () => {
+    expect(r.stack['stack.env']).toBe(
+      '# Per-stack settings read by supplier.sh. Written by the Pocket Service Manager.\n' +
+        'PROJECT=pocket-supplier\nNET=beta\nHEALTH_PORT=8081\nCADDY_DIR=/opt/pocket/caddy\n' +
+        'HOSTNAME_PUBLIC=services-beta.example.org\n' +
+        '# The versions this stack runs, pinned by the app release that provisioned it. The\n' +
+        "# RelayMiner's relayer and miner always share one exact tag.\n" +
+        `STACK_LAYOUT=${STACK_LAYOUT}\nRELAYMINER_IMAGE=${RELAYMINER_IMAGE}\n` +
+        `REDIS_IMAGE=${REDIS_IMAGE}\nPOCKETD_IMAGE=${POCKETD_IMAGE}\n`
+    )
+  })
+  it('pins exact images: no moving tags, Redis new enough for the RelayMiner', () => {
+    expect(RELAYMINER_IMAGE).toMatch(/:v\d+\.\d+\.\d+$/)
+    expect(POCKETD_IMAGE).toMatch(/:\d+\.\d+\.\d+$/)
+    const [maj, min] = REDIS_IMAGE.replace(/^redis:/, '')
+      .split('.')
+      .map(Number)
+    expect(maj > 8 || (maj === 8 && min >= 10)).toBe(true)
+    const compose = r.stack['docker-compose.yaml']
+    expect(compose).not.toMatch(/:rc\b|:latest\b|allkeys-lru/)
+    expect(compose).toContain('--maxmemory-policy noeviction')
+    expect(compose).toContain('image: ${RELAYMINER_IMAGE}')
+    expect(compose).toMatch(/miner: \{ condition: service_healthy \}/)
+  })
+  it('leaves out the config keys RelayMiner v0.1.0 rejects', () => {
+    expect(r.stack['miner-config.yaml']).not.toMatch(/^\s+output:/m)
+    expect(r.stack['relayer-config.yaml']).not.toMatch(/^\s+chain_id:/m)
+    expect(r.stack['miner-config.yaml']).toMatch(/^\s+chain_id: "pocket-lego-testnet"/m)
   })
   it('reproduces the beta site file on the reference host, plus the service routes import', () => {
     // The reference host predates service routes (0.1.9) and reference/ is a snapshot that
