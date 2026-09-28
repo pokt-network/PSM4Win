@@ -23,6 +23,7 @@ import {
   type AppStakeHolder
 } from '../lib/actions'
 import { formFromCard } from '@core/card-form'
+import { groupServiceFolders } from '@core/service-folders'
 
 interface Row {
   id: string
@@ -31,6 +32,8 @@ interface Row {
   chain: boolean
   taken: ChainService | null
   local: LocalService | null
+  /** Other folders that declare the same service ID; the row works on `local`. */
+  extra: string[]
   stake: AppStakeHolder[] | undefined
 }
 
@@ -44,22 +47,27 @@ export function ServicesScreen(): React.JSX.Element {
     const loc = localServices()
     const [stakes, sup] = await Promise.all([appStakesByService(), supplyMap()])
     const seen = new Set<string>()
-    const byId = new Map(loc.map((l) => [l.id, l]))
+    // One entry per service ID, on its source folder, however many folders declare it.
+    const groups = groupServiceFolders(loc)
+    const byId = new Map(groups.map((g) => [g.id, g]))
     const out: Row[] = []
     for (const s of owned) {
       seen.add(s.id)
+      const g = byId.get(s.id)
       out.push({
         id: s.id,
         name: s.name,
         cupr: Number(s.compute_units_per_relay),
         chain: true,
         taken: null,
-        local: byId.get(s.id) ?? null,
+        local: g?.primary ?? null,
+        extra: g?.others.map((o) => o.folder) ?? [],
         stake: stakes[s.id]
       })
     }
-    for (const l of loc) {
-      if (seen.has(l.id)) continue
+    for (const g of groups) {
+      if (seen.has(g.id)) continue
+      const l = g.primary
       out.push({
         id: l.id,
         name: l.name,
@@ -67,6 +75,7 @@ export function ServicesScreen(): React.JSX.Element {
         chain: false,
         taken: catalogEntry(l.id),
         local: l,
+        extra: g.others.map((o) => o.folder),
         stake: stakes[l.id]
       })
     }
@@ -178,7 +187,19 @@ export function ServicesScreen(): React.JSX.Element {
                 const deployable = !!x.local?.hasDockerfile
                 return (
                   <tr key={x.id}>
-                    <td className="svcid">{x.id}</td>
+                    <td className="svcid">
+                      {x.id}
+                      {x.extra.length && x.local ? (
+                        <div className="hint">
+                          <WarnText>
+                            The folder{x.extra.length > 1 ? 's' : ''} {x.extra.join(', ')} also{' '}
+                            {x.extra.length > 1 ? 'say they are' : 'says it is'} this service. The
+                            app uses {x.local.folder}; the other{x.extra.length > 1 ? 's' : ''} can
+                            be deleted.
+                          </WarnText>
+                        </div>
+                      ) : null}
+                    </td>
                     <td>{x.name || ''}</td>
                     <td>
                       {x.cupr ? (

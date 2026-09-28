@@ -24,6 +24,7 @@ import {
 import { confirmDialog } from '../lib/modal'
 import { browseForServiceFolder, loadServiceFolders, psm } from '../lib/actions'
 import { selectRegisterFolder } from './Services'
+import { createTargetFolder } from '@core/service-folders'
 
 type K = keyof CreateForm
 
@@ -117,11 +118,17 @@ export function CreateScreen(): React.JSX.Element {
     if (!ok) return setStatus('Fix the red items first.', 'err')
     if (!S().servicesRoot) return setStatus('Choose a services folder in Settings first.', 'err')
     const id = cr.id.trim()
-    const existing = await psm().files.readServiceFile(id, 'card.json')
+    // A card loaded from a folder is written back there; a new one gets a folder named
+    // after its ID, unless another folder already holds that service.
+    await loadServiceFolders()
+    const target = createTargetFolder(crFolder, id, S().local)
+    if (!target.ok) return setStatus(target.reason, 'err')
+    const folder = target.folder
+    const existing = await psm().files.readServiceFile(folder, 'card.json')
     if (
       existing !== null &&
       !(await confirmDialog(
-        `services\\${id}\\card.json already exists. Overwrite it with this form?`,
+        `services\\${folder}\\card.json already exists. Overwrite it with this form?`,
         'Overwrite',
         'Overwrite card',
         'danger solid'
@@ -131,11 +138,11 @@ export function CreateScreen(): React.JSX.Element {
     }
     const card = buildCard(cr)
     const json = JSON.stringify(card, null, 2)
-    const wrote = await psm().files.writeServiceFile(id, 'card.json', json + '\n')
+    const wrote = await psm().files.writeServiceFile(folder, 'card.json', json + '\n')
     if (!wrote)
       return setStatus('Could not write the card. Is the services folder set and writable?', 'err')
     let m: Record<string, unknown> = {}
-    const manText = await psm().files.readServiceFile(id, 'service.json')
+    const manText = await psm().files.readServiceFile(folder, 'service.json')
     if (manText) {
       try {
         m = JSON.parse(manText)
@@ -148,8 +155,8 @@ export function CreateScreen(): React.JSX.Element {
     m.compute_units_per_relay = parseInt(cr.cupr, 10)
     m.card = 'card.json'
     m.networks = m.networks || {}
-    await psm().files.writeServiceFile(id, 'service.json', JSON.stringify(m, null, 2) + '\n')
-    const cardPath = `${S().servicesRoot}\\${id}\\card.json`
+    await psm().files.writeServiceFile(folder, 'service.json', JSON.stringify(m, null, 2) + '\n')
+    const cardPath = `${S().servicesRoot}\\${folder}\\card.json`
     const nodes = toNodes(items)
     nodes.push({
       level: 'ok',
@@ -177,7 +184,7 @@ export function CreateScreen(): React.JSX.Element {
       })
     setChecks([...nodes])
     await loadServiceFolders()
-    await selectRegisterFolder(id)
+    await selectRegisterFolder(folder)
     const passed = r.ok || ('skipped' in r && !!r.skipped)
     setStatus(
       passed

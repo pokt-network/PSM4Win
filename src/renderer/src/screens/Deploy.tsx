@@ -46,6 +46,7 @@ import {
   loadServiceFolders
 } from '../lib/actions'
 import { openSupplier, svcTest } from './Services'
+import { groupServiceFolders } from '@core/service-folders'
 
 export function DeployScreen(): React.JSX.Element {
   const { dep, local, net, settings, busy, deployed } = useStore()
@@ -62,7 +63,9 @@ export function DeployScreen(): React.JSX.Element {
     useStore.setState({ deployed: null })
     void loadServiceFolders()
   }, [])
-  const deployable = local.filter((l) => l.hasDockerfile)
+  const deployable = groupServiceFolders(local)
+    .map((g) => g.primary)
+    .filter((l) => l.hasDockerfile)
   const provisioned = servers().filter(
     (s) => stackState(stackOf(s, net)) === 'ready' && stackOf(s, net)?.dir
   )

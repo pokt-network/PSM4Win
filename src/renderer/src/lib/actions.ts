@@ -32,6 +32,7 @@ import { lcdTxUrl } from '@core/chain'
 import { serviceFolderName } from '@core/text'
 import { ROUTES_FILE, parseRoutesFile, type ParsedRoutes } from '@core/routes'
 import { RELAYER_FILE, DEFAULT_RELAYER, parseRelayerFile, type ParsedRelayer } from '@core/relayer'
+import { sourceFolderFor } from '@core/service-folders'
 import type { Settings } from '../../../preload/index'
 import { alertDialog, confirmDialog } from './modal'
 import { isDemo } from './demo'
@@ -423,12 +424,14 @@ export function localServices(): LocalService[] {
   return S().local
 }
 
+// A service ID can be declared by more than one folder; these always mean its source
+// folder (src/core/service-folders.ts).
 export function folderForId(id: string): string {
-  return S().local.find((l) => l.id === id)?.folder ?? ''
+  return sourceFolderFor(S().local, id)?.folder ?? ''
 }
 
 export function localById(id: string): LocalService | null {
-  return S().local.find((l) => l.id === id) ?? null
+  return sourceFolderFor(S().local, id)
 }
 
 export async function readManifestFor(id: string): Promise<Manifest | null> {
