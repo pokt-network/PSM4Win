@@ -57,6 +57,30 @@ export function DashboardScreen(): React.JSX.Element {
     void load()
   }, [load, net, imported, wallets, address, catalog, settings?.servers])
 
+  // While it is open, the dashboard follows the chain: about once a block (the measured
+  // block time in 5 s steps, 10 to 60 s) it reads the height and parameters, the balance,
+  // and the supplies and stakes again, so a countdown moves and a pending supply turns
+  // active without leaving the screen. Paused while the window is hidden.
+  const tickMs = Math.min(60, Math.max(10, Math.round((params.blockTime || 30) / 5) * 5)) * 1000
+  useEffect(() => {
+    let running = false
+    const t = window.setInterval(() => {
+      if (running || document.visibilityState === 'hidden') return
+      running = true
+      void (async () => {
+        try {
+          await Promise.all([refreshNetwork(), refreshBalance()])
+          await load()
+        } catch {
+          // Keep the last values; the next tick tries again.
+        } finally {
+          running = false
+        }
+      })()
+    }, tickMs)
+    return () => window.clearInterval(t)
+  }, [tickMs, load, net])
+
   const owned = ownedServices()
   // app.js sums appRecordOf(wallet) over state.wallets: each app wallet once, never the owner.
   const appStaked = [

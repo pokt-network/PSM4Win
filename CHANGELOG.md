@@ -8,6 +8,7 @@ One line per user-visible change. Versions are tags `v<version>`; compat strings
 - My services shows one entry per service even when two folders say they are the same service. The entry uses the folder with the service's code in it and names the other folder, which can be deleted. Deploy and Test use that same folder.
 - Create refuses a new service whose ID another folder already holds, and points to that folder's Edit card instead.
 - My services reads the service folders again when it opens and when you press Refresh, so a folder added, changed, or deleted outside the app shows up without restarting it.
+- Dashboard: the chain panel and the services table now keep themselves up to date while the Dashboard is open, about once a block. The block height and the "next session" countdown move, and a supply marked pending turns active when its block arrives, without leaving the screen and coming back. It pauses while the window is minimised.
 
 ## 0.1.15
 
