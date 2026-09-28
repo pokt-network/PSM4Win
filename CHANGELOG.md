@@ -7,6 +7,7 @@ One line per user-visible change. Versions are tags `v<version>`; compat strings
 - Your server now comes first. Register asks for a provisioned server before a new service goes on chain, with a link to set one up; tick "Someone else will run the supplier" if another operator will supply it. The Dashboard, the welcome message, and Help put setting up the server right after importing the owner wallet.
 - Claude is told the same: the app's status tells an assistant to set up the server in the app when none is provisioned, and never to provision a server or stake a supplier on the command line, and the app refuses to register a new service for an assistant until a server exists.
 - Provision a supplier no longer has its own network choice. It provisions for the network the app is on, and the stack folder and hostname follow the network switch, so a folder meant for one network can no longer be used for the other.
+- Dashboard: the red box listing application stakes below their minimum is gone. It could not be dismissed and repeated the badge in the Margin column; the line under the badge now says what happens and what to do.
 
 ## 0.1.11
 

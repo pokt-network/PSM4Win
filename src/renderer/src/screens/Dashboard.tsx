@@ -72,7 +72,6 @@ export function DashboardScreen(): React.JSX.Element {
   const withOp = (rows ?? []).filter((r) => r.state === 'ready').length
   const ns = nextSessionBoundary(params)
   const min = params.appMinStake || 0
-  const alerts: React.ReactNode[] = []
   // The server comes before the service: Register asks for one, and without it Deploy and
   // Supply have nothing to work with.
   const needServer = imported && !hasProvisionedStack(settings?.servers ?? [], net)
@@ -230,35 +229,21 @@ export function DashboardScreen(): React.JSX.Element {
                               ? 'below minimum'
                               : `${fmtPokt(margin)} POKT`}
                         </Badge>
-                        {!e.unbonding && margin > 0 && per ? (
+                        {/* The badge says the state; this line says what follows from it. */}
+                        {e.unbonding ? (
+                          <div className="hint">Restake to cancel and keep its delegations.</div>
+                        ) : margin <= 0 ? (
+                          <div className="hint">
+                            Unstaked at the session end. Restake with a margin.
+                          </div>
+                        ) : per ? (
                           <div className="hint">
                             about {fmtInt(relays)} relays before the minimum
+                            {margin < min * 0.05 ? '; top it up soon' : ''}
                           </div>
                         ) : null}
                       </div>
                     )
-                    if (e.unbonding)
-                      alerts.push(
-                        <span key={e.name + s.id}>
-                          <b>{e.name}</b> ({s.id}) is unbonding; its stake stops at block{' '}
-                          {fmtInt(e.unbonding)}. Restake it now to cancel that and keep its
-                          delegations.
-                        </span>
-                      )
-                    else if (margin <= 0)
-                      alerts.push(
-                        <span key={e.name + s.id}>
-                          <b>{e.name}</b> ({s.id}) is at or below the minimum stake and will be
-                          unstaked at the session end. Restake it with a margin.
-                        </span>
-                      )
-                    else if (margin < min * 0.05)
-                      alerts.push(
-                        <span key={e.name + s.id}>
-                          <b>{e.name}</b> ({s.id}) has only {fmtPokt(margin)} POKT of margin left,
-                          about {fmtInt(relays)} relays. Top the stake up soon.
-                        </span>
-                      )
                   }
                   return (
                     <tr key={s.id}>
@@ -302,13 +287,6 @@ export function DashboardScreen(): React.JSX.Element {
                 })
                 return (
                   <>
-                    {alerts.length ? (
-                      <div className="dangerbox">
-                        {alerts.map((a, i) => (
-                          <div key={i}>{a}</div>
-                        ))}
-                      </div>
-                    ) : null}
                     <table className="services">
                       <thead>
                         <tr>
