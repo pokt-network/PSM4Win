@@ -261,7 +261,12 @@ class BridgeService {
     out.port = entry.port
     out.user = entry.user
     out.key_path = entry.keyPath
-    if (tool.op !== 'ssh-test' && tool.op !== 'deploy-ship' && !out.path)
+    if (
+      tool.op !== 'ssh-test' &&
+      tool.op !== 'server-survey' &&
+      tool.op !== 'deploy-ship' &&
+      !out.path
+    )
       out.path = stack?.dir || `/opt/pocket/supplier-${net}`
     if (tool.op === 'deploy-ship' && !out.deploy_root)
       out.deploy_root = entry.deployRoot || '/opt/pocket/services'

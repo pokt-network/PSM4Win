@@ -577,6 +577,18 @@ Remote command: `hostname; docker compose version 2>/dev/null | head -1[; test -
 
 Result: `{ ok: true, hostname: <first non-empty line>, docker: <the line containing "Docker Compose", or ""> , keyring: <bool> }`. No disk side effects. UI: Settings "Test connection" (`timeoutMs: 60000`), the first step of Provision (without `path`), and the first step of Deploy (with `path`; `keyring` must be true).
 
+#### `server-survey` (Electron 0.1.19; not in the HTA)
+
+Purpose: a read-only look at a server whose supplier was set up by hand, the first step of importing it: which RelayMiner runs there (the HA `pocket-relay-miner`, in Docker or as a process, or the legacy `pocketd relayminer`), its config files, each service and the backend it calls, what holds ports 80 and 443 and the proxy configs, and which keyring or keys file holds the operator's key. It changes nothing on the server and prints no secret.
+
+Request: `host`, `port`, `user`, `key_path` (`Resolve-Ssh`); optional `operator_address` (`pokt1...`, validated), the supplier's operator to look for. No `path`.
+
+Steps: the app assembles `resources/server/survey.sh` with `resources/server/survey_address.py` in place of `@@ADDRESS_PY@@` (`buildSurveyScript` in `src/core/survey.ts`, which refuses a Python text containing the heredoc's closing line), writes it to its work folder, copies it with `scp` to `/tmp/psm-survey-<12 hex>.sh`, and runs `bash <file> <operator>; rc=$?; rm -f <file>; exit $rc`. The script runs as the SSH user and uses `sudo -n` only where it is available, to read files and list listeners; it reads Docker (containers, their images, compose labels, commands, mounts), processes outside containers (a process whose `/proc/<pid>/cgroup` names docker, containerd, kubepods, or libpod is skipped), systemd units, `ss -ltnp` for ports 80, 443, 8080, 8443, 8445, the proxy config files, the RelayMiner configs it finds (keys source, service backends with any `user:password@` removed, node settings), keyrings (`keyring-*` directories: each `<40 hex>.address` file converted to bech32, so no key is read), and keys files (each 64-hex key's address derived by `survey_address.py` from the file, which reaches Python only through a pipe: the key is never printed, written, or passed as an argument). With `operator_address`, each keyring address and keys-file address is marked `match=yes` or `match=no`.
+
+Output: one fact per line (`host:`, `os:`, `sudo:`, `python3:`, `memory_mb:`, `docker:`, `container:`, `config:`, `process:`, `unit:`, `listen:`, `proxyconf:`, `keysource:`, `service:`, `setting:`, `keyring:`, `keysfile:`), ending with `done`, or `done: partial (...)` when the server has no python3 (configs and keys are then not read).
+
+Result: `{ ok: true, report: SurveyReport, verdict: SurveyVerdict }` (`parseSurvey` and `judgeSurvey` in `src/core/survey.ts`). The verdict gives the RelayMiner kinds (`ha`, `legacy`), where the operator key is (`keysfile` or `keyring`, or null), each service with its backend, what answers on 80 and 443, and plain notes (no Docker, Docker not usable by this user, no RelayMiner, the legacy RelayMiner, key not found, survey partial or unfinished). Fails with "The survey could not run on the server." only when SSH fails and no `survey:` line came back. `timeoutMs: 180000`. No history entry, no disk side effect beyond the temporary file, which is removed. Bridge: `psm_server_survey` (read-only, no confirmation).
+
 #### `supplier-ship`
 
 Purpose: render one network's supplier stack from `tools/service-manager/server/` and copy it to the stack directory, plus the server's shared Caddy files, then run `supplier.sh prepare`. No keys involved.

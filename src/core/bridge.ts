@@ -326,6 +326,24 @@ export const BRIDGE_TOOLS: readonly BridgeTool[] = [
     server: true
   },
   {
+    name: 'psm_server_survey',
+    description:
+      'Read-only survey of a server whose supplier was set up by hand, before importing it: the RelayMiner running there (HA or the legacy pocketd one) and its configs, each service and its backend, what holds ports 80 and 443, and which keyring or keys file holds the operator key (matched by address; no key is printed). Changes nothing on the server.',
+    inputSchema: obj(
+      {
+        server,
+        operator_address: {
+          type: 'string',
+          description: 'The supplier operator to look for among the keys on the server'
+        }
+      },
+      ['server']
+    ),
+    op: 'server-survey',
+    confirm: 'never',
+    server: true
+  },
+  {
     name: 'psm_supplier_ship',
     description:
       'Copy the RelayMiner stack templates and supplier.sh to a server for one network (the first Provision step). Existing relayer config is kept.',

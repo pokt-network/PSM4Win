@@ -202,6 +202,8 @@ export interface SignerRequests {
     dry?: boolean
   }
   'ssh-test': SshConn & { path?: string }
+  /** Read-only survey of a server whose supplier was set up by hand (import). */
+  'server-survey': SshConn & { operator_address?: string }
   'supplier-ship': SshConn & {
     path: string
     network: Network
@@ -267,6 +269,11 @@ export interface SignerResults {
   'tx-unstake-app': TxResult | DryResult
   'remote-stake-supplier': TxResult | (DryResult & { config: string })
   'ssh-test': { ok: true; hostname: string; docker: string; keyring: boolean }
+  'server-survey': {
+    ok: true
+    report: import('./survey').SurveyReport
+    verdict: import('./survey').SurveyVerdict
+  }
   'supplier-ship': { ok: true; files: string[]; relayer_kept: boolean; out: string }
   'supplier-run': SupplierRunResult
   'deploy-ship': {
@@ -313,6 +320,7 @@ export const SIGNER_OPS: readonly SignerOp[] = [
   'tx-unstake-app',
   'remote-stake-supplier',
   'ssh-test',
+  'server-survey',
   'supplier-ship',
   'supplier-run',
   'deploy-ship',
@@ -327,6 +335,7 @@ export const TIMEOUTS_MS: Partial<Record<SignerOp, number>> = {
   'image-pull': 900_000,
   'pocketap-pull': 900_000,
   'ssh-test': 60_000,
+  'server-survey': 180_000,
   'supplier-ship': 180_000,
   'deploy-ship': 600_000,
   'relay-call': 120_000

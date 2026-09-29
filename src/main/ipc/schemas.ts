@@ -90,6 +90,7 @@ export const requestSchemas: Record<SignerOp, z.ZodTypeAny> = {
     dry
   }),
   'ssh-test': ssh.extend({ path: z.string().max(512).optional() }),
+  'server-survey': ssh.extend({ operator_address: z.string().max(64).optional() }),
   'supplier-ship': ssh.extend({
     path: z.string().max(512),
     network,

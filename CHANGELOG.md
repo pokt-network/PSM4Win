@@ -5,6 +5,7 @@ One line per user-visible change. Versions are tags `v<version>`; compat strings
 ## Unreleased
 
 - Suppliers: changing a supplier's stake or services now always keeps its owner and how its rewards are split, exactly as they are on the network. The app checks this itself before signing, so neither the app nor an assistant using it can hand a supplier to a different owner by mistake.
+- Claude can now look over a server whose supplier was set up by hand, without changing anything on it: which RelayMiner runs there, the services it serves and their backends, what answers on the web ports, and which keyring or keys file holds the operator's key. No key is ever shown. This is the first step of importing such a supplier into the app.
 - Suppliers: a custodial supplier, one whose operator is also its owner, can now be restaked from the app. The stake stays custodial: stake increases come from the operator account, and returned stake and rewards stay with it. Unstaking one from the app is not possible yet.
 
 ## 0.1.18

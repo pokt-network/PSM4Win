@@ -1,11 +1,20 @@
 // Server operations over SSH (SIGNER-CONTRACT.md section 3.4): ssh-test,
-// supplier-ship, supplier-run, deploy-ship.
+// supplier-ship, supplier-run, deploy-ship, server-survey.
 import { join } from 'node:path'
+import { randomBytes } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import { fail } from '@core/errors'
 import { CADDY_DIR } from '@core/networks'
 import { measureBlockTime } from '@core/lcd'
-import { RE, requireNetwork, validateServiceId, validateLinuxPath, toInt64 } from '@core/validate'
+import {
+  RE,
+  requireNetwork,
+  validateServiceId,
+  validateLinuxPath,
+  validateAddress,
+  toInt64
+} from '@core/validate'
+import { buildSurveyScript, parseSurvey, judgeSurvey } from '@core/survey'
 import { supplierStepArgs } from '@core/supplier'
 import { ROUTES_FILE } from '@core/routes'
 import { RELAYER_FILE } from '@core/relayer'
@@ -46,6 +55,38 @@ export async function sshTest(req: Req<'ssh-test'>, ctx: OpContext): Promise<Res
     docker,
     keyring: /PSM_KEYRING_OK/.test(r.out)
   }
+}
+
+/**
+ * server-survey: runs resources/server/survey.sh on a server whose supplier was set up by
+ * hand, to see what an import would take over. The script is read-only and prints no
+ * secret; it goes to a temporary file under /tmp, runs as the SSH user, and is removed
+ * however it ends.
+ */
+export async function serverSurvey(
+  req: Req<'server-survey'>,
+  ctx: OpContext
+): Promise<Res<'server-survey'>> {
+  const conn = resolveSsh(req)
+  const op = req.operator_address ? validateAddress(req.operator_address, 'Operator address') : ''
+  const dir = serverTemplatesDir()
+  const sh = await readText(join(dir, 'survey.sh'))
+  const py = await readText(join(dir, 'survey_address.py'))
+  if (sh === null || py === null) fail('The survey script is missing from the app resources.', dir)
+  const script = buildSurveyScript(sh!, py!)
+  const remote = `/tmp/psm-survey-${randomBytes(6).toString('hex')}.sh`
+  ctx.progress('info', `Surveying ${conn.target} (read-only)`, undefined, 'survey')
+  return withWorkDir(async (work) => {
+    const local = join(work, 'survey.sh')
+    await writeText(local, script)
+    const cp = await runScp(conn, [local, `${conn.target}:${remote}`], ctx)
+    if (cp.code !== 0) fail('Could not copy the survey to the server.', cleanErr(cp.err))
+    const r = await runSsh(conn, `bash ${remote} ${op}; rc=$?; rm -f ${remote}; exit $rc`, ctx)
+    if (r.code !== 0 && !/^survey: /m.test(r.out))
+      fail('The survey could not run on the server.', cleanErr(r.err + '\n' + r.out))
+    const report = parseSurvey(r.out)
+    return { ok: true, report, verdict: judgeSurvey(report) }
+  })
 }
 
 async function loadTemplates(): Promise<StackTemplates> {
