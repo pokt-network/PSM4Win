@@ -7,6 +7,9 @@ import {
   supplierStakeYaml,
   pocketApYaml,
   backendComposeFromTemplate,
+  stackUrl,
+  portOfStackUrl,
+  publicPortError,
   type StackTemplates
 } from '@core/stack'
 import { POCKETD_IMAGE, RELAYMINER_IMAGE, REDIS_IMAGE, STACK_LAYOUT } from '@core/versions'
@@ -117,6 +120,23 @@ describe('YAML the transactions mount', () => {
     expect(backendComposeFromTemplate('a {{SERVICE_ID}}\r\nb {{SERVICE_ID}}', 'svc')).toBe(
       'a svc\nb svc'
     )
+  })
+  it('builds and reads a stack URL with an optional public port', () => {
+    expect(stackUrl('services.example.org')).toBe('https://services.example.org')
+    expect(stackUrl('services.example.org', '443')).toBe('https://services.example.org')
+    expect(stackUrl('services.example.org', ' ')).toBe('https://services.example.org')
+    expect(stackUrl('services.example.org', '8445')).toBe('https://services.example.org:8445')
+    expect(stackUrl('services.example.org', 8445)).toBe('https://services.example.org:8445')
+    expect(portOfStackUrl('https://services.example.org:8445')).toBe('8445')
+    expect(portOfStackUrl('https://services.example.org:8445/x')).toBe('8445')
+    expect(portOfStackUrl('https://services.example.org:443')).toBe('')
+    expect(portOfStackUrl('https://services.example.org')).toBe('')
+    expect(portOfStackUrl(undefined)).toBe('')
+    expect(publicPortError('')).toBeNull()
+    expect(publicPortError('8445')).toBeNull()
+    expect(publicPortError('0')).not.toBeNull()
+    expect(publicPortError('70000')).not.toBeNull()
+    expect(publicPortError('84a5')).not.toBeNull()
   })
   it('caps the memory of a templated backend and of the shared Caddy', () => {
     const backend = backendComposeFromTemplate(rd('backend-compose.yaml.tmpl'), 'svc')

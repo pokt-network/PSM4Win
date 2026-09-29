@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useStore, S, type SupplyRow } from '../store'
 import type { ChainSupplier } from '@core/lcd'
-import { account, readAfterTx } from '@core/lcd'
+import { account, readAfterTx, ownedSuppliers, supplier as supplierAt } from '@core/lcd'
 import { stackNeedsUpdate } from '@core/stack'
 import { fmtPokt, fmtInt, fmtDuration, shortAddr, POKT } from '@core/format'
 import { unbondingOf, unbondingNote, nextSessionBoundary, supplierServiceIds } from '@core/chain'
@@ -46,7 +46,8 @@ import {
   saveSettings,
   psm,
   goTo,
-  type SupplierRow as ListRow
+  type SupplierRow as ListRow,
+  copy
 } from '../lib/actions'
 import { confirmTx, fundOperator, TxLink } from '../lib/flows'
 import { provisionOn } from './Settings'
@@ -89,137 +90,258 @@ export function supplierStatusCell(
 function SuppliersList(): React.JSX.Element {
   const { net, params, settings } = useStore()
   const [rows, setRows] = useState<ListRow[] | null>(null)
+  const [reread, setReread] = useState(0)
   const load = useCallback(async () => setRows(await supplierRows()), [])
   useEffect(() => {
     void load()
   }, [load, net, settings?.servers])
   return (
-    <div className="panel">
-      <h2>
-        Suppliers <NetBadge />
-      </h2>
-      <p className="hint" style={{ margin: '0 0 6px 0' }}>
-        A supplier is the operator key on one of your servers, staked on chain for one or more
-        services behind that server's RelayMiner URL. The owner wallet receives the revenue and the
-        returned stake; the operator signs relays and claims and never leaves the server. One
-        supplier per server per network; servers come from Settings.
-      </p>
-      <div id="supList" style={{ marginTop: 10 }}>
-        {rows === null ? (
-          <Busy>Reading suppliers</Busy>
-        ) : !rows.length ? (
-          <Empty
-            text="No servers configured. A supplier lives on a server."
-            button={
-              <button className="btn primary" onClick={() => goTo('settings')}>
-                Add a server
-              </button>
-            }
-          />
-        ) : (
-          <table className="services">
-            <thead>
-              <tr>
-                <th>Server</th>
-                <th>Status on {netLabel(net)}</th>
-                <th>Services</th>
-                <th>Operator gas</th>
-                <th>URL</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((x) => {
-                const st = x.stack
-                const ids = supplierServiceIds(x.rec)
-                return (
-                  <tr key={x.server.name}>
-                    <td className="svcid">
-                      {x.server.name}
-                      <div className="hint mono">{st?.operator ? shortAddr(st.operator) : ''}</div>
-                    </td>
-                    <td>
-                      {supplierStatusCell(x, params, net)}
-                      {stackNeedsUpdate(st) ? (
-                        <div>
-                          <Badge cls="warn">stack update needed</Badge>
+    <>
+      <div className="panel">
+        <h2>
+          Suppliers <NetBadge />
+        </h2>
+        <p className="hint" style={{ margin: '0 0 6px 0' }}>
+          A supplier is the operator key on one of your servers, staked on chain for one or more
+          services behind that server's RelayMiner URL. The owner wallet receives the revenue and
+          the returned stake; the operator signs relays and claims and never leaves the server. One
+          supplier per server per network; servers come from Settings.
+        </p>
+        <div id="supList" style={{ marginTop: 10 }}>
+          {rows === null ? (
+            <Busy>Reading suppliers</Busy>
+          ) : !rows.length ? (
+            <Empty
+              text="No servers configured. A supplier lives on a server."
+              button={
+                <button className="btn primary" onClick={() => goTo('settings')}>
+                  Add a server
+                </button>
+              }
+            />
+          ) : (
+            <table className="services">
+              <thead>
+                <tr>
+                  <th>Server</th>
+                  <th>Status on {netLabel(net)}</th>
+                  <th>Services</th>
+                  <th>Operator gas</th>
+                  <th>URL</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((x) => {
+                  const st = x.stack
+                  const ids = supplierServiceIds(x.rec)
+                  return (
+                    <tr key={x.server.name}>
+                      <td className="svcid">
+                        {x.server.name}
+                        <div className="hint mono">
+                          {st?.operator ? shortAddr(st.operator) : ''}
                         </div>
-                      ) : null}
-                    </td>
-                    <td>{ids.length ? ids.join(', ') : <span className="hint">none</span>}</td>
-                    <td>
-                      {x.gas === null ? (
-                        '?'
-                      ) : x.gas < 2 * POKT ? (
-                        <Badge cls="warn">{fmtPokt(x.gas)} POKT</Badge>
-                      ) : (
-                        fmtPokt(x.gas) + ' POKT'
-                      )}
-                    </td>
-                    <td>
-                      {st?.url ? (
-                        x.answers ? (
-                          <Badge cls="ok">answers</Badge>
+                      </td>
+                      <td>
+                        {supplierStatusCell(x, params, net)}
+                        {stackNeedsUpdate(st) ? (
+                          <div>
+                            <Badge cls="warn">stack update needed</Badge>
+                          </div>
+                        ) : null}
+                      </td>
+                      <td>{ids.length ? ids.join(', ') : <span className="hint">none</span>}</td>
+                      <td>
+                        {x.gas === null ? (
+                          '?'
+                        ) : x.gas < 2 * POKT ? (
+                          <Badge cls="warn">{fmtPokt(x.gas)} POKT</Badge>
                         ) : (
-                          <Badge cls="bad">no answer</Badge>
-                        )
-                      ) : (
-                        <span className="hint">none</span>
-                      )}
-                    </td>
-                    <td className="actions">
-                      {x.state === 'ready' && stackNeedsUpdate(st) ? (
-                        <>
+                          fmtPokt(x.gas) + ' POKT'
+                        )}
+                      </td>
+                      <td>
+                        {st?.url ? (
+                          x.answers ? (
+                            <Badge cls="ok">answers</Badge>
+                          ) : (
+                            <Badge cls="bad">no answer</Badge>
+                          )
+                        ) : (
+                          <span className="hint">none</span>
+                        )}
+                      </td>
+                      <td className="actions">
+                        {x.state === 'ready' && stackNeedsUpdate(st) ? (
+                          <>
+                            <button
+                              className="btn small primary"
+                              title="The server runs an older RelayMiner stack than this version of the app ships. Updating keeps the operator key, the services, and the stake."
+                              onClick={() => provisionOn(x.server.name, net)}
+                            >
+                              Update stack
+                            </button>
+                            <button
+                              className="btn small"
+                              onClick={() => openSupplier(x.server.name)}
+                            >
+                              {x.rec ? 'Manage' : 'Stake'}
+                            </button>
+                          </>
+                        ) : x.state === 'ready' ? (
                           <button
                             className="btn small primary"
-                            title="The server runs an older RelayMiner stack than this version of the app ships. Updating keeps the operator key, the services, and the stake."
-                            onClick={() => provisionOn(x.server.name, net)}
+                            onClick={() => openSupplier(x.server.name)}
                           >
-                            Update stack
-                          </button>
-                          <button className="btn small" onClick={() => openSupplier(x.server.name)}>
                             {x.rec ? 'Manage' : 'Stake'}
                           </button>
-                        </>
-                      ) : x.state === 'ready' ? (
-                        <button
-                          className="btn small primary"
-                          onClick={() => openSupplier(x.server.name)}
-                        >
-                          {x.rec ? 'Manage' : 'Stake'}
-                        </button>
-                      ) : (
-                        <button
-                          className="btn small primary"
-                          onClick={() => provisionOn(x.server.name, net)}
-                        >
-                          {x.state === 'pending'
-                            ? 'Continue provisioning'
-                            : `Provision for ${netLabel(net)}`}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        )}
+                        ) : (
+                          <button
+                            className="btn small primary"
+                            onClick={() => provisionOn(x.server.name, net)}
+                          >
+                            {x.state === 'pending'
+                              ? 'Continue provisioning'
+                              : `Provision for ${netLabel(net)}`}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div className="btnrow">
+          <RunButton
+            failText="Could not refresh"
+            onRun={async () => {
+              await refreshNetworkChecked()
+              await load()
+              setReread((n) => n + 1)
+            }}
+          >
+            Refresh
+          </RunButton>
+          <button className="btn small" onClick={() => goTo('settings')}>
+            Add a server
+          </button>
+        </div>
       </div>
-      <div className="btnrow">
-        <RunButton
-          failText="Could not refresh"
-          onRun={async () => {
-            await refreshNetworkChecked()
-            await load()
-          }}
-        >
-          Refresh
-        </RunButton>
-        <button className="btn small" onClick={() => goTo('settings')}>
-          Add a server
-        </button>
+      <UnmanagedSuppliers reread={reread} />
+    </>
+  )
+}
+
+interface Unmanaged {
+  operator: string
+  status: string
+  stakeUpokt: number
+  services: string[]
+  url: string
+}
+
+/**
+ * Suppliers the owner wallet has on this network that no server in the app manages:
+ * set up by hand with pocketd, or on a server not added here. Read-only for now; the app
+ * cannot import them yet, so they are listed to be seen, not changed. Shown only when
+ * there are some. A custodial supplier (staked by its operator as its own owner) is not
+ * under the owner wallet and does not appear here.
+ */
+function UnmanagedSuppliers({ reread }: { reread: number }): React.JSX.Element | null {
+  const { net, address, imported, settings } = useStore()
+  const [list, setList] = useState<Unmanaged[] | null>(null)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    let live = true
+    const read = async (): Promise<void> => {
+      if (!imported || !address) return setList([])
+      setError('')
+      try {
+        const known = new Set(
+          (settings?.servers ?? [])
+            .map((s) => stackOf(s, net)?.operator)
+            .filter((o): o is string => !!o)
+        )
+        const owned = (await ownedSuppliers(net, address)).filter((o) => !known.has(o.operator))
+        const out: Unmanaged[] = []
+        for (const o of owned) {
+          const rec = await supplierAt(net, o.operator).catch(() => null)
+          out.push({
+            ...o,
+            services: (rec?.services ?? []).map((s) => s.service_id),
+            url: rec?.services?.[0]?.endpoints?.[0]?.url ?? ''
+          })
+        }
+        if (live) setList(out)
+      } catch (e) {
+        if (live) setError(e instanceof Error ? e.message : String(e))
+      }
+    }
+    void read()
+    return () => {
+      live = false
+    }
+  }, [net, address, imported, settings?.servers, reread])
+
+  if (error)
+    return (
+      <div className="panel">
+        <h2>Suppliers set up outside this app</h2>
+        <div className="hint">
+          <ErrText>Could not check for them: {error}</ErrText>
+        </div>
       </div>
+    )
+  if (!list?.length) return null
+  return (
+    <div className="panel" id="supUnmanaged">
+      <h2>
+        Suppliers set up outside this app <NetBadge />
+      </h2>
+      <p className="hint" style={{ margin: '0 0 6px 0' }}>
+        Your owner wallet has {list.length === 1 ? 'this supplier' : 'these suppliers'} on{' '}
+        {netLabel(net)}, but {list.length === 1 ? 'it was' : 'they were'} set up outside this app,
+        so the app cannot deploy to, test, or restake {list.length === 1 ? 'it' : 'them'}. Leave{' '}
+        {list.length === 1 ? 'it' : 'them'} running as {list.length === 1 ? 'it is' : 'they are'}:
+        importing a supplier into the app is coming in a later version.
+      </p>
+      <table className="services">
+        <thead>
+          <tr>
+            <th>Operator</th>
+            <th>Services</th>
+            <th>Public URL</th>
+            <th>Stake</th>
+          </tr>
+        </thead>
+        <tbody>
+          {list.map((x) => (
+            <tr key={x.operator}>
+              <td>
+                <a
+                  className="mono"
+                  title={`${x.operator} (click to copy)`}
+                  onClick={() => copy(x.operator)}
+                >
+                  {shortAddr(x.operator)}
+                </a>
+              </td>
+              <td>
+                {x.services.length ? x.services.join(', ') : <span className="hint">none</span>}
+              </td>
+              <td className="mono">{x.url || <span className="hint">none</span>}</td>
+              <td>
+                <Badge cls={x.status === 'Staked' ? 'ok' : 'warn'}>
+                  {x.status === 'Staked' ? 'staked' : 'unstaking'}, {fmtPokt(x.stakeUpokt)} POKT
+                </Badge>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

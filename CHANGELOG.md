@@ -2,6 +2,11 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
+## Unreleased
+
+- Provision a supplier: a new "Public port" box for a server behind a router that forwards another port to it (for example 8445). The supplier is staked at that port, so a supplier reached as https://host:8445 keeps working when the app stakes or restakes it. Leave it empty for the usual 443.
+- Suppliers: if your owner wallet has suppliers that were set up outside this app, for example with pocketd on the command line, they are now listed under "Suppliers set up outside this app", with their services, address, and stake. The app cannot manage them yet; leave them running. Importing them is coming.
+
 ## 0.1.17
 
 - The app now tells you what happened. Copying an address, a token, or a recovery phrase shows a short "Copied to clipboard" message, also inside dialogs, where the bottom bar was hidden. Opening a link or a folder says it opened in your browser or File Explorer, or why it could not. Creating, importing, recovering, or removing a wallet, and approving or declining an assistant's request, say so where you are instead of only in the bottom bar.

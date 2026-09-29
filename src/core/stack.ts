@@ -110,6 +110,32 @@ export function hasProvisionedStack(servers: readonly ServerStacks[], net: Netwo
   return servers.some((s) => !!s.suppliers?.[net]?.provisioned_at)
 }
 
+/**
+ * A stack's public URL, the one its supplier stakes. Caddy always listens on 443 on the
+ * server; a public port other than 443 is for a server behind a router that forwards
+ * that port to 443 (for example `https://host:8445`). 443, empty, or nothing gives the
+ * plain `https://host`.
+ */
+export function stackUrl(host: string, port?: string | number | null): string {
+  const p = String(port ?? '').trim()
+  return p && p !== '443' ? `https://${host}:${p}` : `https://${host}`
+}
+
+/** The public port in a stack URL, or '' for the default 443. */
+export function portOfStackUrl(url: string | undefined | null): string {
+  const m = /^https:\/\/[^/:]+:(\d+)(?:\/|$)/.exec(String(url ?? ''))
+  return m && m[1] !== '443' ? m[1] : ''
+}
+
+/** Checks a public port as typed: empty (443) or a whole number 1 to 65535. */
+export function publicPortError(port: string): string | null {
+  const p = port.trim()
+  if (!p) return null
+  if (!/^\d{1,5}$/.test(p) || Number(p) < 1 || Number(p) > 65535)
+    return 'The public port is a number from 1 to 65535, or empty for 443.'
+  return null
+}
+
 export function appStakeYaml(stakeUpokt: number, serviceId: string): string {
   return `stake_amount: ${stakeUpokt}upokt\nservice_ids:\n  - ${serviceId}\n`
 }

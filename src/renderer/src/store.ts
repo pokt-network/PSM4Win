@@ -137,7 +137,7 @@ export interface State {
   cameFrom: Screen | null
   /** The Provision form. `net` is the network dir and host were filled for, never chosen:
    *  the panel follows the network switch at the top of the window. */
-  prov: { server: string; net: Network; dir: string; host: string; fund: string }
+  prov: { server: string; net: Network; dir: string; host: string; port: string; fund: string }
   deployed: { id: string; server: string } | null
   bridge: BridgeStatus | null
   /** Which Settings tab is showing (docs/SCREENS.md 3.11). */
@@ -181,7 +181,7 @@ export const useStore = create<State>((set) => ({
   tst: { id: '', wallet: '' },
   supOpen: null,
   cameFrom: null,
-  prov: { server: '', net: 'beta', dir: '', host: '', fund: '10' },
+  prov: { server: '', net: 'beta', dir: '', host: '', port: '', fund: '10' },
   deployed: null,
   bridge: null,
   settingsTab: 'start',

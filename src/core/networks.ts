@@ -8,6 +8,8 @@ export const NETWORKS = ['beta', 'main'] as const
 export interface NetworkInfo {
   chainId: string
   lcd: string
+  /** The indexer's GraphQL endpoint, for what the LCD cannot filter (suppliers by owner). */
+  indexer: string
   rpc: string
   grpc: string
   explorer: string
@@ -26,6 +28,7 @@ export const NETWORK_INFO: Record<Network, NetworkInfo> = {
   beta: {
     chainId: CHAIN_IDS.beta,
     lcd: 'https://sauron-api.beta.infra.pocket.network',
+    indexer: 'https://data.beta.pocket.network/graphql',
     rpc: 'https://sauron-rpc.beta.infra.pocket.network',
     grpc: 'sauron-grpc.beta.infra.pocket.network:443',
     explorer: 'https://explorer.pocket.network/beta',
@@ -41,6 +44,7 @@ export const NETWORK_INFO: Record<Network, NetworkInfo> = {
   main: {
     chainId: CHAIN_IDS.main,
     lcd: 'https://sauron-api.infra.pocket.network',
+    indexer: 'https://data.pocket.network/graphql',
     rpc: 'https://sauron-rpc.infra.pocket.network',
     grpc: 'sauron-grpc.infra.pocket.network:443',
     explorer: 'https://explorer.pocket.network',

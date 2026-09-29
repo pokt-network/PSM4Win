@@ -14,7 +14,7 @@ const PROD_CSP = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
   "font-src 'self' data:",
-  "connect-src 'self' https://sauron-api.infra.pocket.network https://sauron-api.beta.infra.pocket.network https://explorer.pocket.network",
+  "connect-src 'self' https://sauron-api.infra.pocket.network https://sauron-api.beta.infra.pocket.network https://data.pocket.network https://data.beta.pocket.network https://explorer.pocket.network",
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'none'"

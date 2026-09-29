@@ -7,7 +7,10 @@ import { resourcesDir } from './paths'
 
 const LCD_HOSTS = [
   'https://sauron-api.infra.pocket.network',
-  'https://sauron-api.beta.infra.pocket.network'
+  'https://sauron-api.beta.infra.pocket.network',
+  // The indexers, for questions the LCD cannot answer (which suppliers an owner has).
+  'https://data.pocket.network',
+  'https://data.beta.pocket.network'
 ]
 
 export interface WindowOptions {

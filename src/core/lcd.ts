@@ -442,3 +442,41 @@ export function upoktToPokt(amount: string | number | undefined): number {
 export function poktToUpokt(pokt: number): number {
   return Math.round(pokt * 1_000_000)
 }
+
+/** A supplier the indexer attributes to an owner. */
+export interface OwnedSupplier {
+  operator: string
+  /** The indexer's stake status: Staked, Unstaking. */
+  status: string
+  stakeUpokt: number
+}
+
+/**
+ * The suppliers an owner has on a network, from the indexer: the LCD cannot filter
+ * suppliers by owner (its owner_address filter answers nothing), and paging every
+ * supplier on MainNet is thousands of records. Suppliers that finished unstaking are
+ * left out. A custodial supplier, staked by its operator as its own owner, is not under
+ * the owner wallet at all; it is found from its operator instead.
+ */
+export async function ownedSuppliers(net: Network, owner: string): Promise<OwnedSupplier[]> {
+  if (!/^pokt1[0-9a-z]{38}$/.test(owner)) return []
+  const res = await fetch(NETWORK_INFO[net].indexer, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({
+      query:
+        'query($owner: String!) { suppliers(filter: { ownerId: { equalTo: $owner } }) { nodes { id stakeStatus stakeAmount } } }',
+      variables: { owner }
+    }),
+    signal: AbortSignal.timeout(20_000)
+  })
+  if (!res.ok) throw new LcdError(`HTTP ${res.status} from the indexer`, res.status)
+  const j = (await res.json()) as {
+    data?: { suppliers?: { nodes?: { id: string; stakeStatus: string; stakeAmount: string }[] } }
+    errors?: { message: string }[]
+  }
+  if (j.errors?.length) throw new Error(`the indexer answered: ${j.errors[0].message}`)
+  return (j.data?.suppliers?.nodes ?? [])
+    .filter((n) => n.stakeStatus !== 'Unstaked')
+    .map((n) => ({ operator: n.id, status: n.stakeStatus, stakeUpokt: Number(n.stakeAmount) || 0 }))
+}

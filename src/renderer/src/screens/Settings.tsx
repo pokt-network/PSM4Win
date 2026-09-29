@@ -6,7 +6,7 @@ import type { Network } from '@core/networks'
 import type { RemoteClaudeStatus } from '../../../preload/index'
 import { RE } from '@core/validate'
 import { STACK_LAYOUT } from '@core/versions'
-import { stackNeedsUpdate } from '@core/stack'
+import { stackNeedsUpdate, stackUrl, portOfStackUrl, publicPortError } from '@core/stack'
 import { fmtPokt, fmtInt, shortAddr, POKT } from '@core/format'
 import {
   Badge,
@@ -483,7 +483,7 @@ function StackCell({ s, net }: { s: ServerEntry; net: Network }): React.JSX.Elem
       <div className="mono" style={{ marginTop: 4 }} title={st?.operator ?? ''}>
         {st?.operator ? shortAddr(st.operator) : ''}
       </div>
-      <div className="hint">{hostOfUrl(st?.url)}</div>
+      <div className="hint">{String(st?.url ?? '').replace('https://', '')}</div>
       <div className="hint mono">{st?.dir ?? ''}</div>
       {st?.provisioned_at ? (
         <div className="hint">{String(st.provisioned_at).substring(0, 10)}</div>
@@ -506,7 +506,8 @@ export function openProvision(name: string, net: Network): void {
           server: name,
           net,
           dir: st?.dir || stackDirDefault(net),
-          host: st ? hostOfUrl(st.url) : ''
+          host: st ? hostOfUrl(st.url) : '',
+          port: portOfStackUrl(st?.url)
         },
         provOpenAt: Date.now(),
         settingsTab: 'suppliers'
@@ -549,7 +550,8 @@ function ProvisionPanel(): React.JSX.Element {
         server,
         net: appNet,
         dir: st?.dir || stackDirDefault(appNet),
-        host: st ? hostOfUrl(st.url) : ''
+        host: st ? hostOfUrl(st.url) : '',
+        port: portOfStackUrl(st?.url)
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -622,6 +624,8 @@ function ProvisionPanel(): React.JSX.Element {
     const ports = stackPorts(net)
     if (!/^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(host))
       return setStatus('Enter the public hostname (a DNS name pointing at the server).', 'err')
+    const portErr = publicPortError(prov.port)
+    if (portErr) return setStatus(portErr, 'err')
     if (!S().imported || !dockerReady())
       return setStatus('Owner wallet and Docker must be ready.', 'err')
     if (net !== S().net)
@@ -652,7 +656,7 @@ function ProvisionPanel(): React.JSX.Element {
       await setStack(s.name, net, {
         dir,
         project,
-        url: 'https://' + host,
+        url: stackUrl(host, prov.port),
         operator,
         provisioned_at: new Date().toISOString(),
         layout: STACK_LAYOUT
@@ -705,7 +709,7 @@ function ProvisionPanel(): React.JSX.Element {
       true,
       `Copied ${r2.files.join(', ')}${r2.relayer_kept ? '; the existing relayer config with its services was kept' : ''}`
     )
-    await setStack(s.name, net, { dir, project, url: 'https://' + host })
+    await setStack(s.name, net, { dir, project, url: stackUrl(host, prov.port) })
     log(
       'Creating the operator key on the server (kept if it already exists). It never leaves the server.'
     )
@@ -719,7 +723,7 @@ function ProvisionPanel(): React.JSX.Element {
       return fail('Operator key step failed.')
     }
     operator = r3.address
-    await setStack(s.name, net, { dir, project, operator, url: 'https://' + host })
+    await setStack(s.name, net, { dir, project, operator, url: stackUrl(host, prov.port) })
     mark('Operator key', true, r3.lines.join(' | '))
     log("Writing the RelayMiner's key file from the operator keyring (mode 400).")
     const r4 = await sg['supplier-run']({ ...conn, step: 'keys' })
@@ -838,7 +842,8 @@ function ProvisionPanel(): React.JSX.Element {
                 server: e.target.value,
                 net: appNet,
                 dir: st2?.dir || stackDirDefault(appNet),
-                host: st2 ? hostOfUrl(st2.url) : ''
+                host: st2 ? hostOfUrl(st2.url) : '',
+                port: portOfStackUrl(st2?.url)
               })
             }}
           >
@@ -888,6 +893,25 @@ function ProvisionPanel(): React.JSX.Element {
           <div className="hint">
             One hostname per network, its DNS record already pointing at the server; Caddy requests
             the certificate for it.
+          </div>
+        </div>
+        <div>
+          <label>Public port (optional)</label>
+          <input
+            type="text"
+            id="provPort"
+            inputMode="numeric"
+            placeholder="443"
+            value={prov.port}
+            onChange={(e) => setProv({ port: e.target.value })}
+          />
+          <div className="hint">
+            Leave empty unless the server is behind a router that forwards a different port to it,
+            for example 8445. The supplier is staked at{' '}
+            <span className="mono">
+              {stackUrl(prov.host.trim() || 'host', prov.port.trim() || null)}
+            </span>
+            . The router must also forward port 80, which Caddy needs to get the certificate.
           </div>
         </div>
         <div>
