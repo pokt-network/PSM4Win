@@ -26,6 +26,11 @@
 #   supplier.sh operator-import <operator> hex|mnemonic
 #                                            import: the same for a key the user pasted into the app,
 #                                            read from standard input (never an argument)
+#   supplier.sh backend-attach <container>   import: join one of their backend containers to the
+#                                            shared network so this stack's relayer can call it
+#   supplier.sh theirs stop|start|disable container|unit <name>
+#                                            import: stop (or start again, or keep from starting on
+#                                            its own) their RelayMiner or proxy; refuses anything else
 #
 # The stack's images are pinned in stack.env by the app release that provisioned it
 # (STACK_LAYOUT 2 and later); `start` sizes memory from this server and validates both
@@ -292,6 +297,58 @@ case "$step" in
       *) echo "error: unknown key kind $KIND"; exit 2 ;;
     esac
     import_record "$WANT" pasted
+    ;;
+  backend-attach)
+    # One of their backend containers joins the shared network, where this stack's relayer
+    # calls it by its container name. Their own network connections are kept.
+    C="${1:?container}"
+    case "$C" in pocket-supplier*|pocket-caddy) echo "error: $C is one of the app's own containers"; exit 1 ;; esac
+    docker inspect "$C" >/dev/null 2>&1 || { echo "error: there is no container named $C"; exit 1; }
+    docker network inspect "$NET_NAME" >/dev/null 2>&1 || docker network create "$NET_NAME" >/dev/null
+    if docker inspect --format '{{range $n, $v := .NetworkSettings.Networks}}{{$n}} {{end}}' "$C" | tr ' ' '\n' | grep -qx "$NET_NAME"; then
+      echo "backend: $C is already on $NET_NAME"
+    else
+      docker network connect "$NET_NAME" "$C" && echo "backend: $C joined $NET_NAME"
+    fi
+    ;;
+  theirs)
+    # Their RelayMiner and proxy, at the switch-over. Only a RelayMiner (HA or legacy) or a
+    # web proxy is ever touched, never one of the app's own containers.
+    ACT="${1:?stop, start or disable}"; KIND="${2:?container or unit}"; NAME="${3:?name}"
+    case "$ACT" in stop|start|disable) ;; *) echo "error: unknown action $ACT"; exit 2 ;; esac
+    case "$KIND" in
+      container)
+        case "$NAME" in pocket-supplier*|pocket-caddy) echo "error: $NAME is one of the app's own containers"; exit 1 ;; esac
+        what=$(docker inspect --format '{{.Config.Image}} {{join .Config.Entrypoint " "}} {{join .Config.Cmd " "}}' "$NAME" 2>/dev/null) ||
+          { echo "error: there is no container named $NAME"; exit 1; }
+        case "$what" in
+          *pocket-relay-miner*|*relayminer*|*caddy*|*nginx*|*traefik*|*haproxy*) ;;
+          *) echo "error: $NAME is not a RelayMiner or a web proxy; the app leaves it alone"; exit 1 ;;
+        esac
+        case "$ACT" in
+          stop) docker stop "$NAME" >/dev/null && echo "theirs: stopped $NAME" ;;
+          start) docker start "$NAME" >/dev/null && echo "theirs: started $NAME" ;;
+          disable) docker update --restart=no "$NAME" >/dev/null && echo "theirs: $NAME will not start again on its own" ;;
+        esac
+        ;;
+      unit)
+        case "$NAME" in *.service) ;; *) echo "error: $NAME is not a systemd service"; exit 2 ;; esac
+        exe=$(systemctl show -p ExecStart --value "$NAME" 2>/dev/null || true)
+        case "$NAME" in
+          caddy.service|nginx.service) ;;
+          *) case "$exe" in
+               *relayminer*|*pocket-relay-miner*) ;;
+               *) echo "error: $NAME does not run a RelayMiner; the app leaves it alone"; exit 1 ;;
+             esac ;;
+        esac
+        case "$ACT" in
+          stop) sudo -n systemctl stop "$NAME" && echo "theirs: stopped $NAME" ;;
+          start) sudo -n systemctl start "$NAME" && echo "theirs: started $NAME" ;;
+          disable) sudo -n systemctl disable "$NAME" >/dev/null 2>&1 && echo "theirs: $NAME will not start again on its own" ;;
+        esac
+        ;;
+      *) echo "error: unknown kind $KIND"; exit 2 ;;
+    esac
     ;;
   keys)
     UID_IN_IMAGE="${1:-1000}"

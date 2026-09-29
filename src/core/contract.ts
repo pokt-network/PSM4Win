@@ -133,6 +133,10 @@ export type SupplierStep =
   | 'remove-routes'
   /** Import: puts a supplier's existing operator key, found on the same server, into this stack. */
   | 'operator-adopt'
+  /** Import: one of their backend containers joins the shared network. */
+  | 'backend-attach'
+  /** Import: stop, start again, or disable their RelayMiner or proxy (container or systemd unit). */
+  | 'theirs'
 
 /** One extra public route for supplier-run add-routes: https://<hostname><path>/* to
  *  <service_id>-backend:<port>, prefix stripped. The host is never a request field. */
@@ -235,6 +239,12 @@ export interface SignerRequests {
     source_path?: string
     /** operator-adopt only: the operator whose key it must be. */
     operator_address?: string
+    /** backend-attach: their backend container. */
+    container?: string
+    /** theirs: what to do, to what kind of thing, and its name. */
+    their_action?: 'stop' | 'start' | 'disable'
+    their_kind?: 'container' | 'unit'
+    their_name?: string
   }
   /**
    * Import: puts a supplier's operator key, pasted by the user, into a stack on the server.
@@ -372,7 +382,9 @@ export const SUPPLIER_STEP_TIMEOUTS_MS: Record<SupplierStep, number> = {
   'remove-service': 240_000,
   'add-routes': 120_000,
   'remove-routes': 120_000,
-  'operator-adopt': 180_000
+  'operator-adopt': 180_000,
+  'backend-attach': 60_000,
+  theirs: 120_000
 }
 
 /**

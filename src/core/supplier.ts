@@ -26,7 +26,9 @@ export const SUPPLIER_STEPS: readonly SupplierStep[] = [
   'remove-service',
   'add-routes',
   'remove-routes',
-  'operator-adopt'
+  'operator-adopt',
+  'backend-attach',
+  'theirs'
 ]
 
 /** The step and its validated arguments, or a thrown SignerFailure. */
@@ -85,6 +87,22 @@ export function supplierStepArgs(req: SignerRequests['supplier-run']): {
       )
       break
     }
+    case 'backend-attach':
+      args.push(validateContainerName(req.container))
+      break
+    case 'theirs': {
+      const act = String(req.their_action ?? '')
+      if (!['stop', 'start', 'disable'].includes(act)) fail(`Unknown action '${act}'.`)
+      const kind = String(req.their_kind ?? '')
+      if (kind === 'container') args.push(act, kind, validateContainerName(req.their_name))
+      else if (kind === 'unit') {
+        const u = String(req.their_name ?? '')
+        if (!/^[A-Za-z0-9@_.-]{1,120}\.service$/.test(u))
+          fail('That is not a systemd service name.')
+        args.push(act, kind, u)
+      } else fail('It must be a container or a systemd service.')
+      break
+    }
   }
   return { step, args }
 }
@@ -102,4 +120,16 @@ export function normalizeOperatorSecret(s: string): { kind: 'hex' | 'mnemonic'; 
   if ([12, 15, 18, 21, 24].includes(words.length) && words.every((w) => /^[a-z]+$/.test(w)))
     return { kind: 'mnemonic', value: words.join(' ') }
   return fail('That is neither a 64-character hex private key nor a 12 to 24 word recovery phrase.')
+}
+
+/**
+ * A Docker container name from the survey, for the import steps. Never one of the app's own
+ * containers (supplier.sh refuses them too).
+ */
+export function validateContainerName(name: unknown): string {
+  const n = String(name ?? '')
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(n)) fail('That is not a container name.')
+  if (/^pocket-supplier(-|$)|^pocket-caddy$/.test(n))
+    fail(`${n} is one of the app's own containers.`)
+  return n
 }

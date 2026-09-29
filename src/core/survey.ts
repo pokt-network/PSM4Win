@@ -42,6 +42,10 @@ export interface SurveyReport {
   settings: { key: string; value: string; config: string }[]
   keyrings: { dir: string; backend: string; address: string; match: boolean | null }[]
   keysFiles: { path: string; address: string; match: boolean | null }[]
+  /** Each container's Docker networks and the names it answers to on each. */
+  networks: { container: string; nets: { network: string; aliases: string[] }[] }[]
+  /** The hostnames each proxy serves, from its config files. */
+  sites: { proxy: string; host: string; file: string }[]
   /** The script reached its last line (a missing python3 ends it early, marked partial). */
   complete: boolean
   partial: boolean
@@ -86,6 +90,8 @@ export function parseSurvey(out: string): SurveyReport {
     settings: [],
     keyrings: [],
     keysFiles: [],
+    networks: [],
+    sites: [],
     complete: false,
     partial: false
   }
@@ -184,6 +190,23 @@ export function parseSurvey(out: string): SurveyReport {
             address: p.address,
             match: matchOf(p.match)
           })
+        break
+      }
+      case 'networks': {
+        const p = pairs(rest)
+        const nets = (p.nets ?? '')
+          .split(';')
+          .filter(Boolean)
+          .map((n) => {
+            const [network, aliases = ''] = n.split('=')
+            return { network, aliases: aliases.split(',').filter(Boolean) }
+          })
+        if (p.container) r.networks.push({ container: p.container, nets })
+        break
+      }
+      case 'site': {
+        const p = pairs(rest)
+        if (p.host) r.sites.push({ proxy: p.proxy ?? '', host: p.host, file: p.file ?? '' })
         break
       }
       case 'keysfile': {

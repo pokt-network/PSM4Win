@@ -31,6 +31,7 @@ echo "$*" >> "$FAKE_LOG"
 case " $* " in *" -e PSM_IMPORT_KEY "*) printf '%s' "\${PSM_IMPORT_KEY:-}" > "$FAKE_ENV" ;; esac
 case " $* " in *" -i "*) cat > "$FAKE_STDIN" ;; esac
 case " $* " in *" keys show operator -a "*) [ -n "\${FAKE_KEYRING_ADDR:-}" ] && echo "$FAKE_KEYRING_ADDR" ;; esac
+if [ "$1" = inspect ]; then [ -n "\${FAKE_INSPECT:-}" ] || exit 1; echo "$FAKE_INSPECT"; fi
 exit 0
 `
 // stack_operator reads operator-key.json with python3 -c; keyaddr.py pick answers FAKE_PICK.
@@ -178,6 +179,46 @@ describe.skipIf(!BASH)('supplier.sh operator import', () => {
     expect(r.code).not.toBe(0)
     expect(r.out).toContain(`holds no key for ${OP}`)
     expect(r.calls.some((c) => /import-hex/.test(c))).toBe(false)
+  })
+
+  it('stops their RelayMiner container, and refuses anything that is not one', () => {
+    const ok = sh(['theirs', 'stop', 'container', 'supplier-relayer-1'], {
+      env: {
+        FAKE_INSPECT: 'ghcr.io/pokt-network/pocket-relay-miner:v0.1.0  relayer --config /c.yaml'
+      }
+    })
+    expect(ok.code).toBe(0)
+    expect(ok.calls).toContain('stop supplier-relayer-1')
+    const db = sh(['theirs', 'stop', 'container', 'postgres'], {
+      env: { FAKE_INSPECT: 'postgres:16  postgres' }
+    })
+    expect(db.code).not.toBe(0)
+    expect(db.out).toContain('is not a RelayMiner or a web proxy')
+    expect(db.calls.some((c) => c.startsWith('stop'))).toBe(false)
+    const own = sh(['theirs', 'stop', 'container', 'pocket-supplier-main-relayer'])
+    expect(own.code).not.toBe(0)
+    expect(own.out).toContain("one of the app's own containers")
+    expect(own.calls).toEqual([])
+    const disable = sh(['theirs', 'disable', 'container', 'caddy'], {
+      env: { FAKE_INSPECT: 'caddy:2  caddy run' }
+    })
+    expect(disable.calls).toContain('update --restart=no caddy')
+  })
+
+  it('joins their backend to the shared network, never an app container', () => {
+    const r = sh(['backend-attach', 'supplier-charts-1'], {
+      env: { FAKE_INSPECT: 'supplier_default ' }
+    })
+    expect(r.code).toBe(0)
+    expect(r.calls).toContain('network connect pocket-supplier supplier-charts-1')
+    const already = sh(['backend-attach', 'supplier-charts-1'], {
+      env: { FAKE_INSPECT: 'supplier_default pocket-supplier ' }
+    })
+    expect(already.out).toContain('already on pocket-supplier')
+    expect(already.calls.some((c) => c.startsWith('network connect'))).toBe(false)
+    const own = sh(['backend-attach', 'pocket-caddy'])
+    expect(own.code).not.toBe(0)
+    expect(own.calls).toEqual([])
   })
 
   it('points to pasting when the keyring has a passphrase (no test keyring)', () => {

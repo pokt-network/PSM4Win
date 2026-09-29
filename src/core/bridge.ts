@@ -490,10 +490,15 @@ export const BRIDGE_EXCLUDED_OPS: readonly SignerOp[] = [
 
 /**
  * supplier-run steps an assistant may not ask for, whatever the tool's step list says:
- * operator-adopt moves an existing operator key into a stack (import), which is done in
- * the app window only.
+ * operator-adopt moves an existing operator key into a stack, backend-attach and theirs
+ * change containers the app did not make; all three are import steps, done in the app
+ * window only.
  */
-export const BRIDGE_REFUSED_STEPS: readonly string[] = ['operator-adopt']
+export const BRIDGE_REFUSED_STEPS: readonly string[] = [
+  'operator-adopt',
+  'backend-attach',
+  'theirs'
+]
 
 /**
  * Operations that exist in the app but are deliberately not offered to an assistant.

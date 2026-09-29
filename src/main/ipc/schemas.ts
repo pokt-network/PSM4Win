@@ -117,7 +117,11 @@ export const requestSchemas: Record<SignerOp, z.ZodTypeAny> = {
       .optional(),
     source_kind: z.enum(['keysfile', 'keyring']).optional(),
     source_path: z.string().max(512).optional(),
-    operator_address: addr.optional()
+    operator_address: addr.optional(),
+    container: z.string().max(128).optional(),
+    their_action: z.enum(['stop', 'start', 'disable']).optional(),
+    their_kind: z.enum(['container', 'unit']).optional(),
+    their_name: z.string().max(128).optional()
   }),
   'supplier-import-operator': ssh.extend({
     path: z.string().max(512),

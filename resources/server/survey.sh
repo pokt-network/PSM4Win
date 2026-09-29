@@ -39,7 +39,10 @@ fi
 CONFIGS=$(mktemp)
 KEYDIRS=$(mktemp)
 KEYFILES=$(mktemp)
-trap 'rm -f "$CONFIGS" "$KEYDIRS" "$KEYFILES"' EXIT
+PROXIES=$(mktemp)
+CFG_PY=""; SITE_PY=""; ADDR_PY=""
+cleanup() { rm -f "$CONFIGS" "$KEYDIRS" "$KEYFILES" "$PROXIES" ${CFG_PY:+"$CFG_PY"} ${SITE_PY:+"$SITE_PY"} ${ADDR_PY:+"$ADDR_PY"}; }
+trap cleanup EXIT
 
 # ---- containers ----
 if $DK ps >/dev/null 2>&1; then
@@ -62,6 +65,8 @@ if $DK ps >/dev/null 2>&1; then
       *redis*) role=redis ;;
     esac
     say "container: name=$name role=$role image=$image project=$project dir=$wd ports=$ports"
+    nets=$($DK inspect --format '{{range $n, $v := .NetworkSettings.Networks}}{{$n}}={{join $v.Aliases ","}};{{end}}' "$id" 2>/dev/null)
+    say "networks: container=$name nets=$nets"
     case "$role" in
       relayer|miner|relayminer|legacy-relayminer)
         # The --config path inside the container, mapped back to the file on this server.
@@ -84,7 +89,7 @@ if $DK ps >/dev/null 2>&1; then
       caddy|nginx|traefik|haproxy)
         $DK inspect --format '{{range .Mounts}}{{.Source}}|{{.Destination}}{{"\n"}}{{end}}' "$id" 2>/dev/null |
           while IFS='|' read -r src dst; do
-            case "$dst" in /etc/caddy*|/etc/nginx*) say "proxyconf: proxy=$role where=container:$name path=$src" ;; esac
+            case "$dst" in /etc/caddy*|/etc/nginx*) say "proxyconf: proxy=$role where=container:$name path=$src"; printf '%s|%s\n' "$role" "$src" >>"$PROXIES" ;; esac
           done
         ;;
     esac
@@ -118,7 +123,11 @@ if command -v ss >/dev/null 2>&1; then
     case "$port" in 80|443|8080|8443|8445) say "listen: port=$port process=$(printf '%s' "$proc" | sed -n 's/.*(("\([^"]*\)".*/\1/p')" ;; esac
   done | sort -u
 fi
-for f in /etc/caddy/Caddyfile /etc/nginx/nginx.conf; do [ -e "$f" ] && say "proxyconf: proxy=$(basename "$(dirname "$f")") where=host path=$f"; done
+for f in /etc/caddy/Caddyfile /etc/caddy /etc/nginx/sites-enabled /etc/nginx/conf.d /etc/nginx/nginx.conf; do
+  [ -e "$f" ] || continue
+  p=caddy; case "$f" in /etc/nginx*) p=nginx ;; esac
+  say "proxyconf: proxy=$p where=host path=$f"; printf '%s|%s\n' "$p" "$f" >>"$PROXIES"
+done
 
 # ---- keyrings and keys files in the usual places ----
 for d in /root/.pocket /home/*/.pocket /opt/*/pocket-home /opt/*/*/pocket-home /var/lib/*/.pocket; do
@@ -133,7 +142,6 @@ done
 # The configs name their keys file or keyring and list each service's backend. The
 # program goes in a file so the config itself can reach Python on stdin.
 CFG_PY=$(mktemp)
-trap 'rm -f "$CONFIGS" "$KEYDIRS" "$KEYFILES" "$CFG_PY"' EXIT
 cat >"$CFG_PY" <<'PY'
 import re, sys
 role, path, frm = sys.argv[1:4]
@@ -160,6 +168,38 @@ for m in re.finditer(r'^\s*(listen_addr|listen_url|query_node_grpc_url|query_nod
 PY
 sort -u "$CONFIGS" | while IFS='|' read -r role path from; do
   rd "$path" | $PY "$CFG_PY" "$role" "$path" "$from" 2>/dev/null
+done
+
+# The sites each proxy serves, so an import can tell whether a proxy serves only the
+# supplier's hostname (and may be stopped) or other sites too (and must be left alone).
+SITE_PY=$(mktemp)
+cat >"$SITE_PY" <<'PY'
+import re, sys
+proxy, path = sys.argv[1:3]
+seen = set()
+for block in sys.stdin.read().split("\0@@FILE@@"):
+    if not block.strip():
+        continue
+    name, _, text = block.partition("\n")
+    if proxy == "nginx":
+        hosts = [h for m in re.finditer(r"^\s*server_name\s+([^;]+);", text, re.M) for h in m.group(1).split()]
+    else:
+        hosts = []
+        depth = 0
+        for line in text.splitlines():
+            s = line.split("#", 1)[0].strip()
+            if depth == 0 and s.endswith("{") and s != "{" and not s.startswith(("(", "import", "@")):
+                hosts += [h for h in re.split(r"[\s,]+", s[:-1].strip()) if h]
+            depth += s.count("{") - s.count("}")
+    for h in hosts:
+        h = re.sub(r"^https?://", "", h)
+        if h and h != "_" and (proxy, h) not in seen:
+            seen.add((proxy, h))
+            print("site: proxy=%s host=%s file=%s" % (proxy, h, name.strip()))
+PY
+sort -u "$PROXIES" | while IFS='|' read -r proxy path; do
+  { find "$path" -maxdepth 3 -type f 2>/dev/null || $S find "$path" -maxdepth 3 -type f 2>/dev/null; } | head -200 |
+    while read -r pf; do printf '\0@@FILE@@%s\n' "$pf"; rd "$pf"; done | $PY "$SITE_PY" "$proxy" "$path" 2>/dev/null
 done
 
 # Keyrings: each <hex>.address file names an address the keyring holds. No key is read.
@@ -199,7 +239,6 @@ done
 # Keys files: the address of each key, derived here. The file goes to Python through a
 # pipe; the key is never printed, written, or passed as an argument.
 ADDR_PY=$(mktemp)
-trap 'rm -f "$CONFIGS" "$KEYDIRS" "$KEYFILES" "$CFG_PY" "$ADDR_PY"' EXIT
 cat >"$ADDR_PY" <<'PY'
 @@ADDRESS_PY@@
 PY
