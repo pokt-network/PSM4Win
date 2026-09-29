@@ -2,6 +2,11 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
+## Unreleased
+
+- Suppliers: changing a supplier's stake or services now always keeps its owner and how its rewards are split, exactly as they are on the network. The app checks this itself before signing, so neither the app nor an assistant using it can hand a supplier to a different owner by mistake.
+- Suppliers: a custodial supplier, one whose operator is also its owner, can now be restaked from the app. The stake stays custodial: stake increases come from the operator account, and returned stake and rewards stay with it. Unstaking one from the app is not possible yet.
+
 ## 0.1.18
 
 - Provision a supplier: a new "Public port" box for a server behind a router that forwards another port to it (for example 8445). The supplier is staked at that port, so a supplier reached as https://host:8445 keeps working when the app stakes or restakes it. Leave it empty for the usual 443.

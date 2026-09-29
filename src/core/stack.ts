@@ -140,13 +140,43 @@ export function appStakeYaml(stakeUpokt: number, serviceId: string): string {
   return `stake_amount: ${stakeUpokt}upokt\nservice_ids:\n  - ${serviceId}\n`
 }
 
+/** One share of a supplier's revenue: an address and its whole-number percentage. */
+export interface RevShare {
+  address: string
+  percent: number
+}
+
+/**
+ * The revenue split recorded on a supplier, read from its first service (the app stakes
+ * every service with the same default split). Null when the record carries none, or one
+ * that does not add up to 100, so the caller falls back to the owner alone.
+ */
+export function revShareOf(rec: {
+  services?: { rev_share?: { address: string; rev_share_percentage: string | number }[] }[]
+}): RevShare[] | null {
+  const rs = rec.services?.[0]?.rev_share ?? []
+  const out = rs
+    .map((r) => ({ address: r.address, percent: Number(r.rev_share_percentage) }))
+    .filter(
+      (r) => /^pokt1[0-9a-z]{38}$/.test(r.address) && Number.isInteger(r.percent) && r.percent > 0
+    )
+  return out.length && out.reduce((a, r) => a + r.percent, 0) === 100 ? out : null
+}
+
+/**
+ * The stake config a supplier stakes with. `revShare` defaults to the owner alone, as for
+ * a supplier the app made; a restake of an existing supplier passes the split it already
+ * has, so an update never moves its revenue.
+ */
 export function supplierStakeYaml(
   owner: string,
   operator: string,
   stakeUpokt: number,
-  services: StakeService[]
+  services: StakeService[],
+  revShare: RevShare[] = [{ address: owner, percent: 100 }]
 ): string {
-  let y = `owner_address: ${owner}\noperator_address: ${operator}\nstake_amount: ${stakeUpokt}upokt\ndefault_rev_share_percent:\n  ${owner}: 100\nservices:\n`
+  const split = revShare.map((r) => `  ${r.address}: ${r.percent}\n`).join('')
+  let y = `owner_address: ${owner}\noperator_address: ${operator}\nstake_amount: ${stakeUpokt}upokt\ndefault_rev_share_percent:\n${split}services:\n`
   for (const s of services) {
     y += `  - service_id: ${s.service_id}\n    endpoints:\n      - publicly_exposed_url: ${s.url}\n        rpc_type: ${s.rpc_type}\n`
   }

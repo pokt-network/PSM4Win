@@ -15,7 +15,8 @@ import {
   MAX_CARD_BYTES,
   RPC_TYPES
 } from '@core/validate'
-import { appStakeYaml, supplierStakeYaml } from '@core/stack'
+import { appStakeYaml, supplierStakeYaml, revShareOf } from '@core/stack'
+import { supplierLookup } from '@core/lcd'
 import { summarizeErr, cleanErr } from '@core/pocketd-output'
 import type { SignerRequests, SignerResults } from '@core/contract'
 import type { OpContext } from './context'
@@ -279,7 +280,24 @@ export async function remoteStakeSupplier(
       fail(`Unknown rpc_type '${s.rpc_type}' for ${s.service_id}.`)
     ids.push(s.service_id)
   }
-  const yaml = supplierStakeYaml(owner, operator, stake, svcs)
+  // A stake change never moves a supplier's ownership or revenue. Signed by the operator,
+  // a restake could: for a custodial supplier (operator staked as its own owner) the
+  // operator is allowed to change the owner. So an existing supplier keeps the owner and
+  // the revenue split on its record, whatever the request says, and a request naming
+  // another owner is refused. Checked here, not only in the window, so the bridge and a
+  // compromised renderer are held to it too.
+  const found = await supplierLookup(net, operator)
+  if (found.status !== 200 && found.status !== 404)
+    fail(
+      'Could not read the supplier from the network, so its owner cannot be checked. Try again.',
+      `HTTP ${found.status}`
+    )
+  if (found.rec && found.rec.owner_address !== owner)
+    fail(
+      `This supplier's owner is ${found.rec.owner_address}. A stake change keeps its owner; the app never changes it.`
+    )
+  const split = found.rec ? (revShareOf(found.rec) ?? undefined) : undefined
+  const yaml = supplierStakeYaml(owner, operator, stake, svcs, split)
   const remote =
     `cd ${path} && docker run --rm -v ${path}/pocket-home:/home -v ${path}:/work:ro ${POCKETD_IMAGE} tx supplier stake-supplier ` +
     `--config /work/supplier_stake.yaml --from ${keyName} --keyring-backend test --home /home --network ${net} ${GAS_ARGS.join(' ')} -y -o json`

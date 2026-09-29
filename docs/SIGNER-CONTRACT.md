@@ -547,6 +547,8 @@ cd <path> && docker run --rm -v <path>/pocket-home:/home -v <path>:/work:ro ghcr
 
 Note the server-side keyring is the unencrypted `test` backend under `<path>/pocket-home`.
 
+**Owner and revenue are kept (Electron 0.1.19; not in the HTA).** Before building the YAML, the signer reads the supplier's record from the LCD (`supplierLookup`). When it exists, `owner_address` must equal the recorded owner, or the operation fails with "This supplier's owner is <owner>. A stake change keeps its owner; the app never changes it."; and `default_rev_share_percent` is the split recorded on the supplier's first service (`revShareOf`, used when it adds up to 100), not the owner alone. A new supplier (404) is staked as above. Any other read failure fails the operation, because the owner cannot be checked. The reason: poktroll lets whoever signs a stake update change the owner when that signer is the current owner, and for a custodial supplier (operator staked as its own owner) the operator is; an operator-signed restake that named the owner wallet would silently hand the supplier and its future rewards over. The renderer sends the recorded owner (`Snapshot.owner`); the check here holds the bridge and a compromised renderer to the same rule.
+
 Failure rule: if ssh exits non-zero **and** stdout does not contain `"txhash"`, fail with `Summarize-Err`; otherwise hand `$r` to `Emit-Tx` (history `op: "stake-supplier"`, `service_id: "<id1>,<id2>,..."`, `extra: "operator=<op> via <user@host>"`). Dry: `{ ok, dry, command: "ssh <ssh args> <target> '<remote>'", config: <yaml> }`.
 
 Signs: the operator key on the server; the local keyring is not opened. Disk: `work/` (removed), `history.jsonl`; on the server, `<path>/supplier_stake.yaml` is left in place.

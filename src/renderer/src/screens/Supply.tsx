@@ -350,6 +350,8 @@ function UnmanagedSuppliers({ reread }: { reread: number }): React.JSX.Element |
 
 interface Snapshot {
   op: string
+  /** The owner the stake keeps: the supplier's recorded owner, or the owner wallet for a new one. */
+  owner: string
   upokt: number
   services: { service_id: string; url: string; rpc_type: string }[]
   isUpdate: boolean
@@ -651,7 +653,13 @@ function SupplierEditor({
     if (existing.rec) {
       isUpdate = true
       current = Number(existing.rec.stake.amount)
-      if (existing.rec.owner_address !== S().address)
+      if (existing.rec.owner_address === existing.rec.operator_address)
+        items.push({
+          level: 'info',
+          text: 'This supplier is custodial: its operator is also its owner.',
+          sub: 'The stake keeps it that way. Stake increases are paid from the operator account, and returned stake and rewards stay with it.'
+        })
+      else if (existing.rec.owner_address !== S().address)
         items.push({
           level: 'fail',
           text: `This operator already belongs to a supplier owned by ${existing.rec.owner_address}, not the owner wallet.`
@@ -730,10 +738,11 @@ function SupplierEditor({
       rpc_type: x.rpc as (typeof RPC_TYPES)[number]
     }))
     const conn = { host: s.host, port: s.port, user: s.user, key_path: s.keyPath, path: sshPath }
+    const owner = existing.rec?.owner_address ?? S().address
     const r = await psm().signer['remote-stake-supplier']({
       network: S().net,
       ...conn,
-      owner_address: S().address,
+      owner_address: owner,
       operator_address: op,
       stake_upokt: upokt,
       services,
@@ -750,7 +759,16 @@ function SupplierEditor({
     }
     setPlan(r.command + '\n\n# supplier_stake.yaml (copied to the server)\n' + r.config)
     setPlanOk(true)
-    setSnap({ op, upokt, services, isUpdate, server: s.name, conn, key: JSON.stringify(services) })
+    setSnap({
+      op,
+      owner,
+      upokt,
+      services,
+      isUpdate,
+      server: s.name,
+      conn,
+      key: JSON.stringify(services)
+    })
     setStatus(`Preflight passed. Review the plan, then press Stake supplier on ${label}.`, 'ok')
   }
 
@@ -803,7 +821,7 @@ function SupplierEditor({
     const r = await psm().signer['remote-stake-supplier']({
       network: S().net,
       ...f.conn,
-      owner_address: S().address,
+      owner_address: f.owner,
       operator_address: f.op,
       stake_upokt: f.upokt,
       services: f.services as never
@@ -926,6 +944,11 @@ function SupplierEditor({
       return setUnstakeStatus('This supplier is already unstaking.', 'err')
     if (!S().imported || !dockerReady())
       return setUnstakeStatus('Owner wallet and Docker must be ready.', 'err')
+    if (rec.owner_address === rec.operator_address)
+      return setUnstakeStatus(
+        'This supplier is custodial: its operator is its owner, so only the operator key on the server can unstake it. The app cannot do that yet.',
+        'err'
+      )
     if (rec.owner_address !== S().address)
       return setUnstakeStatus(
         `This supplier is owned by ${rec.owner_address}, not the owner wallet.`,

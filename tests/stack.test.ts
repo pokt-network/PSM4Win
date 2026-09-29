@@ -5,6 +5,7 @@ import {
   renderStack,
   appStakeYaml,
   supplierStakeYaml,
+  revShareOf,
   pocketApYaml,
   backendComposeFromTemplate,
   stackUrl,
@@ -114,6 +115,41 @@ describe('YAML the transactions mount', () => {
     expect(y).toBe(
       'owner_address: pokt1owner\noperator_address: pokt1op\nstake_amount: 59500000000upokt\ndefault_rev_share_percent:\n  pokt1owner: 100\nservices:\n  - service_id: a\n    endpoints:\n      - publicly_exposed_url: https://x\n        rpc_type: REST\n'
     )
+  })
+  it('supplier stake keeps a given revenue split, and reads one from a record', () => {
+    const A = 'pokt1' + 'a'.repeat(38)
+    const B = 'pokt1' + 'b'.repeat(38)
+    const y = supplierStakeYaml(
+      A,
+      A,
+      1,
+      [{ service_id: 's', url: 'https://x', rpc_type: 'REST' }],
+      [
+        { address: A, percent: 70 },
+        { address: B, percent: 30 }
+      ]
+    )
+    expect(y).toContain(`default_rev_share_percent:\n  ${A}: 70\n  ${B}: 30\nservices:\n`)
+    expect(
+      revShareOf({
+        services: [
+          {
+            rev_share: [
+              { address: A, rev_share_percentage: '70' },
+              { address: B, rev_share_percentage: 30 }
+            ]
+          }
+        ]
+      })
+    ).toEqual([
+      { address: A, percent: 70 },
+      { address: B, percent: 30 }
+    ])
+    // Missing, or not adding up to 100: the caller falls back to the owner alone.
+    expect(revShareOf({ services: [] })).toBeNull()
+    expect(
+      revShareOf({ services: [{ rev_share: [{ address: A, rev_share_percentage: '60' }] }] })
+    ).toBeNull()
   })
   it('pocket-ap config and backend compose', () => {
     expect(pocketApYaml('beta', 'x')).toContain('service_id: x')
