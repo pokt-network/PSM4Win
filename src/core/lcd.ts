@@ -201,6 +201,27 @@ export async function supplierLookup(
   }
 }
 
+/** The claims a supplier operator has open (not yet settled), with each one's session end. */
+export async function openClaims(
+  net: Network,
+  operator: string
+): Promise<{ service_id: string; session_end: number }[]> {
+  const d = await getJson<{
+    claims?: {
+      session_header?: { service_id?: string; session_end_block_height?: string }
+    }[]
+  }>(
+    lcd(
+      net,
+      `/pokt-network/poktroll/proof/claim?supplier_operator_address=${operator}&pagination.limit=200`
+    )
+  )
+  return (d.claims ?? []).map((c) => ({
+    service_id: c.session_header?.service_id ?? '',
+    session_end: Number(c.session_header?.session_end_block_height ?? 0)
+  }))
+}
+
 export async function supplier(net: Network, operator: string): Promise<ChainSupplier | null> {
   try {
     const d = await getJson<{ supplier: ChainSupplier }>(

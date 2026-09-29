@@ -10,6 +10,7 @@ import {
   type AppWallet
 } from '../store'
 import type { Network } from '@core/networks'
+import type { ImportProgress } from '@core/import'
 import { OWNER_KEY_NAME } from '@core/versions'
 import {
   loadLiveParams,
@@ -359,6 +360,7 @@ export async function setNetwork(n: Network): Promise<void> {
     params: {},
     catalog: null,
     supOpen: null,
+    impOpen: null,
     deployed: null,
     balance: undefined
   })
@@ -424,6 +426,7 @@ export function tab(name: Screen): void {
     navOpen: sec.screens.length > 1 ? { ...s.navOpen, [sec.id]: true } : s.navOpen,
     // tab("supply") always resets to the suppliers list; openSupplier sets supOpen afterwards.
     supOpen: name === 'supply' ? null : s.supOpen,
+    impOpen: name === 'supply' ? null : s.impOpen,
     // Choosing a screen from the menu is a fresh start, not a step into something.
     cameFrom: null
   }))
@@ -625,6 +628,8 @@ export interface StackEntry {
   provisioned_at?: string
   /** STACK_LAYOUT of the files Provision last shipped; absent means layout 1. */
   layout?: number
+  /** An import of a supplier set up by hand, while it is under way (src/core/import.ts). */
+  import?: ImportProgress
 }
 
 export function servers(): ServerEntry[] {

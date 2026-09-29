@@ -52,9 +52,12 @@ import {
 import { confirmTx, fundOperator, TxLink } from '../lib/flows'
 import { provisionOn } from './Settings'
 import { openSupplier } from './Services'
+import { ImportWizard, openImport } from './ImportSupplier'
 
 export function SupplyScreen(): React.JSX.Element {
   const supOpen = useStore((s) => s.supOpen)
+  const impOpen = useStore((s) => s.impOpen)
+  if (impOpen) return <ImportWizard operator={impOpen.operator} server={impOpen.server} />
   return supOpen ? (
     <SupplierEditor server={supOpen.server} preselect={supOpen.preselect} />
   ) : (
@@ -68,7 +71,12 @@ export function supplierStatusCell(
   net: import('@core/networks').Network
 ): React.ReactNode {
   if (x.state === 'none') return <Badge cls="muted">not provisioned on {netLabel(net)}</Badge>
-  if (x.state === 'pending') return <Badge cls="warn">provisioning pending</Badge>
+  if (x.state === 'pending')
+    return x.stack?.import ? (
+      <Badge cls="warn">import under way</Badge>
+    ) : (
+      <Badge cls="warn">provisioning pending</Badge>
+    )
   if (x.rec) {
     const u = unbondingOf(p, x.rec)
     return u ? (
@@ -196,6 +204,13 @@ function SuppliersList(): React.JSX.Element {
                           >
                             {x.rec ? 'Manage' : 'Stake'}
                           </button>
+                        ) : st?.import ? (
+                          <button
+                            className="btn small primary"
+                            onClick={() => openImport(st.operator, x.server.name)}
+                          >
+                            Continue import
+                          </button>
                         ) : (
                           <button
                             className="btn small primary"
@@ -231,6 +246,7 @@ function SuppliersList(): React.JSX.Element {
         </div>
       </div>
       <UnmanagedSuppliers reread={reread} />
+      <ImportByOperator />
     </>
   )
 }
@@ -245,10 +261,10 @@ interface Unmanaged {
 
 /**
  * Suppliers the owner wallet has on this network that no server in the app manages:
- * set up by hand with pocketd, or on a server not added here. Read-only for now; the app
- * cannot import them yet, so they are listed to be seen, not changed. Shown only when
- * there are some. A custodial supplier (staked by its operator as its own owner) is not
- * under the owner wallet and does not appear here.
+ * set up by hand with pocketd, or on a server not added here. Each can be imported (the
+ * wizard in ImportSupplier.tsx). Shown only when there are some. A custodial supplier
+ * (staked by its operator as its own owner) is not under the owner wallet and does not
+ * appear here; ImportByOperator starts its import from the operator address.
  */
 function UnmanagedSuppliers({ reread }: { reread: number }): React.JSX.Element | null {
   const { net, address, imported, settings } = useStore()
@@ -304,9 +320,10 @@ function UnmanagedSuppliers({ reread }: { reread: number }): React.JSX.Element |
       <p className="hint" style={{ margin: '0 0 6px 0' }}>
         Your owner wallet has {list.length === 1 ? 'this supplier' : 'these suppliers'} on{' '}
         {netLabel(net)}, but {list.length === 1 ? 'it was' : 'they were'} set up outside this app,
-        so the app cannot deploy to, test, or restake {list.length === 1 ? 'it' : 'them'}. Leave{' '}
-        {list.length === 1 ? 'it' : 'them'} running as {list.length === 1 ? 'it is' : 'they are'}:
-        importing a supplier into the app is coming in a later version.
+        so the app cannot deploy to, test, or restake {list.length === 1 ? 'it' : 'them'}. Import
+        moves {list.length === 1 ? 'it' : 'one'} into the app: add{' '}
+        {list.length === 1 ? 'its' : 'the'} server in Settings first, then press Import. The stake
+        and the services on chain stay as they are.
       </p>
       <table className="services">
         <thead>
@@ -315,6 +332,7 @@ function UnmanagedSuppliers({ reread }: { reread: number }): React.JSX.Element |
             <th>Services</th>
             <th>Public URL</th>
             <th>Stake</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -338,10 +356,55 @@ function UnmanagedSuppliers({ reread }: { reread: number }): React.JSX.Element |
                   {x.status === 'Staked' ? 'staked' : 'unstaking'}, {fmtPokt(x.stakeUpokt)} POKT
                 </Badge>
               </td>
+              <td className="actions">
+                {x.status === 'Staked' ? (
+                  <button className="btn small primary" onClick={() => openImport(x.operator)}>
+                    Import
+                  </button>
+                ) : (
+                  <span className="hint">unstaking; nothing to import</span>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+/**
+ * Import by operator address: for a custodial supplier (its operator is its own owner, so
+ * the owner wallet's list above never shows it) or one owned by another wallet.
+ */
+function ImportByOperator(): React.JSX.Element {
+  const [op, setOp] = useState('')
+  const valid = /^pokt1[0-9a-z]{38}$/.test(op.trim())
+  return (
+    <div className="panel" id="supImportOp">
+      <h2>Import a supplier by its operator address</h2>
+      <p className="hint" style={{ margin: '0 0 6px 0' }}>
+        For a supplier set up by hand that is not listed above, for example one staked with its
+        operator key as its own owner. The address starts with pokt1.
+      </p>
+      <div className="row">
+        <div>
+          <label>Operator address</label>
+          <input
+            type="text"
+            id="supImportOpAddr"
+            spellCheck={false}
+            placeholder="pokt1..."
+            value={op}
+            onChange={(e) => setOp(e.target.value)}
+          />
+        </div>
+      </div>
+      <div className="btnrow">
+        <button className="btn small" disabled={!valid} onClick={() => openImport(op.trim())}>
+          Import
+        </button>
+      </div>
     </div>
   )
 }

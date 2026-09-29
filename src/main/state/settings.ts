@@ -2,6 +2,7 @@
 import { dataFiles } from '../paths'
 import { readJson, writeJson } from './files'
 import type { Network } from '@core/networks'
+import type { ImportProgress } from '@core/import'
 
 export interface SupplierStack {
   dir: string
@@ -11,6 +12,8 @@ export interface SupplierStack {
   provisioned_at?: string
   /** STACK_LAYOUT of the files Provision last shipped; absent means layout 1. */
   layout?: number
+  /** An import of a supplier set up by hand, while it is under way (src/core/import.ts). */
+  import?: ImportProgress
 }
 
 export interface ServerEntry {

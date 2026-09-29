@@ -133,6 +133,9 @@ export interface State {
   dep: { id: string; server: string }
   tst: { id: string; wallet: string }
   supOpen: { server: string; preselect?: string } | null
+  /** The import wizard (Suppliers): the operator of the supplier being imported, and the
+   *  server it lives on when already chosen. */
+  impOpen: { operator: string; server?: string } | null
   /** The screen a row action or a fix-this link came from, for the way back. */
   cameFrom: Screen | null
   /** The Provision form. `net` is the network dir and host were filled for, never chosen:
@@ -180,6 +183,7 @@ export const useStore = create<State>((set) => ({
   dep: { id: '', server: '' },
   tst: { id: '', wallet: '' },
   supOpen: null,
+  impOpen: null,
   cameFrom: null,
   prov: { server: '', net: 'beta', dir: '', host: '', port: '', fund: '10' },
   deployed: null,

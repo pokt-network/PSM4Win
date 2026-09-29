@@ -238,3 +238,90 @@ export function planImport(
 
   return { key, backends, stop, blockers, notes }
 }
+
+// ---- the switch-over ----
+
+/**
+ * Their things to stop, in two steps. First whatever stops new relays while their miner keeps
+ * running, so it can claim and prove what it has already served; then, once those claims are
+ * proved, the rest. A RelayMiner that relays and mines in one process cannot be split that
+ * way, so when there is one its proxy goes first instead; without a proxy to stop, it stops
+ * at once and the claims it still holds are lost (said in `note`).
+ */
+export function stopPhases(plan: Pick<ImportPlan, 'stop'>): {
+  first: ImportTarget[]
+  after: ImportTarget[]
+  note: string | null
+} {
+  const combined = plan.stop.filter(
+    (t) => t.role === 'relayminer' || t.role === 'legacy-relayminer'
+  )
+  const relayers = plan.stop.filter((t) => t.role === 'relayer')
+  const miners = plan.stop.filter((t) => t.role === 'miner')
+  const proxies = plan.stop.filter((t) => t.role === 'proxy')
+  if (!combined.length) return { first: relayers, after: [...miners, ...proxies], note: null }
+  if (proxies.length)
+    return { first: [...proxies, ...relayers], after: [...combined, ...miners], note: null }
+  return {
+    first: [...combined, ...relayers],
+    after: miners,
+    note: 'Their RelayMiner relays and claims in one process and nothing stands in front of it that the app could stop instead, so it stops at once; claims for the relays it served in the last few sessions will not be made.'
+  }
+}
+
+/** The shared parameters that place a session's claim and proof windows (read live). */
+export interface ProofWindows {
+  blocksPerSession: number
+  anchor: number
+  claimOpen: number
+  claimClose: number
+  proofOpen: number
+  proofClose: number
+}
+
+export function proofWindowsOf(shared: Record<string, unknown>): ProofWindows | null {
+  const n = (k: string): number => Number(shared[k])
+  const w: ProofWindows = {
+    blocksPerSession: n('num_blocks_per_session'),
+    anchor: Number(shared.session_grid_anchor_height ?? 1),
+    claimOpen: n('claim_window_open_offset_blocks'),
+    claimClose: n('claim_window_close_offset_blocks'),
+    proofOpen: n('proof_window_open_offset_blocks'),
+    proofClose: n('proof_window_close_offset_blocks')
+  }
+  return Object.values(w).every((v) => Number.isFinite(v) && v >= 0) && w.blocksPerSession > 0
+    ? w
+    : null
+}
+
+/** The last block of the session that holds `height`. */
+export function sessionEndOf(w: ProofWindows, height: number): number {
+  const k = Math.floor((height - w.anchor) / w.blocksPerSession)
+  return w.anchor + (k + 1) * w.blocksPerSession - 1
+}
+
+/**
+ * The height at which the proof window closes for the session ending at `sessionEnd`
+ * (poktroll x/shared: the claim window opens the block after sessionEnd + its offset).
+ * Past it, every claim for that session is either proved or settled.
+ */
+export function proofCloseAfter(w: ProofWindows, sessionEnd: number): number {
+  return sessionEnd + w.claimOpen + 1 + w.claimClose + w.proofOpen + w.proofClose
+}
+
+/** What the import has done so far, kept in settings so it resumes after a restart. */
+export interface ImportProgress {
+  /**
+   * staged: the app's stack is ready beside theirs and nothing of theirs is stopped;
+   * draining: new relays are stopped and their miner is finishing its claims;
+   * switching: their miner and proxy are being stopped and the app's stack started.
+   */
+  stage: 'staged' | 'draining' | 'switching'
+  first: ImportTarget[]
+  after: ImportTarget[]
+  /** Names of what has been stopped so far, in order. */
+  stopped: string[]
+  /** The height after which their last claims are proved (set when draining starts). */
+  drainUntil?: number
+  started_at: string
+}

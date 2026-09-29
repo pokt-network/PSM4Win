@@ -497,7 +497,8 @@ export const BRIDGE_EXCLUDED_OPS: readonly SignerOp[] = [
 export const BRIDGE_REFUSED_STEPS: readonly string[] = [
   'operator-adopt',
   'backend-attach',
-  'theirs'
+  'theirs',
+  'halt'
 ]
 
 /**

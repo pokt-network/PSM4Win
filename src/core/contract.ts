@@ -137,6 +137,8 @@ export type SupplierStep =
   | 'backend-attach'
   /** Import: stop, start again, or disable their RelayMiner or proxy (container or systemd unit). */
   | 'theirs'
+  /** Import, the way back: stop this stack (and the shared Caddy when it serves nothing else). */
+  | 'halt'
 
 /** One extra public route for supplier-run add-routes: https://<hostname><path>/* to
  *  <service_id>-backend:<port>, prefix stripped. The host is never a request field. */
@@ -232,6 +234,8 @@ export interface SignerRequests {
      *  (deploy/relayer.json); 8080 when absent. */
     backend_port?: number
     backend_url?: string
+    /** add-service only: write and check the relayer config without starting anything (import). */
+    stage?: boolean
     /** add-routes only. */
     routes?: RouteSpec[]
     /** operator-adopt only: where the key is on the server (a keys file, or a keyring's home). */
@@ -384,7 +388,8 @@ export const SUPPLIER_STEP_TIMEOUTS_MS: Record<SupplierStep, number> = {
   'remove-routes': 120_000,
   'operator-adopt': 180_000,
   'backend-attach': 60_000,
-  theirs: 120_000
+  theirs: 120_000,
+  halt: 120_000
 }
 
 /**

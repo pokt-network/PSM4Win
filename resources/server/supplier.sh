@@ -12,8 +12,9 @@
 #   supplier.sh deploy <id> <deploy-root> [<health-path>] [<port>]
 #                                            build and start a service's backend on the shared network;
 #                                            wait for <health-path> on the port this network's relayer calls
-#   supplier.sh add-service <id> <backend-url> <health-path>   add to this stack's relayer (or bring an
-#                                            existing entry's URL and health path up to date), recreate relayer
+#   supplier.sh add-service <id> <backend-url> <health-path> [stage]   add to this stack's relayer (or bring an
+#                                            existing entry's URL and health path up to date), recreate relayer;
+#                                            with "stage" (import) only write and check the config
 #   supplier.sh remove-service <id>          drop from this stack's relayer, recreate relayer; drop the
 #                                            service's routes once no other network's stack serves it
 #   supplier.sh add-routes <id> <path> <port> [<path> <port> ...]
@@ -31,6 +32,8 @@
 #   supplier.sh theirs stop|start|disable container|unit <name>
 #                                            import: stop (or start again, or keep from starting on
 #                                            its own) their RelayMiner or proxy; refuses anything else
+#   supplier.sh halt                         import, the way back: stop this stack, and the shared
+#                                            Caddy when it serves no other stack
 #
 # The stack's images are pinned in stack.env by the app release that provisioned it
 # (STACK_LAYOUT 2 and later); `start` sizes memory from this server and validates both
@@ -410,6 +413,10 @@ except Exception: print("", "parse")' 2>/dev/null)
     ;;
   add-service)
     ID="${1:?service id}"; URL="${2:?backend url}"; HP="${3:-/healthz}"
+    # "stage" (import): write and check the config only. Starting the relayer would start
+    # this stack's miner too, beside theirs on the same operator key, so nothing starts
+    # until the switch-over's start step.
+    STAGE="${4:-}"
     need_pins
     [ -f "$D/compose.env" ] || size_stack >/dev/null
     cp -f "$CFG" "$CFG.before"
@@ -450,8 +457,22 @@ PY
     # one that worked instead.
     if ! validate_stack; then mv -f "$CFG.before" "$CFG"; echo "error: the relayer config was put back as it was"; exit 1; fi
     rm -f "$CFG.before"
+    if [ "$STAGE" = stage ]; then echo "relayer: staged; it starts at the switch-over"; exit 0; fi
     dc up -d --force-recreate relayer 2>&1 | tail -2
     wait_health
+    ;;
+  halt)
+    # Import, the way back: stops this stack so their RelayMiner and proxy can start again.
+    # The shared Caddy stops too when it serves no other stack's hostname; otherwise it keeps
+    # ports 80 and 443 and says so.
+    [ -f "$D/compose.env" ] && dc stop 2>&1 | tail -3 || true
+    others=$(ls "$CADDY_DIR/sites" 2>/dev/null | grep '\.caddy$' | grep -vx "$NET.caddy" || true)
+    if [ -n "$others" ]; then
+      echo "caddy: kept running; it also serves $(echo "$others" | sed 's/\.caddy$//' | tr '\n' ' ')"
+    elif caddy_running; then
+      docker stop pocket-caddy >/dev/null && echo "caddy: stopped"
+    fi
+    echo "halted: $PROJECT"
     ;;
   remove-service)
     ID="${1:?service id}"

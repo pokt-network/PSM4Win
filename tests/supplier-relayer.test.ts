@@ -181,6 +181,24 @@ describe.skipIf(!BASH || !HAS_PYTHON)('supplier.sh per-network relay port', () =
     expect(lf(readFileSync(cfg(beta), 'utf8'))).toContain('endpoint: "/ready"')
   })
 
+  it('add-service stage writes and checks the config but starts nothing (import)', () => {
+    const r = sh(beta, ['add-service', 'svc-a', 'http://their-charts:8080', '/', 'stage'])
+    expect(r.code).toBe(0)
+    expect(r.out).toContain('relayer: added svc-a')
+    expect(r.out).toContain('relayer: staged')
+    expect(lf(readFileSync(cfg(beta), 'utf8'))).toContain('url: "http://their-charts:8080"')
+    expect(r.calls.some((c) => /\bup\b/.test(c))).toBe(false)
+  })
+
+  it('halt stops the stack and keeps the shared Caddy while another stack uses it', () => {
+    writeFileSync(join(beta, 'compose.env'), 'REDIS_MEM_LIMIT=1g\n')
+    const r = sh(beta, ['halt'])
+    expect(r.code).toBe(0)
+    expect(r.calls.some((c) => /-p pocket-supplier-beta .*\bstop\b/.test(c))).toBe(true)
+    expect(r.out).toContain('caddy: kept running; it also serves main')
+    expect(r.out).toContain('halted: pocket-supplier-beta')
+  })
+
   it('add-service changes only the URL and health path lines, keeping hand edits', () => {
     // An entry someone tuned by hand on the server: its other settings must survive.
     const tuned = entry('svc-a', 'http://svc-a-backend:8080')

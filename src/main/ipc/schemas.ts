@@ -111,6 +111,7 @@ export const requestSchemas: Record<SignerOp, z.ZodTypeAny> = {
     health_path: z.string().max(256).optional(),
     backend_port: z.coerce.number().int().optional(),
     backend_url: z.string().max(256).optional(),
+    stage: z.boolean().optional(),
     routes: z
       .array(z.object({ path: z.string().max(64), port: z.coerce.number().int() }))
       .max(8)
@@ -182,7 +183,45 @@ export const settingsPatchSchema = z
                 url: z.string(),
                 operator: z.string(),
                 provisioned_at: z.string().optional(),
-                layout: z.coerce.number().int().optional()
+                layout: z.coerce.number().int().optional(),
+                import: z
+                  .object({
+                    stage: z.enum(['staged', 'draining', 'switching']),
+                    first: z
+                      .array(
+                        z.object({
+                          kind: z.enum(['container', 'unit']),
+                          name: z.string().max(128),
+                          role: z.enum([
+                            'relayer',
+                            'miner',
+                            'relayminer',
+                            'legacy-relayminer',
+                            'proxy'
+                          ])
+                        })
+                      )
+                      .max(16),
+                    after: z
+                      .array(
+                        z.object({
+                          kind: z.enum(['container', 'unit']),
+                          name: z.string().max(128),
+                          role: z.enum([
+                            'relayer',
+                            'miner',
+                            'relayminer',
+                            'legacy-relayminer',
+                            'proxy'
+                          ])
+                        })
+                      )
+                      .max(16),
+                    stopped: z.array(z.string().max(128)).max(32),
+                    drainUntil: z.coerce.number().int().optional(),
+                    started_at: z.string().max(64)
+                  })
+                  .optional()
               })
             )
             .default({})

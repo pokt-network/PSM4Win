@@ -214,6 +214,13 @@ function TheSteps(): React.JSX.Element {
         On MainNet every spend asks you to type a confirmation first. The Dashboard shows each
         service's stage and anything that needs attention.
       </p>
+      <p>
+        Already running a supplier that you set up by hand, outside this app? Don&apos;t make a
+        second one. Add its server in <Go screen="settings">Settings</Go>, then press Import next to
+        it on <Go screen="supply">Suppliers</Go>. The app takes it over with the same key and stake.
+        It stops answering for a short while in the middle, while it finishes the work it has
+        already done.
+      </p>
     </>
   )
 }

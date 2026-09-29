@@ -28,7 +28,8 @@ export const SUPPLIER_STEPS: readonly SupplierStep[] = [
   'remove-routes',
   'operator-adopt',
   'backend-attach',
-  'theirs'
+  'theirs',
+  'halt'
 ]
 
 /** The step and its validated arguments, or a thrown SignerFailure. */
@@ -44,6 +45,7 @@ export function supplierStepArgs(req: SignerRequests['supplier-run']): {
     case 'keys':
     case 'start':
     case 'status':
+    case 'halt':
       break
     case 'publish':
       args.push(requireNetwork(req.network))
@@ -64,6 +66,7 @@ export function supplierStepArgs(req: SignerRequests['supplier-run']): {
       const url = String(req.backend_url ?? '')
       if (!RE.backendUrl.test(url)) fail('Backend URL must be http://<container>:<port>.')
       args.push(sid, url, validateHealthPath(req.health_path))
+      if (req.stage === true) args.push('stage')
       break
     }
     case 'remove-service':
