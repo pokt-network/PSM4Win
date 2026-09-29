@@ -177,7 +177,7 @@ export interface ChainSupplier {
     rev_share?: { address: string; rev_share_percentage: string }[]
   }[]
   service_config_history?: {
-    service?: { service_id: string }
+    service?: { service_id: string; endpoints?: { url: string; rpc_type: string }[] }
     activation_height?: string
     deactivation_height?: string
   }[]
@@ -199,6 +199,23 @@ export async function supplierLookup(
   } catch (e) {
     return { status: (e as LcdError).status ?? 0, rec: null }
   }
+}
+
+/**
+ * A supplier's services with their endpoint URLs: the active ones, or, for a supplier staked
+ * so recently that none has activated yet (`services` is empty until the next session), the
+ * configurations still to come from its history.
+ */
+export function supplierEndpoints(
+  rec: ChainSupplier | null | undefined
+): { service_id: string; url: string }[] {
+  if (!rec) return []
+  if (rec.services?.length)
+    return rec.services.map((s) => ({ service_id: s.service_id, url: s.endpoints?.[0]?.url ?? '' }))
+  return (rec.service_config_history ?? [])
+    .filter((h) => !h.deactivation_height || h.deactivation_height === '0')
+    .filter((h) => !!h.service?.service_id)
+    .map((h) => ({ service_id: h.service!.service_id, url: h.service!.endpoints?.[0]?.url ?? '' }))
 }
 
 /** The claims a supplier operator has open (not yet settled), with each one's session end. */

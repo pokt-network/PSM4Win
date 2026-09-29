@@ -90,6 +90,16 @@ export async function serverSurvey(
   })
 }
 
+/**
+ * A remote shell command that creates directories owned by the SSH user. On a server whose
+ * parent (for example /opt/pocket) the user cannot write, which is usual on one set up by
+ * hand, it creates them with passwordless sudo and hands them to the user.
+ */
+export function mkdirOwned(dirs: string[]): string {
+  const q = dirs.map((d) => `'${d}'`).join(' ')
+  return `{ mkdir -p ${q} 2>/dev/null || { sudo -n mkdir -p ${q} && sudo -n chown "$(id -u):$(id -g)" ${q}; }; }`
+}
+
 async function loadTemplates(): Promise<StackTemplates> {
   const dir = serverTemplatesDir()
   if (!exists(join(dir, 'supplier.sh')))
@@ -171,7 +181,7 @@ export async function supplierShip(
     ctx.progress('info', `Creating ${path} on ${conn.target}`, undefined, 'mkdir')
     const mk = await runSsh(
       conn,
-      `mkdir -p '${path}' '${caddyDir}/sites' && test -f '${path}/relayer-config.yaml' && echo PSM_HAVE_RELAYER || true`,
+      `${mkdirOwned([path, caddyDir, `${caddyDir}/sites`])} && { test -f '${path}/relayer-config.yaml' && echo PSM_HAVE_RELAYER; true; }`,
       ctx
     )
     if (mk.code !== 0)
@@ -369,7 +379,7 @@ export async function deployShip(
     const size = await fileSize(bundle)
     const dest = `${root}/${sid}`
     ctx.progress('info', `Copying ${size} bytes to ${conn.target}:${dest}`, undefined, 'ship')
-    const mk = await runSsh(conn, `mkdir -p '${dest}'`, ctx)
+    const mk = await runSsh(conn, mkdirOwned([root, dest]), ctx)
     if (mk.code !== 0)
       fail('Could not create the service directory on the server.', cleanErr(mk.err))
     const cp = await runScp(conn, [bundle, `${conn.target}:${dest}/bundle.tar`], ctx)

@@ -26,6 +26,7 @@ import {
   params as moduleParams,
   latestHeight,
   openClaims,
+  supplierEndpoints,
   type ChainSupplier
 } from '@core/lcd'
 import { fmtPokt, fmtInt, fmtDuration, shortAddr, POKT } from '@core/format'
@@ -120,6 +121,10 @@ export function ImportWizard({
   const [drain, setDrain] = useState<{ height: number; until: number; claims: number } | null>(null)
   const [failedAt, setFailedAt] = useState<ImportProgress['stage'] | null>(null)
   const live = useRef(true)
+  // One wait at a time: set while this wizard waits for their claims; Put theirs back ends it.
+  const inWait = useRef(false)
+  const cancelWait = useRef(false)
+  const [waiting, setWaiting] = useState(false)
   useEffect(() => {
     live.current = true
     return () => {
@@ -140,7 +145,8 @@ export function ImportWizard({
     }
   }, [net, operator])
 
-  const stakedUrl = rec?.services?.[0]?.endpoints?.[0]?.url ?? ''
+  const endpoints = supplierEndpoints(rec)
+  const stakedUrl = endpoints[0]?.url ?? ''
   const host = hostOfUrl(stakedUrl)
   const port = portOfStackUrl(stakedUrl)
   const urlProblem = !rec
@@ -297,7 +303,7 @@ export function ImportWizard({
   const waitForClaims = async (p: ImportProgress): Promise<boolean> => {
     const w = windows ?? proofWindowsOf(await moduleParams(net, 'shared'))
     for (;;) {
-      if (!live.current) return false
+      if (!live.current || cancelWait.current) return false
       try {
         const [h, claims] = await Promise.all([latestHeight(net), openClaims(net, operator)])
         const pending = w ? claims.filter((c) => proofCloseAfter(w, c.session_end) >= h) : claims
@@ -313,7 +319,8 @@ export function ImportWizard({
   }
 
   const run = async (): Promise<void> => {
-    if (S().busy || !s) return
+    if (S().busy || inWait.current || !s) return
+    cancelWait.current = false
     const sg = psm().signer
     clear()
     setChecks([])
@@ -384,7 +391,16 @@ export function ImportWizard({
         setBusy(false)
         setStatus('Waiting for their last claims to be proved', 'busy')
         log('You can leave this page; the import continues from here when you come back.')
-        if (!(await waitForClaims(p))) return
+        inWait.current = true
+        setWaiting(true)
+        const done = await waitForClaims(p).finally(() => {
+          inWait.current = false
+          setWaiting(false)
+        })
+        if (!done) return
+        // Put theirs back may have ended the import while this waited.
+        const still = stackOf(serverByName(s.name), net)?.import
+        if (!still || still.stage !== 'draining') return
         setBusy(true)
         mark('Their last claims', true, 'proved or settled')
         p = { ...p, stage: 'switching' }
@@ -451,6 +467,7 @@ export function ImportWizard({
       'Put theirs back'
     )
     if (!ok) return
+    cancelWait.current = true
     const sg = psm().signer
     const c = { ...conn(), path: dir }
     setBusy(true)
@@ -543,7 +560,12 @@ export function ImportWizard({
             </tr>
             <tr>
               <td>Services</td>
-              <td>{rec.services.map((x) => x.service_id).join(', ') || 'none'}</td>
+              <td>
+                {endpoints.map((x) => x.service_id).join(', ') || 'none'}
+                {!rec.services?.length && endpoints.length ? (
+                  <span className="hint"> (active from the next session)</span>
+                ) : null}
+              </td>
             </tr>
             <tr>
               <td>Public URL</td>
@@ -680,8 +702,13 @@ export function ImportWizard({
           <div className="btnrow">
             {progress ? (
               <>
-                <button className="btn primary" id="btnImpRun" disabled={busy} onClick={run}>
-                  Continue import
+                <button
+                  className="btn primary"
+                  id="btnImpRun"
+                  disabled={busy || waiting}
+                  onClick={run}
+                >
+                  {waiting ? 'Waiting' : 'Continue import'}
                 </button>
                 <button className="btn" id="btnImpBack" disabled={busy} onClick={putBack}>
                   Put theirs back
