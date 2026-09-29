@@ -60,11 +60,14 @@ export async function runSsh(
   conn: ResolvedSsh,
   remote: string,
   ctx: OpContext,
-  timeoutMs?: number
+  timeoutMs?: number,
+  /** Text for the remote command's standard input; never logged (runNative logs arguments only). */
+  stdin?: string
 ): Promise<NativeResult> {
   return runNative(toolPath('ssh'), [...conn.ssh, conn.target, remote], {
     timeoutMs: timeoutMs ?? ctx.timeoutMs,
-    signal: ctx.signal
+    signal: ctx.signal,
+    ...(stdin !== undefined ? { stdin } : {})
   })
 }
 

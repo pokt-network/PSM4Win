@@ -20,6 +20,12 @@
 #                                            route https://<hostname><path>/* to <id>-backend:<port>, prefix stripped
 #   supplier.sh remove-routes <id>           drop a service's extra routes
 #   supplier.sh status                       one line per fact the app shows
+#   supplier.sh operator-adopt keysfile|keyring <path> <operator>
+#                                            import: put a supplier's existing operator key, found on
+#                                            this server, into this stack instead of creating one
+#   supplier.sh operator-import <operator> hex|mnemonic
+#                                            import: the same for a key the user pasted into the app,
+#                                            read from standard input (never an argument)
 #
 # The stack's images are pinned in stack.env by the app release that provisioned it
 # (STACK_LAYOUT 2 and later); `start` sizes memory from this server and validates both
@@ -157,6 +163,43 @@ routes_drop() {
   rm -f "$OLD"; echo "routes: removed for $1"
 }
 
+# ---- import: an existing operator key instead of a new one ----
+# The operator this stack already has, from operator-key.json, or nothing.
+stack_operator() {
+  [ -s "$D/operator-key.json" ] && python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["address"])' "$D/operator-key.json" 2>/dev/null || true
+}
+# Before an import: a stack that already has this operator is done; one with another
+# operator is refused; otherwise the keyring is made ready and emptied of a leftover
+# "operator" from an earlier attempt that did not finish.
+import_prepare() {
+  local cur; cur=$(stack_operator)
+  if [ -n "$cur" ] && [ "$cur" != "$1" ]; then echo "error: this stack already has the operator $cur"; exit 1; fi
+  if [ -n "$cur" ]; then echo "created: the operator is already in this stack"; echo "operator: $cur"; exit 0; fi
+  mkdir -p "$D/pocket-home"; sudo chown 1025:1025 "$D/pocket-home"
+  pd keys delete operator -y --keyring-backend test --home /home >/dev/null 2>&1 || true
+}
+# Imports the hex key in PSM_IMPORT_KEY as "operator". The key reaches the container through
+# its environment (docker -e with the name only), not the command line.
+import_hex_env() {
+  docker run --rm -e PSM_IMPORT_KEY -v "$D/pocket-home:/home" --entrypoint sh "$IMG" \
+    -c 'pocketd keys import-hex operator "$PSM_IMPORT_KEY" --keyring-backend test --home /home' >/dev/null 2>&1 || true
+}
+# After an import: the keyring must hold exactly the operator, or nothing is kept.
+import_record() {
+  local want="$1" how="$2" got
+  got=$(pd keys show operator -a --keyring-backend test --home /home 2>/dev/null | tr -d '\r\n' || true)
+  if [ "$got" != "$want" ]; then
+    pd keys delete operator -y --keyring-backend test --home /home >/dev/null 2>&1 || true
+    echo "error: the key imported is ${got:-no key}, not the operator $want; nothing was kept"
+    exit 1
+  fi
+  umask 077
+  printf '{"address": "%s", "imported": "%s"}\n' "$want" "$how" > "$D/operator-key.json"
+  chmod 600 "$D/operator-key.json"
+  echo "created: operator key imported ($how)"
+  echo "operator: $want"
+}
+
 case "$step" in
   prepare)
     mkdir -p "$D/pocket-home" "$CADDY_DIR/sites/routes"
@@ -190,6 +233,65 @@ case "$step" in
       echo "created: existing operator key kept"
     fi
     echo "operator: $(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["address"])' "$D/operator-key.json")"
+    ;;
+  operator-adopt)
+    # The key is already on this server (the survey found it). It moves from there into this
+    # stack's keyring and never leaves the machine or appears on a command line.
+    KIND="${1:?keysfile or keyring}"; SRC="${2:?where the key is}"; WANT="${3:?operator address}"
+    import_prepare "$WANT"
+    case "$KIND" in
+      keysfile)
+        # keyaddr.py picks the key whose address is the operator's; the file reaches it
+        # through a pipe (with sudo when only root may read it).
+        PSM_IMPORT_KEY=$( { cat -- "$SRC" 2>/dev/null || sudo -n cat -- "$SRC"; } | python3 "$D/keyaddr.py" pick "$WANT" 2>/dev/null || true)
+        if [ -z "$PSM_IMPORT_KEY" ]; then echo "error: $SRC holds no key for $WANT"; exit 1; fi
+        export PSM_IMPORT_KEY
+        import_hex_env
+        unset PSM_IMPORT_KEY
+        ;;
+      keyring)
+        # A keyring without a passphrase (the test backend). The key goes from that keyring
+        # to this one inside a single container, run as root to read a keyring owned by
+        # root, which then hands this stack's keyring back to the image's user.
+        H="$SRC"
+        if ! { [ -d "$H/keyring-test" ] || sudo -n test -d "$H/keyring-test"; }; then
+          echo "error: $H has no keyring without a passphrase; paste the operator key into the app instead"; exit 1
+        fi
+        rc=0
+        docker run --rm --user 0 -e WANT="$WANT" -v "$H:/src:ro" -v "$D/pocket-home:/home" --entrypoint sh "$IMG" -c '
+          cp -a /src /tmp/src
+          N=$(pocketd keys show "$WANT" --keyring-backend test --home /tmp/src --output json 2>/dev/null | sed -n "s/.*\"name\":\"\([^\"]*\)\".*/\1/p")
+          [ -n "$N" ] || exit 3
+          K=$(printf "y\n" | pocketd keys export "$N" --unarmored-hex --unsafe --keyring-backend test --home /tmp/src 2>/dev/null)
+          pocketd keys import-hex operator "$K" --keyring-backend test --home /home >/dev/null 2>&1
+          chown -R 1025:1025 /home' || rc=$?
+        if [ "$rc" = 3 ]; then echo "error: the keyring in $H has no key for $WANT"; exit 1; fi
+        ;;
+      *) echo "error: unknown key source $KIND"; exit 2 ;;
+    esac
+    import_record "$WANT" "$KIND"
+    ;;
+  operator-import)
+    # A key the user pasted into the app, on standard input. A hex key goes to the container
+    # through its environment; a recovery phrase through the container's standard input.
+    WANT="${1:?operator address}"; KIND="${2:?hex or mnemonic}"
+    SECRET=""; IFS= read -r SECRET || true
+    import_prepare "$WANT"
+    case "$KIND" in
+      hex)
+        PSM_IMPORT_KEY="$SECRET"; SECRET=""
+        export PSM_IMPORT_KEY
+        import_hex_env
+        unset PSM_IMPORT_KEY
+        ;;
+      mnemonic)
+        printf '%s\n' "$SECRET" | docker run --rm -i -v "$D/pocket-home:/home" "$IMG" \
+          keys add operator --recover --keyring-backend test --home /home >/dev/null 2>&1 || true
+        SECRET=""
+        ;;
+      *) echo "error: unknown key kind $KIND"; exit 2 ;;
+    esac
+    import_record "$WANT" pasted
     ;;
   keys)
     UID_IN_IMAGE="${1:-1000}"

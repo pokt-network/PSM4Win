@@ -24,6 +24,7 @@ const templates: StackTemplates = {
   'stack.env.tmpl': rd('stack.env.tmpl'),
   'site.caddy.tmpl': rd('site.caddy.tmpl'),
   'supplier.sh': rd('supplier.sh'),
+  'survey_address.py': rd('survey_address.py'),
   'caddy/docker-compose.yaml': rd(join('caddy', 'docker-compose.yaml')),
   'caddy/Caddyfile': rd(join('caddy', 'Caddyfile'))
 }

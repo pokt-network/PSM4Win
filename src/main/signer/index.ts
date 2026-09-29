@@ -60,6 +60,7 @@ const handlers: { [K in SignerOp]: Handler<K> } = {
   'remote-stake-supplier': tx.remoteStakeSupplier,
   'ssh-test': server.sshTest,
   'server-survey': server.serverSurvey,
+  'supplier-import-operator': server.supplierImportOperator,
   'supplier-ship': server.supplierShip,
   'supplier-run': server.supplierRun,
   'deploy-ship': server.deployShip,

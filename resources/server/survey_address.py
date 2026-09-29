@@ -148,7 +148,19 @@ if __name__ == '__main__':
     import sys
     # keysfile <path> [<operator>]: the keys file on stdin; one line per key found, with
     # its address and whether it is the operator's. The key itself is never printed.
-    if len(sys.argv) >= 3 and sys.argv[1] == 'keysfile':
+    # pick <operator>: the keys file on stdin; prints the one key whose address is the
+    # operator's, for supplier.sh operator-adopt to hold in a variable (never shown), or
+    # nothing. Shipped with each stack as keyaddr.py.
+    if len(sys.argv) >= 3 and sys.argv[1] == 'pick':
+        want = sys.argv[2]
+        for k in re.findall(r'(?<![0-9a-fA-F])(?:0x)?([0-9a-fA-F]{64})(?![0-9a-fA-F])', sys.stdin.read()):
+            try:
+                if address_from_hex(k) == want:
+                    print(k.lower())
+                    break
+            except ValueError:
+                continue
+    elif len(sys.argv) >= 3 and sys.argv[1] == 'keysfile':
         path = sys.argv[2]
         op = sys.argv[3] if len(sys.argv) > 3 else ''
         text = sys.stdin.read()

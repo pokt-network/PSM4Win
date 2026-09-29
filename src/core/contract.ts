@@ -131,6 +131,8 @@ export type SupplierStep =
   | 'remove-service'
   | 'add-routes'
   | 'remove-routes'
+  /** Import: puts a supplier's existing operator key, found on the same server, into this stack. */
+  | 'operator-adopt'
 
 /** One extra public route for supplier-run add-routes: https://<hostname><path>/* to
  *  <service_id>-backend:<port>, prefix stripped. The host is never a request field. */
@@ -228,6 +230,22 @@ export interface SignerRequests {
     backend_url?: string
     /** add-routes only. */
     routes?: RouteSpec[]
+    /** operator-adopt only: where the key is on the server (a keys file, or a keyring's home). */
+    source_kind?: 'keysfile' | 'keyring'
+    source_path?: string
+    /** operator-adopt only: the operator whose key it must be. */
+    operator_address?: string
+  }
+  /**
+   * Import: puts a supplier's operator key, pasted by the user, into a stack on the server.
+   * The only operation that carries an operator key. Sent to the server once on SSH's
+   * standard input, never on a command line or in a log.
+   */
+  'supplier-import-operator': SshConn & {
+    path: string
+    operator_address: string
+    /** A 64-hex private key, or a 12 to 24 word recovery phrase. */
+    secret: string
   }
   'deploy-ship': SshConn & { deploy_root: string; service_id: string; folder: string }
   'relay-call': {
@@ -269,6 +287,7 @@ export interface SignerResults {
   'tx-unstake-app': TxResult | DryResult
   'remote-stake-supplier': TxResult | (DryResult & { config: string })
   'ssh-test': { ok: true; hostname: string; docker: string; keyring: boolean }
+  'supplier-import-operator': { ok: true; operator: string; lines: string[] }
   'server-survey': {
     ok: true
     report: import('./survey').SurveyReport
@@ -321,6 +340,7 @@ export const SIGNER_OPS: readonly SignerOp[] = [
   'remote-stake-supplier',
   'ssh-test',
   'server-survey',
+  'supplier-import-operator',
   'supplier-ship',
   'supplier-run',
   'deploy-ship',
@@ -336,6 +356,7 @@ export const TIMEOUTS_MS: Partial<Record<SignerOp, number>> = {
   'pocketap-pull': 900_000,
   'ssh-test': 60_000,
   'server-survey': 180_000,
+  'supplier-import-operator': 180_000,
   'supplier-ship': 180_000,
   'deploy-ship': 600_000,
   'relay-call': 120_000
@@ -350,7 +371,8 @@ export const SUPPLIER_STEP_TIMEOUTS_MS: Record<SupplierStep, number> = {
   'add-service': 240_000,
   'remove-service': 240_000,
   'add-routes': 120_000,
-  'remove-routes': 120_000
+  'remove-routes': 120_000,
+  'operator-adopt': 180_000
 }
 
 /**

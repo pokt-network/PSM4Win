@@ -483,8 +483,17 @@ export const BRIDGE_EXCLUDED_OPS: readonly SignerOp[] = [
   'wallet-create',
   'wallet-recover',
   'wallet-export',
-  'wallet-delete'
+  'wallet-delete',
+  // Import: carries a pasted operator key.
+  'supplier-import-operator'
 ]
+
+/**
+ * supplier-run steps an assistant may not ask for, whatever the tool's step list says:
+ * operator-adopt moves an existing operator key into a stack (import), which is done in
+ * the app window only.
+ */
+export const BRIDGE_REFUSED_STEPS: readonly string[] = ['operator-adopt']
 
 /**
  * Operations that exist in the app but are deliberately not offered to an assistant.

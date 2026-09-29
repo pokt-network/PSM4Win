@@ -36,6 +36,14 @@ describe('log redaction (security model)', () => {
       list: ['[redacted]']
     })
   })
+  it('redacts the pasted operator secret by its field, whatever it looks like', () => {
+    const req = {
+      path: '/opt/pocket/supplier-beta',
+      operator_address: 'pokt1x',
+      secret: 'short or odd'
+    }
+    expect(redactDeep(req)).toEqual({ ...req, secret: '[redacted]' })
+  })
   it('leaves addresses and tx hashes readable', () => {
     const addr = 'pokt1qyqszqgpqyqszqgpqyqszqgpqyqszqgp04723y'
     expect(redact(`addr ${addr}`)).toContain(addr)

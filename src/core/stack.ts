@@ -24,6 +24,8 @@ export interface StackTemplates {
   'stack.env.tmpl': string
   'site.caddy.tmpl': string
   'supplier.sh': string
+  /** Shipped as keyaddr.py: picks an operator's key from a keys file (import). */
+  'survey_address.py': string
   'caddy/docker-compose.yaml': string
   'caddy/Caddyfile': string
 }
@@ -35,7 +37,8 @@ export interface RenderedStack {
     | 'miner-config.yaml'
     | 'relayer-config.yaml'
     | 'stack.env'
-    | 'supplier.sh',
+    | 'supplier.sh'
+    | 'keyaddr.py',
     string
   >
   /** Files for the shared Caddy directory. */
@@ -75,7 +78,8 @@ export function renderStack(tpl: StackTemplates, t: StackTokens): RenderedStack 
       'miner-config.yaml': r(tpl['miner-config.yaml.tmpl']),
       'relayer-config.yaml': r(tpl['relayer-config.yaml.tmpl']),
       'stack.env': r(tpl['stack.env.tmpl']),
-      'supplier.sh': toLf(tpl['supplier.sh'])
+      'supplier.sh': toLf(tpl['supplier.sh']),
+      'keyaddr.py': toLf(tpl['survey_address.py'])
     },
     caddy: {
       'docker-compose.yaml': toLf(tpl['caddy/docker-compose.yaml']),

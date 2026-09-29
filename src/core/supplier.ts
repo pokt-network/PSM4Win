@@ -8,7 +8,8 @@ import {
   requireNetwork,
   validateServiceId,
   validateLinuxPath,
-  validateHealthPath
+  validateHealthPath,
+  validateAddress
 } from './validate'
 import { validateRoutes, routeArgs } from './routes'
 import { validateBackendPort } from './relayer'
@@ -24,7 +25,8 @@ export const SUPPLIER_STEPS: readonly SupplierStep[] = [
   'add-service',
   'remove-service',
   'add-routes',
-  'remove-routes'
+  'remove-routes',
+  'operator-adopt'
 ]
 
 /** The step and its validated arguments, or a thrown SignerFailure. */
@@ -72,6 +74,32 @@ export function supplierStepArgs(req: SignerRequests['supplier-run']): {
         ...routeArgs(validateRoutes(req.routes))
       )
       break
+    case 'operator-adopt': {
+      const kind = String(req.source_kind ?? '')
+      if (kind !== 'keysfile' && kind !== 'keyring')
+        fail("The key's source must be a keys file or a keyring on the server.")
+      args.push(
+        kind,
+        validateLinuxPath(String(req.source_path ?? ''), 'Key source'),
+        validateAddress(String(req.operator_address ?? ''), 'Operator address')
+      )
+      break
+    }
   }
   return { step, args }
+}
+
+/**
+ * A pasted operator secret: a 64-hex private key (optionally 0x-prefixed) or a recovery
+ * phrase of 12, 15, 18, 21, or 24 lowercase words. Whitespace is normalised; anything else
+ * is refused before it leaves the app. The value is never logged or put in a message.
+ */
+export function normalizeOperatorSecret(s: string): { kind: 'hex' | 'mnemonic'; value: string } {
+  const t = String(s ?? '').trim()
+  const hex = t.replace(/^0x/i, '')
+  if (/^[0-9a-fA-F]{64}$/.test(hex)) return { kind: 'hex', value: hex.toLowerCase() }
+  const words = t.toLowerCase().split(/\s+/).filter(Boolean)
+  if ([12, 15, 18, 21, 24].includes(words.length) && words.every((w) => /^[a-z]+$/.test(w)))
+    return { kind: 'mnemonic', value: words.join(' ') }
+  return fail('That is neither a 64-character hex private key nor a 12 to 24 word recovery phrase.')
 }

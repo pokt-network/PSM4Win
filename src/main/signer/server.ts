@@ -15,7 +15,8 @@ import {
   toInt64
 } from '@core/validate'
 import { buildSurveyScript, parseSurvey, judgeSurvey } from '@core/survey'
-import { supplierStepArgs } from '@core/supplier'
+import { supplierStepArgs, normalizeOperatorSecret } from '@core/supplier'
+import { probeHexAddress } from './docker'
 import { ROUTES_FILE } from '@core/routes'
 import { RELAYER_FILE } from '@core/relayer'
 import { renderStack, backendComposeFromTemplate, type StackTemplates } from '@core/stack'
@@ -105,6 +106,7 @@ async function loadTemplates(): Promise<StackTemplates> {
     'stack.env.tmpl': await rd('stack.env.tmpl'),
     'site.caddy.tmpl': await rd('site.caddy.tmpl'),
     'supplier.sh': await rd('supplier.sh'),
+    'survey_address.py': await rd('survey_address.py'),
     'caddy/docker-compose.yaml': await rd(join('caddy', 'docker-compose.yaml')),
     'caddy/Caddyfile': await rd(join('caddy', 'Caddyfile'))
   }
@@ -175,7 +177,13 @@ export async function supplierShip(
     if (mk.code !== 0)
       fail('Could not create the stack directory over SSH.', cleanErr(mk.err + '\n' + mk.out))
     const keepRelayer = /PSM_HAVE_RELAYER/.test(mk.out)
-    const files = ['docker-compose.yaml', 'miner-config.yaml', 'stack.env', 'supplier.sh']
+    const files = [
+      'docker-compose.yaml',
+      'miner-config.yaml',
+      'stack.env',
+      'supplier.sh',
+      'keyaddr.py'
+    ]
     if (!keepRelayer) files.push('relayer-config.yaml')
 
     ctx.progress('info', 'Copying the stack files', undefined, 'scp')
@@ -243,6 +251,50 @@ export async function supplierRun(
     address: operatorFromOutput(out),
     lines
   }
+}
+
+/**
+ * supplier-import-operator: puts an operator key the user pasted into a stack on the
+ * server (import). The one operation that carries an operator key: it travels once, on
+ * SSH's standard input, to supplier.sh operator-import, which puts it in the stack's
+ * keyring and keeps it only when the keyring then holds exactly this operator. Never on a
+ * command line, in the log, or in history. A hex key is checked against the operator here
+ * first, so a wrong key does not leave this PC.
+ */
+export async function supplierImportOperator(
+  req: Req<'supplier-import-operator'>,
+  ctx: OpContext
+): Promise<Res<'supplier-import-operator'>> {
+  const conn = resolveSsh(req)
+  const path = validateLinuxPath(req.path, 'Stack directory')
+  const op = validateAddress(req.operator_address, 'Operator address')
+  const secret = normalizeOperatorSecret(req.secret)
+  if (secret.kind === 'hex') {
+    const derived = await probeHexAddress(secret.value, ctx)
+    if (derived && derived !== op)
+      fail(`That key belongs to ${derived}, not to the operator ${op}. Nothing was sent.`)
+  }
+  ctx.progress(
+    'info',
+    `Importing the operator key into ${path} on ${conn.target}`,
+    undefined,
+    'import'
+  )
+  const r = await runSsh(
+    conn,
+    `bash '${path}/supplier.sh' operator-import '${op}' '${secret.kind}'`,
+    ctx,
+    Math.min(ctx.timeoutMs, 180_000),
+    `${secret.value}\n`
+  )
+  const lines = nonEmptyLines(tail(r.out, 20_000))
+  const err = lastErrorLine(lines)
+  if (r.code !== 0 || err) fail(err || 'The operator key could not be imported.', cleanErr(r.err))
+  const got = operatorFromOutput(r.out)
+  if (got !== op)
+    fail('The server did not confirm the operator after the import.', lines.join('\n'))
+  await addHistory({ op: 'supplier-operator-import', extra: `host=${conn.target} operator=${op}` })
+  return { ok: true, operator: op, lines }
 }
 
 export async function deployShip(

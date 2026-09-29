@@ -9,6 +9,7 @@ import type { Server } from 'node:http'
 import { join } from 'node:path'
 import {
   BRIDGE_TOOLS,
+  BRIDGE_REFUSED_STEPS,
   bridgeTool,
   needsConfirmation,
   serverFirstNote,
@@ -249,6 +250,10 @@ class BridgeService {
     tool: BridgeTool,
     req: Record<string, unknown>
   ): Promise<{ req: Record<string, unknown> } | { error: string }> {
+    if (tool.op === 'supplier-run' && BRIDGE_REFUSED_STEPS.includes(String(req.step ?? '')))
+      return {
+        error: `The ${String(req.step)} step is done in the Pocket Service Manager window only (Suppliers, import a supplier).`
+      }
     const s = await readSettings()
     const name = String(req.server ?? '')
     const entry = s.servers.find((x) => x.name === name)
