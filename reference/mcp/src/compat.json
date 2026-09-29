@@ -2,10 +2,18 @@
   "app": "Pocket Service Manager",
   "updated": "2026-09-28",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.17",
+  "latest": "electron-0.1.18",
   "minimum_supported": "hta-2026-09-14",
   "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.18": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.12",
+      "changes": [
+        "Provision has an optional public port: a stack behind a router that forwards another port to 443 is staked at https://host:<port>, so its endpoint keeps working when the app stakes or restakes it",
+        "Suppliers lists 'Suppliers set up outside this app': the owner wallet's suppliers (from the indexer) that no server in the app manages, read-only. The app cannot import them yet; tell the user to leave such a supplier running and not to create a second one. Custodial suppliers (operator staked as its own owner) do not appear there"
+      ]
+    },
     "electron-0.1.17": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.12",
