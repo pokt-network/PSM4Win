@@ -2,12 +2,13 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
-## Unreleased
+## 0.1.19
 
 - Suppliers: changing a supplier's stake or services now always keeps its owner and how its rewards are split, exactly as they are on the network. The app checks this itself before signing, so neither the app nor an assistant using it can hand a supplier to a different owner by mistake.
 - Claude can now look over a server whose supplier was set up by hand, without changing anything on it: which RelayMiner runs there, the services it serves and their backends, what answers on the web ports, and which keyring or keys file holds the operator's key. No key is ever shown. This is the first step of importing such a supplier into the app.
 - Suppliers: a custodial supplier, one whose operator is also its owner, can now be restaked from the app. The stake stays custodial: stake increases come from the operator account, and returned stake and rewards stay with it. Unstaking one from the app is not possible yet.
 - Suppliers: a supplier set up by hand can now be imported into the app. Press Import next to it under "Suppliers set up outside this app". For a supplier staked with its operator as its own owner, enter its operator address under "Import a supplier by its operator address". The app looks over the server first and shows what it will do, and it will not start if something is in the way. Then it builds its own RelayMiner next to yours with the same operator key, finding the key on the server or taking it from you once, and points it at your existing backends. It stops new relays to yours and waits until your last claims are proved, then switches over. The stake, the owner, and the services on the network stay as they are. The import picks up where it left off if the app is closed partway through, and "Put theirs back" starts your own setup again.
+- Provision and Deploy now work on a server where only the administrator can create folders under /opt, as on many servers set up by hand. The app creates its folders there with the server user's sudo and hands them to that user.
 
 ## 0.1.18
 

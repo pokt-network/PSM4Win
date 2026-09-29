@@ -1,11 +1,30 @@
 {
   "app": "Pocket Service Manager",
-  "updated": "2026-09-28",
+  "updated": "2026-09-29",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.18",
+  "latest": "electron-0.1.19",
   "minimum_supported": "hta-2026-09-14",
   "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.19": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.12",
+      "capabilities_added": [
+        "import a supplier set up by hand (pocketd or an assistant's command-line steps) into the app: Suppliers, 'Suppliers set up outside this app', Import; or 'Import a supplier by its operator address' for a custodial supplier (operator staked as its own owner) or one another wallet owns. The user adds the supplier's server in Settings first (SSH login with passwordless sudo). The app surveys the server read-only, shows a plan with anything in the way (a proxy that serves other sites on 80/443, a backend running outside Docker, a RelayMiner outside Docker and systemd, an existing app stack for the network), builds its own HA RelayMiner stack beside theirs with the same operator key (found on the server, or pasted into the app once), points it at their existing backend containers, stops new relays to theirs, waits until their last claims are proved, then stops their miner and proxy and starts its own. The stake, owner, and services on chain do not change. 'Put theirs back' restores their setup while an import is under way. Never tell such a user to create a second supplier; send them to Import",
+        "server survey, read-only, of a server whose supplier was set up by hand (psm_server_survey on the bridge): which RelayMiner runs there, its services and backends, what holds ports 80 and 443, and which keyring or keys file holds the operator key; no key is ever printed",
+        "restake a custodial supplier (operator is its own owner); the stake stays custodial"
+      ],
+      "bridge_tools_added": ["psm_server_survey"],
+      "not_on_the_bridge": "the import itself (placing the operator key, joining their backends, stopping their RelayMiner and proxy, halting a stack) is app-window only: it takes over a live supplier. Tell the user to use Import on the Suppliers screen.",
+      "not_available": [
+        "unstaking a custodial supplier from the app (the operator must sign it); tell the user it is not possible in the app yet"
+      ],
+      "changes": [
+        "a stake change always keeps the supplier's recorded owner and revenue split; the app checks this itself before signing, so a supplier is never handed to another owner",
+        "Provision and Deploy create /opt/pocket folders with passwordless sudo when the SSH user cannot write /opt, as on a server set up by hand",
+        "Help, 'Getting started', tells a user with a hand-made supplier to import it instead of making a second one"
+      ]
+    },
     "electron-0.1.18": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.12",
