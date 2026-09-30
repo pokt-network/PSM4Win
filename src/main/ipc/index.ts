@@ -2,7 +2,7 @@
 // `signer:<op>`), plus window controls, settings, constrained service-folder
 // file access, and the importer. Every payload is validated with zod first.
 import { app, ipcMain, dialog, BrowserWindow, shell } from 'electron'
-import { join, resolve, sep, isAbsolute } from 'node:path'
+import { join, resolve, sep, isAbsolute, dirname } from 'node:path'
 import { promises as fs } from 'node:fs'
 import { SIGNER_OPS, type SignerOp, type ProgressEvent } from '@core/contract'
 import {
@@ -128,12 +128,21 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return true
   })
 
+  // Since Electron 43 a picker with no defaultPath opens in Downloads and Windows no longer
+  // remembers the last folder, so the app remembers it: the folder of the last pick, or for
+  // a first file pick (an SSH key) the user's .ssh folder when it exists.
+  let lastPickDir: string | null = null
+  const startDir = (initial: unknown, fallback?: string): string | undefined =>
+    typeof initial === 'string' && initial
+      ? initial
+      : (lastPickDir ?? (fallback && exists(fallback) ? fallback : undefined))
+
   ipcMain.handle('files:pick-file', async (_e, opts: unknown) => {
     const o = (opts && typeof opts === 'object' ? opts : {}) as { initial?: string; json?: boolean }
     const w = getWindow()
     const r = await dialog.showOpenDialog(w ?? new BrowserWindow({ show: false }), {
       properties: ['openFile'],
-      defaultPath: typeof o.initial === 'string' ? o.initial : undefined,
+      defaultPath: startDir(o.initial, o.json ? undefined : join(app.getPath('home'), '.ssh')),
       filters: o.json
         ? [
             { name: 'JSON', extensions: ['json'] },
@@ -141,7 +150,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
           ]
         : undefined
     })
-    return r.canceled ? null : r.filePaths[0]
+    if (r.canceled) return null
+    lastPickDir = dirname(r.filePaths[0])
+    return r.filePaths[0]
   })
   ipcMain.handle('files:exists', async (_e, p: unknown) =>
     typeof p === 'string' && p.length < 2048 ? exists(p) : false
@@ -174,9 +185,11 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     const w = getWindow()
     const r = await dialog.showOpenDialog(w ?? new BrowserWindow({ show: false }), {
       properties: ['openDirectory'],
-      defaultPath: typeof initial === 'string' ? initial : undefined
+      defaultPath: startDir(initial)
     })
-    return r.canceled ? null : r.filePaths[0]
+    if (r.canceled) return null
+    lastPickDir = r.filePaths[0]
+    return r.filePaths[0]
   })
 
   // Service folders under settings.servicesRoot: the renderer's only file access.

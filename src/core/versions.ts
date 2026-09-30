@@ -1,6 +1,9 @@
 // Pinned versions. Update docs/ARCHITECTURE.md section 7 in the same commit.
 
 /** The pocketd image the app runs in Docker. The HTA used `:latest`; this pins the tag verified on 2026-09-14. */
+/** The Electron runtime the app ships (package.json pins it exactly; docs/ARCHITECTURE.md). */
+export const ELECTRON_VERSION = '44.5.1'
+
 export const POCKETD_IMAGE = 'ghcr.io/pokt-network/pocketd:0.1.35'
 export const POCKETD_VERSION = '0.1.35'
 

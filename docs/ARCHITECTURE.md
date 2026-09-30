@@ -128,6 +128,7 @@ Keep in `src/core/versions.ts` and update here in the same commit:
 
 | Item | Value at handoff | Pinned in `src/core/versions.ts` (2026-09-15) |
 |---|---|---|
+| Electron | `ELECTRON_VERSION` = 44.5.1 (Chromium 152, Node 24.21), pinned exactly in `package.json`; was 39.8.10 until 0.1.21, which Electron no longer supported. From 42 the electron package does not download its binary on install; `postinstall` runs its installer. | 44.5.1 (2026-09-30) |
 | pocketd image | `ghcr.io/pokt-network/pocketd` (HTA: `:latest`; pin to the tag matching v0.1.35 at first build) | `ghcr.io/pokt-network/pocketd:0.1.35` (the `v`-prefixed tag does not exist on ghcr) |
 | pocket-ap | v0.1.2; image `ghcr.io/pokt-network/pocket-ap:latest` pulled by the `pocketap-pull` operation (pin a tag as well) | `ghcr.io/pokt-network/pocket-ap:v0.1.2` |
 | poktroll | main @ `fea9e14`, pocketd v0.1.35 |
