@@ -2,7 +2,9 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
-## Unreleased
+## 0.1.20
+
+**Priority update.** Pressing Update never worked for copies installed with Scoop: it closed the app without updating. This version fixes it, but the fix cannot reach you through the old button, so update once with Scoop yourself: open PowerShell, run scoop update, then scoop update pocket-service-manager, and open the app again. From this version on, Update in the app works.
 
 - Update now works for copies installed with Scoop. Pressing Update closed the app but never started the update: the window that runs Scoop failed to open. It now opens, checks Scoop for the newest version first (before, Scoop could answer that you already had it), updates, and says when to open the app again. A copy in a Scoop folder with another name is now recognised as a Scoop install too.
 

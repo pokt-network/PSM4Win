@@ -1,11 +1,20 @@
 {
   "app": "Pocket Service Manager",
-  "updated": "2026-09-29",
+  "updated": "2026-09-30",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.19",
+  "latest": "electron-0.1.20",
   "minimum_supported": "hta-2026-09-14",
   "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.20": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.19",
+      "priority": "Pressing Update never worked for copies installed with Scoop: it closed the app without updating. This version fixes it, but the fix cannot reach you through the old button, so update once with Scoop yourself: open PowerShell, run scoop update, then scoop update pocket-service-manager, and open the app again. From this version on, Update in the app works.",
+      "changes": [
+        "the in-app Update works for Scoop installs: it opens a console that refreshes Scoop and its buckets, then runs scoop update pocket-service-manager, and says when to reopen the app. In every earlier version the console never opened (the app quit and nothing updated), so a user on 0.1.19 or older must update once outside the app: scoop update, then scoop update pocket-service-manager",
+        "a Scoop install in a folder not named scoop is recognised as Scoop, not as the portable zip"
+      ]
+    },
     "electron-0.1.19": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.12",
