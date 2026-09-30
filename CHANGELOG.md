@@ -2,6 +2,10 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
+## Unreleased
+
+- Update now works for copies installed with Scoop. Pressing Update closed the app but never started the update: the window that runs Scoop failed to open. It now opens, checks Scoop for the newest version first (before, Scoop could answer that you already had it), updates, and says when to open the app again. A copy in a Scoop folder with another name is now recognised as a Scoop install too.
+
 ## 0.1.19
 
 - Suppliers: changing a supplier's stake or services now always keeps its owner and how its rewards are split, exactly as they are on the network. The app checks this itself before signing, so neither the app nor an assistant using it can hand a supplier to a different owner by mistake.

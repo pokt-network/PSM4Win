@@ -19,6 +19,8 @@ import {
   pickReleaseAssets,
   plainNotes,
   type ReleaseInfo,
+  scoopUpdateCommandLine,
+  SCOOP_APP,
   type UpdateStatus
 } from '@core/update'
 import { APP_VERSION_PREFIX } from '@core/versions'
@@ -27,7 +29,6 @@ import { log } from '../state/log'
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
 const FIRST_CHECK_DELAY_MS = 20_000
 const FETCH_TIMEOUT_MS = 20_000
-const SCOOP_APP = 'pocket-service-manager'
 
 class UpdateService {
   private getWindow: () => BrowserWindow | null = () => null
@@ -158,18 +159,15 @@ class UpdateService {
   /** Scoop owns the files: open a visible console that runs its updater, then quit so it can replace them. */
   private async installWithScoop(): Promise<void> {
     this.set({ state: 'installing', error: null })
-    const child = spawn(
-      'cmd.exe',
-      [
-        '/c',
-        'start',
-        '"Pocket Service Manager update"',
-        'cmd.exe',
-        '/k',
-        `scoop update ${SCOOP_APP}`
-      ],
-      { detached: true, stdio: 'ignore', windowsHide: false, shell: false }
-    )
+    // Verbatim: Node's quoting would escape the window title's quotes as \", which cmd
+    // does not understand (scoopUpdateCommandLine in src/core/update.ts).
+    const child = spawn('cmd.exe', ['/c', scoopUpdateCommandLine(SCOOP_APP)], {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: false,
+      windowsVerbatimArguments: true,
+      shell: false
+    })
     child.unref()
     log.info('update: handed off to scoop')
     setTimeout(() => app.quit(), 1500)

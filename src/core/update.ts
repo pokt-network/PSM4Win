@@ -112,10 +112,14 @@ export function parseChecksums(text: string): Map<string, string> {
   return out
 }
 
+/** The app's name in the Scoop bucket (bucket/pocket-service-manager.json). */
+export const SCOOP_APP = 'pocket-service-manager'
+
 /**
- * How this copy was installed. A Scoop install lives under `...\scoop\apps\...`; the NSIS
- * installer leaves an uninstaller next to the executable; anything else packaged is the
- * portable zip; an unpackaged run is a development build.
+ * How this copy was installed. A Scoop install lives under `...\scoop\apps\...`, or, when
+ * Scoop was put in a folder of another name, under `apps\pocket-service-manager\current`
+ * (or a version folder); the NSIS installer leaves an uninstaller next to the executable;
+ * anything else packaged is the portable zip; an unpackaged run is a development build.
  */
 export function detectInstallKind(
   execPath: string,
@@ -124,8 +128,34 @@ export function detectInstallKind(
 ): InstallKind {
   if (!packaged) return 'dev'
   if (/[\\/]scoop[\\/]apps[\\/]/i.test(execPath)) return 'scoop'
+  if (/[\\/]apps[\\/]pocket-service-manager[\\/](current|\d[^\\/]*)[\\/]/i.test(execPath))
+    return 'scoop'
   if (hasUninstaller) return 'installer'
   return 'portable'
+}
+
+/**
+ * The command line, for `cmd.exe /c`, that opens a console window running the user's Scoop
+ * updater. It must reach cmd exactly as written (spawn with windowsVerbatimArguments):
+ * Node's own quoting turns the window title's quotes into \" sequences, which cmd does not
+ * understand, so `start` took the title for a program named "Pocket" and nothing ran (every
+ * in-app Scoop update up to 0.1.19). The inner cmd waits about two seconds for the app to
+ * finish quitting, refreshes Scoop and its buckets, updates the app, and stays open so the
+ * user can read the result. No quote may
+ * appear inside the /k string: cmd strips only its first and last one.
+ */
+export function scoopUpdateCommandLine(app = SCOOP_APP): string {
+  if (!/^[a-z0-9-]+$/.test(app)) throw new Error('not a Scoop app name')
+  const inner = [
+    'ping -n 3 127.0.0.1 >nul',
+    // Scoop refreshes its buckets before an app update only when its last refresh is hours
+    // old; otherwise it reports the installed version as the latest. Refresh first.
+    'scoop update',
+    `scoop update ${app}`,
+    'echo.',
+    'echo When it says the update finished, close this window and open Pocket Service Manager again.'
+  ].join(' & ')
+  return `start "Pocket Service Manager update" cmd.exe /k "${inner}"`
 }
 
 /** Release notes as plain text for the dialog: no markdown headings or links, bounded length. */

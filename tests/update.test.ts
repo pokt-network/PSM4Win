@@ -5,6 +5,7 @@ import {
   pickReleaseAssets,
   parseChecksums,
   detectInstallKind,
+  scoopUpdateCommandLine,
   plainNotes,
   changesUrl,
   priorityReason,
@@ -189,5 +190,39 @@ describe('updater: priority updates', () => {
 
   it('has nothing to offer with no published release', () => {
     expect(summarizeReleases([], '0.1.10')).toEqual({ release: null, latest: null, priority: null })
+  })
+})
+
+describe('updater: Scoop in a folder of another name', () => {
+  it('is still recognised by the app folder Scoop gives it', () => {
+    const bs = String.fromCharCode(92)
+    const win = (...p: string[]): string => p.join(bs)
+    const exe = 'Pocket Service Manager.exe'
+    for (const p of [
+      win('D:', 'Tools', 'ScoopApps', 'apps', 'pocket-service-manager', 'current', exe),
+      win('C:', 'psm-scoop', 'apps', 'pocket-service-manager', '0.1.19', exe)
+    ])
+      expect(detectInstallKind(p, true, false)).toBe('scoop')
+    expect(detectInstallKind(win('D:', 'apps', 'pocket-service-manager', exe), true, false)).toBe(
+      'portable'
+    )
+  })
+})
+
+describe('updater: Scoop hand-off', () => {
+  it('opens a titled console that refreshes Scoop, then updates the app, with no stray quotes', () => {
+    const line = scoopUpdateCommandLine()
+    // The title must reach start as the first quoted string, exactly: Node's quoting turned
+    // it into an escaped one that start took for a program (0.1.19 and before).
+    expect(line.startsWith('start "Pocket Service Manager update" cmd.exe /k "')).toBe(true)
+    expect(line.includes(String.fromCharCode(92))).toBe(false)
+    expect(line.match(/"/g)).toHaveLength(4)
+    expect(line.endsWith('"')).toBe(true)
+    const inner = line.slice(line.indexOf('/k "') + 4, -1).split(' & ')
+    expect(inner.indexOf('scoop update')).toBeGreaterThan(0)
+    expect(inner.indexOf('scoop update pocket-service-manager')).toBe(
+      inner.indexOf('scoop update') + 1
+    )
+    expect(() => scoopUpdateCommandLine('x" & del *')).toThrow()
   })
 })
