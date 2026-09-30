@@ -1,12 +1,12 @@
 {
-  "version": "0.1.20",
+  "version": "0.1.21",
   "description": "Register, stake, supply, deploy, and test services on Pocket Network.",
   "homepage": "https://github.com/pokt-network/PSM4Win",
   "license": "MIT",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/pokt-network/PSM4Win/releases/download/v0.1.20/PocketServiceManager-0.1.20-win-x64.zip",
-      "hash": "sha256:bb387be83dc262a4118bd6ec8b4be542cea245522f9a648781e01772fd5ea436"
+      "url": "https://github.com/pokt-network/PSM4Win/releases/download/v0.1.21/PocketServiceManager-0.1.21-win-x64.zip",
+      "hash": "sha256:83e83204775550395dfdaa91a089d0a246f51b7dd06f0ccbb42821796b47ee6d"
     }
   },
   "shortcuts": [
