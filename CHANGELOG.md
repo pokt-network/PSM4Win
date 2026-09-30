@@ -2,7 +2,7 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
-## Unreleased
+## 0.1.21
 
 - The app now runs on Electron 44, a version that still gets security fixes (39, which it ran before, no longer did). Nothing changes in how it works. File and folder pickers now open where you last picked something, or for an SSH key in your .ssh folder, instead of in Downloads.
 
