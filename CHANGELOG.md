@@ -2,6 +2,10 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
+## Unreleased
+
+- Update now works when the app was opened from the Start menu. Scoop stopped partway with "Cannot remove the item ... because it is in use": the update window was working inside the app's own folder, which Scoop must remove to put the new version in. It now works from the temp folder. Copies on 0.1.21 or earlier still have the old Update button, so update once by hand: quit the app, open PowerShell from the Start menu, run scoop update, then scoop update pocket-service-manager, and open the app again. From this version on, Update in the app works.
+
 ## 0.1.21
 
 - The app now runs on Electron 44, a version that still gets security fixes (39, which it ran before, no longer did). Nothing changes in how it works. File and folder pickers now open where you last picked something, or for an SSH key in your .ssh folder, instead of in Downloads.

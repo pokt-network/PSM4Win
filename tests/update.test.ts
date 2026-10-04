@@ -220,6 +220,13 @@ describe('updater: Scoop hand-off', () => {
     expect(line.endsWith('"')).toBe(true)
     const inner = line.slice(line.indexOf('/k "') + 4, -1).split(' & ')
     expect(inner.indexOf('scoop update')).toBeGreaterThan(0)
+    // Leave the app's folder before Scoop runs. From the Start menu the console inherits
+    // Scoop's apps\pocket-service-manager\current as its working folder, and PowerShell
+    // cannot remove its own working folder, so Scoop's uninstall step failed with "it is in
+    // use". The spawn sets cwd to the temp folder too; this is the backup.
+    const cd = inner.indexOf('cd /d %TEMP%')
+    expect(cd).toBeGreaterThanOrEqual(0)
+    expect(cd).toBeLessThan(inner.indexOf('scoop update'))
     expect(inner.indexOf('scoop update pocket-service-manager')).toBe(
       inner.indexOf('scoop update') + 1
     )

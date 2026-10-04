@@ -160,8 +160,12 @@ class UpdateService {
   private async installWithScoop(): Promise<void> {
     this.set({ state: 'installing', error: null })
     // Verbatim: Node's quoting would escape the window title's quotes as \", which cmd
-    // does not understand (scoopUpdateCommandLine in src/core/update.ts).
+    // does not understand (scoopUpdateCommandLine in src/core/update.ts). Run from the temp
+    // folder, not the app's: started from the Start menu, the app works in Scoop's
+    // apps\pocket-service-manager\current, and PowerShell cannot remove the folder it works
+    // in, so Scoop's uninstall step failed with "it is in use".
     const child = spawn('cmd.exe', ['/c', scoopUpdateCommandLine(SCOOP_APP)], {
+      cwd: app.getPath('temp'),
       detached: true,
       stdio: 'ignore',
       windowsHide: false,

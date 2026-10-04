@@ -140,14 +140,20 @@ export function detectInstallKind(
  * Node's own quoting turns the window title's quotes into \" sequences, which cmd does not
  * understand, so `start` took the title for a program named "Pocket" and nothing ran (every
  * in-app Scoop update up to 0.1.19). The inner cmd waits about two seconds for the app to
- * finish quitting, refreshes Scoop and its buckets, updates the app, and stays open so the
- * user can read the result. No quote may
+ * finish quitting, moves to the temp folder, refreshes Scoop and its buckets, updates the
+ * app, and stays open so the user can read the result. No quote may
  * appear inside the /k string: cmd strips only its first and last one.
  */
 export function scoopUpdateCommandLine(app = SCOOP_APP): string {
   if (!/^[a-z0-9-]+$/.test(app)) throw new Error('not a Scoop app name')
   const inner = [
     'ping -n 3 127.0.0.1 >nul',
+    // Scoop's Start-menu shortcut starts the app inside apps\pocket-service-manager\current
+    // and the console inherits that folder; PowerShell cannot remove its own working folder,
+    // so Scoop's uninstall step failed on the current junction ("it is in use"). The spawn
+    // already runs in the temp folder; this is the second guard. Quote-free: cd /d takes a
+    // path with spaces as it is.
+    'cd /d %TEMP%',
     // Scoop refreshes its buckets before an app update only when its last refresh is hours
     // old; otherwise it reports the installed version as the latest. Refresh first.
     'scoop update',
