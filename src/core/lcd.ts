@@ -523,7 +523,8 @@ export async function ownedSuppliers(net: Network, owner: string): Promise<Owned
     if (j.errors?.length) throw new Error(`the indexer answered: ${j.errors[0].message}`)
     const page = j.data?.suppliers?.nodes ?? []
     nodes.push(...page)
-    if (page.length < 1000 || page.length >= (j.data?.suppliers?.totalCount ?? 0)) break
+    // totalCount counts the rows after the cursor, so this page held all that remained.
+    if (!page.length || page.length >= (j.data?.suppliers?.totalCount ?? 0)) break
   }
   return nodes
     .filter((n) => n.stakeStatus !== 'Unstaked')

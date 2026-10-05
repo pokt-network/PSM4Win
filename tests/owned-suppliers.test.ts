@@ -80,6 +80,28 @@ describe('ownedSuppliers (indexer)', () => {
     expect(got).toHaveLength(1037)
     expect(new Set(got.map((g) => g.operator)).size).toBe(1037)
   })
+  it('keeps reading when the indexer answers fewer rows per page than it was asked for', async () => {
+    const all = Array.from({ length: 1037 }, (_, i) => ({
+      id: 'pokt1' + String(i).padStart(38, '0'),
+      stakeStatus: 'Staked',
+      stakeAmount: '1'
+    }))
+    const f = vi.fn(async (_url: string, init: { body: string }) => {
+      const { after } = JSON.parse(init.body).variables
+      const rest = all.filter((n) => n.id > after)
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: { suppliers: { totalCount: rest.length, nodes: rest.slice(0, 500) } }
+        })
+      }
+    })
+    vi.stubGlobal('fetch', f)
+    const got = await ownedSuppliers('main', OWNER)
+    expect(f).toHaveBeenCalledTimes(3)
+    expect(got.map((g) => g.operator)).toEqual(all.map((n) => n.id))
+  })
   it('never queries for something that is not an address', async () => {
     const f = answer({ data: { suppliers: { nodes: [] } } })
     expect(await ownedSuppliers('main', 'not-an-address')).toEqual([])
