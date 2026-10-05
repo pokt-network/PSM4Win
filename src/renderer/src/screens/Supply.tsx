@@ -283,13 +283,19 @@ function UnmanagedSuppliers({ reread }: { reread: number }): React.JSX.Element |
         )
         const owned = (await ownedSuppliers(net, address)).filter((o) => !known.has(o.operator))
         const out: Unmanaged[] = []
-        for (const o of owned) {
-          const rec = await supplierAt(net, o.operator).catch(() => null)
-          out.push({
-            ...o,
-            services: (rec?.services ?? []).map((s) => s.service_id),
-            url: rec?.services?.[0]?.endpoints?.[0]?.url ?? ''
-          })
+        // One LCD read per supplier, eight at a time: an owner can have hundreds.
+        for (let i = 0; i < owned.length; i += 8) {
+          const batch = owned.slice(i, i + 8)
+          const recs = await Promise.all(
+            batch.map((o) => supplierAt(net, o.operator).catch(() => null))
+          )
+          batch.forEach((o, k) =>
+            out.push({
+              ...o,
+              services: (recs[k]?.services ?? []).map((s) => s.service_id),
+              url: recs[k]?.services?.[0]?.endpoints?.[0]?.url ?? ''
+            })
+          )
         }
         if (live) setList(out)
       } catch (e) {
