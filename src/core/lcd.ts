@@ -494,27 +494,38 @@ export interface OwnedSupplier {
  * suppliers by owner (its owner_address filter answers nothing), and paging every
  * supplier on MainNet is thousands of records. Suppliers that finished unstaking are
  * left out. A custodial supplier, staked by its operator as its own owner, is not under
- * the owner wallet at all; it is found from its operator instead.
+ * the owner wallet at all; it is found from its operator instead. The indexer answers
+ * at most 1000 rows per request whatever `first` asks for, so the list is read in pages
+ * keyed on the last operator address seen, which a supplier changing status or a new one
+ * appearing mid-walk cannot shift, until a page holds every row that remains (its
+ * `totalCount`).
  */
 export async function ownedSuppliers(net: Network, owner: string): Promise<OwnedSupplier[]> {
   if (!/^pokt1[0-9a-z]{38}$/.test(owner)) return []
-  const res = await fetch(NETWORK_INFO[net].indexer, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({
-      query:
-        'query($owner: String!) { suppliers(filter: { ownerId: { equalTo: $owner } }) { nodes { id stakeStatus stakeAmount } } }',
-      variables: { owner }
-    }),
-    signal: AbortSignal.timeout(20_000)
-  })
-  if (!res.ok) throw new LcdError(`HTTP ${res.status} from the indexer`, res.status)
-  const j = (await res.json()) as {
-    data?: { suppliers?: { nodes?: { id: string; stakeStatus: string; stakeAmount: string }[] } }
-    errors?: { message: string }[]
+  type Node = { id: string; stakeStatus: string; stakeAmount: string }
+  const nodes: Node[] = []
+  for (;;) {
+    const res = await fetch(NETWORK_INFO[net].indexer, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        query:
+          'query($owner: String!, $after: String!) { suppliers(filter: { ownerId: { equalTo: $owner }, stakeStatus: { notEqualTo: Unstaked }, id: { greaterThan: $after } }, orderBy: ID_ASC, first: 1000) { totalCount nodes { id stakeStatus stakeAmount } } }',
+        variables: { owner, after: nodes.at(-1)?.id ?? '' }
+      }),
+      signal: AbortSignal.timeout(20_000)
+    })
+    if (!res.ok) throw new LcdError(`HTTP ${res.status} from the indexer`, res.status)
+    const j = (await res.json()) as {
+      data?: { suppliers?: { totalCount?: number; nodes?: Node[] } }
+      errors?: { message: string }[]
+    }
+    if (j.errors?.length) throw new Error(`the indexer answered: ${j.errors[0].message}`)
+    const page = j.data?.suppliers?.nodes ?? []
+    nodes.push(...page)
+    if (page.length < 1000 || page.length >= (j.data?.suppliers?.totalCount ?? 0)) break
   }
-  if (j.errors?.length) throw new Error(`the indexer answered: ${j.errors[0].message}`)
-  return (j.data?.suppliers?.nodes ?? [])
+  return nodes
     .filter((n) => n.stakeStatus !== 'Unstaked')
     .map((n) => ({ operator: n.id, status: n.stakeStatus, stakeUpokt: Number(n.stakeAmount) || 0 }))
 }
