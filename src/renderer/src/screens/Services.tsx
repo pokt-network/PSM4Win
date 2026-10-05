@@ -19,12 +19,15 @@ import {
   netManifest,
   servers,
   serverByName,
+  stackOf,
   goTo,
   foot,
   type AppStakeHolder
 } from '../lib/actions'
 import { formFromCard } from '@core/card-form'
 import { groupServiceFolders } from '@core/service-folders'
+import { NETWORKS, type Network } from '@core/networks'
+import { Addr } from '../components/Addr'
 
 interface Row {
   id: string
@@ -124,6 +127,7 @@ export function ServicesScreen(): React.JSX.Element {
                 <th>Name</th>
                 <th>Price</th>
                 <th>Status on {netLabel(net)}</th>
+                <th>Supplier operator</th>
                 <th>App stake</th>
                 <th>Actions</th>
               </tr>
@@ -222,6 +226,7 @@ export function ServicesScreen(): React.JSX.Element {
                       {chainCell}{' '}
                       {x.local && !x.local.hasCard ? <Badge cls="warn">no card</Badge> : null}
                     </td>
+                    <td>{operatorCell(x.local, sp)}</td>
                     <td>{stakeCell}</td>
                     <td className="actions">
                       {x.chain ? (
@@ -280,6 +285,27 @@ export function ServicesScreen(): React.JSX.Element {
       </div>
     </div>
   )
+}
+
+/**
+ * The operator of the supplier stack that serves this service, per network: on the network
+ * shown, the server whose supplier serves it on chain; otherwise the server it was last
+ * deployed or supplied to from this machine.
+ */
+function operatorCell(l: LocalService | null, sp: SupplyState | undefined): React.ReactNode {
+  const cur = S().net
+  const lines = NETWORKS.map((n: Network) => {
+    const nm = l?.manifest?.networks?.[n]
+    const server = (n === cur && sp?.server) || nm?.deploy_host || ''
+    const op = stackOf(serverByName(server), n)?.operator || nm?.supplier_operator || ''
+    return op ? { n, op } : null
+  }).filter((v) => v !== null)
+  if (!lines.length) return <span className="hint">none</span>
+  return lines.map(({ n, op }) => (
+    <div key={n}>
+      <Addr value={op} label={n === 'main' ? 'MainNet' : 'Beta'} />
+    </div>
+  ))
 }
 
 // ---- row action targets (docs/SCREENS.md 3.2) ----

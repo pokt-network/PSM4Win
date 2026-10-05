@@ -1,7 +1,7 @@
 // Dashboard (docs/SCREENS.md 3.1) with the Recent activity panel (3.10).
 import { useCallback, useEffect, useState } from 'react'
 import { useStore, S } from '../store'
-import { fmtPokt, fmtInt, fmtDuration, shortAddr, POKT } from '@core/format'
+import { fmtPokt, fmtInt, fmtDuration, POKT } from '@core/format'
 import {
   costPerRelayUpokt,
   nextSessionBoundary,
@@ -28,6 +28,7 @@ import {
   openFolder
 } from '../lib/actions'
 import { supplierStatusCell } from './Supply'
+import { Addr } from '../components/Addr'
 import { openSupplier, svcStake } from './Services'
 
 export function DashboardScreen(): React.JSX.Element {
@@ -369,8 +370,12 @@ export function DashboardScreen(): React.JSX.Element {
                     >
                       <td className="svcid">
                         {x.server.name}
-                        <div className="hint mono">
-                          {st?.operator ? shortAddr(st.operator) : `no ${label} stack`}
+                        <div>
+                          {st?.operator ? (
+                            <Addr value={st.operator} />
+                          ) : (
+                            <span className="hint">no {label} stack</span>
+                          )}
                         </div>
                       </td>
                       <td>{supplierStatusCell(x, params, net)}</td>

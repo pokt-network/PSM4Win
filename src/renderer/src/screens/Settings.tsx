@@ -7,7 +7,7 @@ import type { RemoteClaudeStatus } from '../../../preload/index'
 import { RE } from '@core/validate'
 import { STACK_LAYOUT } from '@core/versions'
 import { stackNeedsUpdate, stackUrl, portOfStackUrl, publicPortError } from '@core/stack'
-import { fmtPokt, fmtInt, shortAddr, POKT } from '@core/format'
+import { fmtPokt, fmtInt, POKT } from '@core/format'
 import {
   Badge,
   Checks,
@@ -50,6 +50,7 @@ import { confirmTx } from '../lib/flows'
 import { showWelcome } from '../lib/welcome'
 import { showUpdateDialog, showChanges } from '../lib/update'
 import { account } from '@core/lcd'
+import { Addr } from '../components/Addr'
 
 const SETTINGS_TABS: Array<[SettingsTab, string]> = [
   ['start', 'Start here'],
@@ -480,9 +481,11 @@ function StackCell({ s, net }: { s: ServerEntry; net: Network }): React.JSX.Elem
       ) : (
         <Badge cls="warn">provisioning pending</Badge>
       )}
-      <div className="mono" style={{ marginTop: 4 }} title={st?.operator ?? ''}>
-        {st?.operator ? shortAddr(st.operator) : ''}
-      </div>
+      {st?.operator ? (
+        <div style={{ marginTop: 4 }}>
+          <Addr value={st.operator} />
+        </div>
+      ) : null}
       <div className="hint">{String(st?.url ?? '').replace('https://', '')}</div>
       <div className="hint mono">{st?.dir ?? ''}</div>
       {st?.provisioned_at ? (
