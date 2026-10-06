@@ -2,6 +2,10 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
+## 0.1.24
+
+- New: Service settings, under Services. A service that needs something from its operator, such as where to post its alerts, how often, or an API key, now asks for it in the app. Choose the service and its server, fill in the form, and press Save; the app checks each value first and saves it on the server, where a later deploy keeps it. Secret values stay on the server and show as set or not set. New values take effect when the service restarts: press Restart now, which says first when the restart pauses relays on both networks. If the service has a test, such as sending a test alert, the Test button runs it. Deploy now stops before building a service that is missing a required setting, and shows where to set it. My services has a Settings button for such services. Each server shows "stack update needed" once; press Update stack under Suppliers to give it what Service settings needs. The operator key, the services, and the stake stay as they are.
+
 ## 0.1.23
 
 - Every operator address now has a Copy button beside it: in Suppliers, on the Dashboard, and in Settings under Servers. Hover over a shortened address to see it in full. The supplier editor's operator field has a Copy button too.

@@ -2,10 +2,26 @@
   "app": "Pocket Service Manager",
   "updated": "2026-10-05",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.23",
+  "latest": "electron-0.1.24",
   "minimum_supported": "hta-2026-09-14",
   "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.24": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.19",
+      "capabilities_added": [
+        "per-service settings: a service declares the configuration its operator gives it (a webhook, an interval, a mode, an API key) in deploy/settings.json, next to routes.json and relayer.json, and the app draws a form from it with no per-service code. Services, Service settings (or the Settings button on a My services row): choose the service and the server, fill in the values, Save. Values are checked in the app first and written over SSH into <deploy root>/<id>/settings.env on the server (mode 600, outside what Deploy ships, so a redeploy keeps them), which the service's compose reads with env_file: ../settings.env. Secrets stay on the server only and show as set or not set, with Replace and Clear. New values apply when the backend restarts: the panel offers Restart now, which recreates only that backend and says when it serves both networks. A Test button runs the check the service declares, inside its container. Deploy stops before building when a required setting has no value, and refuses a service whose own compose does not read settings.env. Whoever has SSH access to the server may change settings. Tell the user to set a service's settings there; never tell them to edit a .env file on the server",
+        "deploy/settings.json is also the reference for operators not using the app: each setting names the environment variable it becomes (per network: {NETWORK} becomes MAIN or BETA), and they set those variables in settings.env beside the service's deploy folder"
+      ],
+      "bridge_tools_added": [
+        "psm_service_settings",
+        "psm_service_settings_check"
+      ],
+      "not_on_the_bridge": "saving settings (it carries secrets) and restarting a backend (it pauses relays) are app-window only: tell the user to use Save and Restart now under Services, Service settings. psm_service_settings reads what is in force on a server (secrets only as set or not set); psm_service_settings_check runs the service's own check",
+      "changes": [
+        "Deploy ships deploy/settings.json with the backend and creates an empty settings.env on the server when there is none; the standard backend compose reads it"
+      ]
+    },
     "electron-0.1.23": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.19",
