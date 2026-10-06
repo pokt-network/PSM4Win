@@ -10,6 +10,7 @@ import {
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
   writeFileSync
@@ -133,7 +134,9 @@ describe.skipIf(!BASH || !PYTHON)('supplier.sh service settings', () => {
   }
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'psm-settings-'))
+    // The long name: a CI runner's temp folder is C:\Users\RUNNER~1\..., and supplier.sh rightly
+    // refuses a deploy root with a ~ in it.
+    root = mkdtempSync(join(realpathSync.native(tmpdir()), 'psm-settings-'))
     stack = join(root, 'stacks', 'supplier-beta')
     services = join(root, 'services')
     svc = join(services, 'exsvc')
