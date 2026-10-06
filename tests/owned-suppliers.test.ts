@@ -138,7 +138,7 @@ describe('ownedSuppliers (indexer)', () => {
 describe('withServices (LCD)', () => {
   afterEach(() => clearLcdCache())
 
-  it('reads eight at a time, keeps the order given, and leaves a failed read with no services', async () => {
+  it('reads eight at a time, keeps the order given, and leaves a failed or unknown supplier with no services', async () => {
     const ops = Array.from({ length: 17 }, (_, i) => 'pokt1' + String(i).padStart(38, '0'))
     const owned = ops.map((operator) => ({ operator, status: 'Staked', stakeUpokt: 1 }))
     let done = 0
@@ -150,6 +150,7 @@ describe('withServices (LCD)', () => {
       await new Promise((r) => setTimeout(r, 17 - i))
       done++
       if (i === 5) return { ok: false, status: 500, text: async () => 'boom' }
+      if (i === 9) return { ok: false, status: 404, text: async () => 'not found' }
       const service = {
         service_id: `svc${i}`,
         endpoints: [{ url: `https://s${i}`, rpc_type: 'JSON_RPC' }]
@@ -162,7 +163,7 @@ describe('withServices (LCD)', () => {
     expect(startedAfter).toEqual([...Array(8).fill(0), ...Array(8).fill(8), 16])
     expect(got).toEqual(
       owned.map((o, i) =>
-        i === 5
+        i === 5 || i === 9
           ? { ...o, services: [], url: '' }
           : { ...o, services: [`svc${i}`], url: `https://s${i}` }
       )
