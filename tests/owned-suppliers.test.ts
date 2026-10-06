@@ -151,6 +151,7 @@ describe('withServices (LCD)', () => {
       done++
       if (i === 5) return { ok: false, status: 500, text: async () => 'boom' }
       if (i === 9) return { ok: false, status: 404, text: async () => 'not found' }
+      if (i === 12) throw new TypeError('fetch failed')
       const service = {
         service_id: `svc${i}`,
         endpoints: [{ url: `https://s${i}`, rpc_type: 'JSON_RPC' }]
@@ -163,7 +164,7 @@ describe('withServices (LCD)', () => {
     expect(startedAfter).toEqual([...Array(8).fill(0), ...Array(8).fill(8), 16])
     expect(got).toEqual(
       owned.map((o, i) =>
-        i === 5 || i === 9
+        i === 5 || i === 9 || i === 12
           ? { ...o, services: [], url: '' }
           : { ...o, services: [`svc${i}`], url: `https://s${i}` }
       )
