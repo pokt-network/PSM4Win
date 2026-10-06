@@ -526,6 +526,7 @@ export async function ownedSuppliers(net: Network, owner: string): Promise<Owned
     // totalCount counts the rows after the cursor, so this page held all that remained.
     if (!page.length || page.length >= (j.data?.suppliers?.totalCount ?? 0)) break
   }
+  // The query already leaves Unstaked out; filtered again in case an indexer ignores that.
   return nodes
     .filter((n) => n.stakeStatus !== 'Unstaked')
     .map((n) => ({ operator: n.id, status: n.stakeStatus, stakeUpokt: Number(n.stakeAmount) || 0 }))
