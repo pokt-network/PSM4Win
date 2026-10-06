@@ -49,6 +49,7 @@ export interface ServiceFolder {
   hasCard: boolean
   hasDockerfile: boolean
   hasCompose: boolean
+  hasSettings: boolean
 }
 
 const api = {

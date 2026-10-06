@@ -277,6 +277,14 @@ class BridgeService {
       out.deploy_root = entry.deployRoot || '/opt/pocket/services'
     if (tool.op === 'supplier-run' && !out.deploy_root)
       out.deploy_root = entry.deployRoot || '/opt/pocket/services'
+    if (tool.op === 'service-settings-read' || tool.op === 'service-settings-check') {
+      // Settings belong to the service on this server, not to a network: any stack's helper
+      // will do, the requested network's first.
+      const any = stack?.dir || Object.values(entry.suppliers ?? {}).find((x) => x?.dir)?.dir
+      if (!any) return { error: `Server '${name}' has no supplier stack; provision it first.` }
+      out.path = any
+      out.deploy_root = entry.deployRoot || '/opt/pocket/services'
+    }
     if (tool.op === 'remote-stake-supplier') {
       if (!out.operator_address) out.operator_address = stack?.operator ?? ''
       if (!out.owner_address) {

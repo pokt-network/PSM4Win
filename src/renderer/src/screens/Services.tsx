@@ -25,6 +25,7 @@ import {
 } from '../lib/actions'
 import { formFromCard } from '@core/card-form'
 import { groupServiceFolders } from '@core/service-folders'
+import { openServiceSettings } from './ServiceSettings'
 
 interface Row {
   id: string
@@ -250,6 +251,14 @@ export function ServicesScreen(): React.JSX.Element {
                           onClick={() => svcRegister(x.local!.folder)}
                         >
                           Register
+                        </button>
+                      ) : null}
+                      {x.local?.hasSettings ? (
+                        <button
+                          className="btn small"
+                          onClick={() => openServiceSettings(x.id, nm.deploy_host)}
+                        >
+                          Settings
                         </button>
                       ) : null}
                       {x.local ? (

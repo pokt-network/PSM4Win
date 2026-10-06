@@ -147,6 +147,38 @@ export interface RouteSpec {
   port: number
 }
 
+/** Which service's settings, on which server: supplier.sh runs from the stack in `path`. */
+export interface ServiceSettingsTarget {
+  /** A stack directory on the server; any network's stack will do. */
+  path: string
+  deploy_root: string
+  service_id: string
+}
+
+/** One variable as the server reports it. A secret's value never comes back. */
+export interface ServerSettingState {
+  set: boolean
+  /** A declared setting that is not a secret, when it is set. */
+  value?: string
+  /** Whether the running backend was created with this value; absent with no container. */
+  applied?: boolean
+  /** false: the file holds it but the deployed declaration no longer names it. */
+  declared?: false
+}
+
+export interface ServiceSettingsReadResult {
+  ok: true
+  /** The deployed deploy/settings.json, checked; null when the service has none there. */
+  declared: import('./service-settings').SettingsDecl | null
+  /** Why the deployed declaration cannot be used, or ''. */
+  declared_error: string
+  values: Record<string, ServerSettingState>
+  /** Whether the backend container exists. */
+  container: boolean
+  /** The networks whose stacks on this server send relays to this backend, and the port. */
+  served: { network: Network; port: number }[]
+}
+
 /** Every operation's request type. */
 export interface SignerRequests {
   'docker-check': Record<string, never>
@@ -262,6 +294,18 @@ export interface SignerRequests {
     secret: string
   }
   'deploy-ship': SshConn & { deploy_root: string; service_id: string; folder: string }
+  'service-settings-read': SshConn & ServiceSettingsTarget
+  /**
+   * Sets and clears a service's settings on the server. Checked against the server's own
+   * copy of deploy/settings.json first; the values travel once, on SSH's standard input,
+   * never on a command line, in the log, or in history (which records names only).
+   */
+  'service-settings-write': SshConn &
+    ServiceSettingsTarget & { edits: import('./service-settings').SettingEdit[] }
+  /** Runs the check the deployed deploy/settings.json declares, inside the backend. */
+  'service-settings-check': SshConn & ServiceSettingsTarget & { network?: Network }
+  /** Recreates the service's backend so saved settings apply; waits on each relay port. */
+  'service-restart': SshConn & ServiceSettingsTarget & { health_path?: string; ports: number[] }
   'relay-call': {
     network: Network
     wallet?: string
@@ -319,7 +363,16 @@ export interface SignerResults {
     routes: boolean
     /** Whether deploy/relayer.json was shipped with the backend. */
     relayer: boolean
+    /** Whether deploy/settings.json was shipped with the backend. */
+    settings: boolean
+    /** Why the service's own compose may ignore a setting; shown, not fatal. */
+    settings_warnings: string[]
   }
+  'service-settings-read': ServiceSettingsReadResult
+  'service-settings-write': { ok: true; set: string[]; cleared: string[] }
+  /** ok is true whenever the check ran; passed says how it went. */
+  'service-settings-check': { ok: true; passed: boolean; summary: string; output: string[] }
+  'service-restart': { ok: true; lines: string[] }
   'relay-call': RelayCallResult
   'validate-card': ValidateCardResult
   history: { ok: true; entries: HistoryEntry[] }
@@ -358,6 +411,10 @@ export const SIGNER_OPS: readonly SignerOp[] = [
   'supplier-ship',
   'supplier-run',
   'deploy-ship',
+  'service-settings-read',
+  'service-settings-write',
+  'service-settings-check',
+  'service-restart',
   'relay-call',
   'validate-card',
   'history'
@@ -373,6 +430,10 @@ export const TIMEOUTS_MS: Partial<Record<SignerOp, number>> = {
   'supplier-import-operator': 180_000,
   'supplier-ship': 180_000,
   'deploy-ship': 600_000,
+  'service-settings-read': 60_000,
+  'service-settings-write': 90_000,
+  'service-settings-check': 120_000,
+  'service-restart': 300_000,
   'relay-call': 120_000
 }
 export const SUPPLIER_STEP_TIMEOUTS_MS: Record<SupplierStep, number> = {

@@ -18,6 +18,7 @@ import { RegisterScreen } from './screens/Register'
 import { StakeScreen } from './screens/Stake'
 import { SupplyScreen } from './screens/Supply'
 import { DeployScreen } from './screens/Deploy'
+import { ServiceSettingsScreen } from './screens/ServiceSettings'
 import { TestScreen } from './screens/Test'
 import { WalletsScreen } from './screens/Wallets'
 import { SettingsScreen } from './screens/Settings'
@@ -88,6 +89,7 @@ export default function App(): React.JSX.Element {
             {screen === 'stake' && <StakeScreen />}
             {screen === 'supply' && <SupplyScreen />}
             {screen === 'deploy' && <DeployScreen />}
+            {screen === 'svcsettings' && <ServiceSettingsScreen />}
             {screen === 'test' && <TestScreen />}
             {screen === 'wallets' && <WalletsScreen />}
             {screen === 'settings' && <SettingsScreen />}

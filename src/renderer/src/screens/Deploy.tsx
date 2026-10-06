@@ -36,6 +36,7 @@ import {
   readCardFor,
   readRoutesFor,
   readRelayerFor,
+  readSettingsFor,
   recordManifestFor,
   refreshNetwork,
   supplyMap,
@@ -47,6 +48,8 @@ import {
 } from '../lib/actions'
 import { openSupplier, svcTest } from './Services'
 import { groupServiceFolders } from '@core/service-folders'
+import { missingRequired, type ParsedSettings } from '@core/service-settings'
+import { openServiceSettings, missingLabels } from './ServiceSettings'
 
 export function DeployScreen(): React.JSX.Element {
   const { dep, local, net, settings, busy, deployed } = useStore()
@@ -57,6 +60,7 @@ export function DeployScreen(): React.JSX.Element {
   const [served, setServed] = useState<boolean | null>(null)
   const [routes, setRoutes] = useState<ParsedRoutes>({ ok: true, routes: [] })
   const [relayer, setRelayer] = useState<ParsedRelayer>({ ok: true, decl: DEFAULT_RELAYER })
+  const [svcSettings, setSvcSettings] = useState<ParsedSettings | null>(null)
   const { lines, log, clear } = useLog()
   const label = netLabel(net)
   useEffect(() => {
@@ -89,6 +93,9 @@ export function DeployScreen(): React.JSX.Element {
     })
     void readRelayerFor(dep.id).then((r) => {
       if (live) setRelayer(r)
+    })
+    void readSettingsFor(dep.id).then((r) => {
+      if (live) setSvcSettings(r)
     })
     return () => {
       live = false
@@ -217,6 +224,29 @@ export function DeployScreen(): React.JSX.Element {
       true,
       `${fmtInt(r2.bytes)} bytes, ${r2.files} files, compose from ${r2.compose_from}`
     )
+    for (const w of r2.settings_warnings ?? []) log(w, 'err')
+    // A service that needs a setting to start is stopped here, before it is built, with the
+    // way to set it; the values file on the server survives this and every later deploy.
+    if (r2.settings) {
+      const rs = await sg['service-settings-read']({ ...conn, deploy_root: root, service_id: id })
+      if (!rs.ok) log(`Could not check the service's settings on the server: ${rs.error}`, 'err')
+      else if (rs.declared) {
+        const miss = missingRequired(rs.declared, [net], rs.values)
+        if (miss.length) {
+          mark('Service settings', false, `Not set yet: ${missingLabels(miss)}`)
+          log(
+            <>
+              Set them under <a onClick={() => openServiceSettings(id, s.name)}>Service settings</a>
+              , then deploy again.
+            </>,
+            'err'
+          )
+          return fail('Required settings are missing.')
+        }
+        const n = Object.values(rs.values).filter((v) => v.set).length
+        mark('Service settings', true, `${n} saved on the server`)
+      }
+    }
     log(
       <>
         Building the image and starting <span className="mono">{id}-backend</span> on the supplier
@@ -375,6 +405,18 @@ export function DeployScreen(): React.JSX.Element {
           {relayerHint ? (
             <div className={relayer.ok ? 'hint' : 'hint hint-err'} id="depRelayerHint">
               {relayerHint}
+            </div>
+          ) : null}
+          {svcSettings ? (
+            <div className={svcSettings.ok ? 'hint' : 'hint hint-err'} id="depSettingsHint">
+              {svcSettings.ok ? (
+                <>
+                  Has settings for its operator (deploy\settings.json).{' '}
+                  <a onClick={() => openServiceSettings(dep.id, dep.server)}>Service settings</a>
+                </>
+              ) : (
+                svcSettings.error
+              )}
             </div>
           ) : null}
           {routesHint ? (

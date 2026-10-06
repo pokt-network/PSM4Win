@@ -74,6 +74,7 @@ Both work with Claude Code in the Claude desktop app's Code tab and in a termina
 - It never shows a private key except when you ask for it with a typed confirmation, and never sends one anywhere.
 - It never hardcodes a chain value. Fees, minimum stakes, session length, and unbonding periods are read from the network at the moment of use.
 - It never runs a `pocketd` command you did not start from a button, and every transaction shows its exact command before you confirm it.
+- It never keeps a service's secret settings (a webhook, an API key) on this PC. Under **Services, Service settings** they go straight to the server the service runs on, into a file only the server's login user can read, and the app shows them afterwards only as set or not set. They never appear in the app's log, its activity list, or a command line. Anyone who can log in to that server can change them.
 
 ## Development
 

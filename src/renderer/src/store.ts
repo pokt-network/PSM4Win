@@ -20,6 +20,7 @@ export type Screen =
   | 'register'
   | 'stake'
   | 'deploy'
+  | 'svcsettings'
   | 'test'
   | 'supply'
   | 'wallets'
@@ -31,6 +32,7 @@ export const SCREENS: Screen[] = [
   'register',
   'stake',
   'deploy',
+  'svcsettings',
   'test',
   'supply',
   'wallets',
@@ -68,6 +70,8 @@ export interface LocalService {
   hasCard: boolean
   hasDockerfile: boolean
   hasCompose: boolean
+  /** The folder declares operator settings in deploy/settings.json. */
+  hasSettings: boolean
   manifest: Manifest
 }
 
@@ -131,6 +135,8 @@ export interface State {
   crFolder: string
   stk: StakeForm
   dep: { id: string; server: string }
+  /** Service settings: the service and the server whose settings are showing. */
+  svs: { id: string; server: string }
   tst: { id: string; wallet: string }
   supOpen: { server: string; preselect?: string } | null
   /** The import wizard (Suppliers): the operator of the supplier being imported, and the
@@ -181,6 +187,7 @@ export const useStore = create<State>((set) => ({
   crFolder: '',
   stk: { id: '', from: 'service-manager', amount: '', fund: '' },
   dep: { id: '', server: '' },
+  svs: { id: '', server: '' },
   tst: { id: '', wallet: '' },
   supOpen: null,
   impOpen: null,

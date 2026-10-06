@@ -20,6 +20,12 @@ const sid = z.string().max(64)
 const addr = z.string().max(64)
 const amount = z.coerce.number()
 const dry = z.boolean().optional()
+/** A service's settings on a server: the stack whose helper runs, the deploy root, the id. */
+const settingsTarget = ssh.extend({
+  path: z.string().max(512),
+  deploy_root: z.string().max(512),
+  service_id: sid
+})
 
 /**
  * The one report the renderer may write to the structured log (VerifyReport in
@@ -133,6 +139,18 @@ export const requestSchemas: Record<SignerOp, z.ZodTypeAny> = {
     deploy_root: z.string().max(512),
     service_id: sid,
     folder: z.string().max(1024)
+  }),
+  'service-settings-read': settingsTarget,
+  'service-settings-write': settingsTarget.extend({
+    edits: z
+      .array(z.object({ name: z.string().max(64), value: z.string().max(1024).nullable() }))
+      .min(1)
+      .max(64)
+  }),
+  'service-settings-check': settingsTarget.extend({ network: network.optional() }),
+  'service-restart': settingsTarget.extend({
+    health_path: z.string().max(256).optional(),
+    ports: z.array(z.coerce.number().int()).max(4)
   }),
   'relay-call': z.object({
     network,

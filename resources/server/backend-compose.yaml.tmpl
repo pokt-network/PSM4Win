@@ -4,6 +4,8 @@
 # The memory limit keeps one runaway backend from taking the memory the supplier
 # stacks were sized with; a service that needs more ships its own
 # deploy/docker-compose.yaml with a larger mem_limit.
+# settings.env holds the service's settings (deploy/settings.json), saved from the app's
+# Service settings; it sits beside backend/ and deploy/, so a redeploy never replaces it.
 
 services:
   backend:
@@ -11,6 +13,7 @@ services:
     image: {{SERVICE_ID}}-backend:latest
     container_name: {{SERVICE_ID}}-backend
     restart: unless-stopped
+    env_file: ../settings.env
     mem_limit: 512m
     expose:
       - "8080"

@@ -44,6 +44,13 @@ describe('log redaction (security model)', () => {
     }
     expect(redactDeep(req)).toEqual({ ...req, secret: '[redacted]' })
   })
+  it('redacts the edits of a settings save, names and values alike', () => {
+    const req = {
+      service_id: 'example-charts',
+      edits: [{ name: 'EXSVC_MAIN_HOOK', value: 'https://discord.com/api/webhooks/1/abc' }]
+    }
+    expect(redactDeep(req)).toEqual({ service_id: 'example-charts', edits: '[redacted]' })
+  })
   it('leaves addresses and tx hashes readable', () => {
     const addr = 'pokt1qyqszqgpqyqszqgpqyqszqgpqyqszqgp04723y'
     expect(redact(`addr ${addr}`)).toContain(addr)

@@ -34,6 +34,7 @@ import { serviceFolderName } from '@core/text'
 import { ROUTES_FILE, parseRoutesFile, type ParsedRoutes } from '@core/routes'
 import { RELAYER_FILE, DEFAULT_RELAYER, parseRelayerFile, type ParsedRelayer } from '@core/relayer'
 import { sourceFolderFor } from '@core/service-folders'
+import { SETTINGS_FILE, parseSettingsFile, type ParsedSettings } from '@core/service-settings'
 import type { Settings } from '../../../preload/index'
 import { alertDialog, confirmDialog } from './modal'
 import { isDemo } from './demo'
@@ -300,6 +301,7 @@ export async function loadServiceFolders(): Promise<LocalService[]> {
       hasCard: f.hasCard,
       hasDockerfile: f.hasDockerfile,
       hasCompose: f.hasCompose,
+      hasSettings: f.hasSettings,
       manifest: m
     }
   })
@@ -393,6 +395,7 @@ export const NAV: readonly NavSection[] = [
       ['register', 'Register service'],
       ['stake', 'Stake application'],
       ['deploy', 'Deploy service'],
+      ['svcsettings', 'Service settings'],
       ['test', 'Test service']
     ]
   },
@@ -517,6 +520,14 @@ export async function readRelayerFor(id: string): Promise<ParsedRelayer> {
   if (!l || isDemo()) return { ok: true, decl: DEFAULT_RELAYER }
   const t = await psm().files.readServiceFile(l.folder, RELAYER_FILE)
   return t === null ? { ok: true, decl: DEFAULT_RELAYER } : parseRelayerFile(t)
+}
+
+/** The operator settings a service declares in deploy/settings.json; null when it has none. */
+export async function readSettingsFor(id: string): Promise<ParsedSettings | null> {
+  const l = localById(id)
+  if (!l || isDemo()) return null
+  const t = await psm().files.readServiceFile(l.folder, SETTINGS_FILE)
+  return t === null ? null : parseSettingsFile(t)
 }
 
 export async function writeManifest(folder: string, m: Manifest): Promise<void> {
@@ -700,6 +711,32 @@ export interface SshConnOf {
 export function connOf(s: ServerEntry, net?: Network): SshConnOf {
   const st = stackOf(s, net) ?? ({} as Partial<StackEntry>)
   return { host: s.host, port: s.port, user: s.user, key_path: s.keyPath, path: st.dir ?? '' }
+}
+
+/**
+ * Where a service's settings are read and written on a server: SSH, any provisioned stack's
+ * helper (the current network's first; settings belong to the service, not to a network),
+ * and the deploy root. Null when the server has no provisioned stack.
+ */
+export function settingsTargetOf(
+  s: ServerEntry,
+  serviceId: string
+): (SshConnOf & { deploy_root: string; service_id: string }) | null {
+  const net = S().net
+  const st =
+    [stackOf(s, net), ...Object.values(s.suppliers ?? {})].find(
+      (x) => stackState(x as StackEntry | null) === 'ready' && x?.dir
+    ) ?? null
+  if (!st?.dir) return null
+  return {
+    host: s.host,
+    port: s.port,
+    user: s.user,
+    key_path: s.keyPath,
+    path: st.dir,
+    deploy_root: s.deployRoot || '/opt/pocket/services',
+    service_id: serviceId
+  }
 }
 
 export interface SupplierRow {

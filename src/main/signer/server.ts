@@ -12,6 +12,7 @@ import {
   validateServiceId,
   validateLinuxPath,
   validateAddress,
+  validateHealthPath,
   toInt64
 } from '@core/validate'
 import { buildSurveyScript, parseSurvey, judgeSurvey } from '@core/survey'
@@ -19,6 +20,18 @@ import { supplierStepArgs, normalizeOperatorSecret } from '@core/supplier'
 import { probeHexAddress } from './docker'
 import { ROUTES_FILE } from '@core/routes'
 import { RELAYER_FILE } from '@core/relayer'
+import {
+  SETTINGS_FILE,
+  SETTINGS_ENV_FILE,
+  SETTINGS_HELPER_TOO_OLD,
+  composeSettingsProblems,
+  helperTooOld,
+  parseSettingsCheck,
+  parseSettingsFile,
+  parseSettingsRead,
+  restartPorts,
+  settingsPatch
+} from '@core/service-settings'
 import { renderStack, backendComposeFromTemplate, type StackTemplates } from '@core/stack'
 import { cleanErr, operatorFromOutput, lastErrorLine } from '@core/pocketd-output'
 import { firstLine, nonEmptyLines, tail, toLf } from '@core/text'
@@ -317,6 +330,20 @@ export async function deployShip(
   const folder = req.folder
   if (!exists(join(folder, 'backend', 'Dockerfile')))
     fail('The service folder has no backend\\Dockerfile to build.', folder)
+  // A declaration the app cannot use, or a compose that would not read the values, stops
+  // the deploy here rather than leave a service whose settings silently do nothing.
+  const settingsText = await readText(join(folder, ...SETTINGS_FILE.split('/')))
+  const ownCompose = join(folder, 'deploy', 'docker-compose.yaml')
+  let settingsWarnings: string[] = []
+  if (settingsText !== null) {
+    const parsed = parseSettingsFile(settingsText)
+    if (!parsed.ok) fail(parsed.error)
+    if (exists(ownCompose)) {
+      const c = composeSettingsProblems((await readText(ownCompose)) ?? '', parsed.decl)
+      if (c.error) fail(c.error)
+      settingsWarnings = c.warnings
+    }
+  }
   return withWorkDir(async (work) => {
     const stage = join(work, 'stage')
     await ensureDir(join(stage, 'deploy'))
@@ -343,12 +370,11 @@ export async function deployShip(
       { timeoutMs: ctx.timeoutMs, signal: ctx.signal }
     )
     if (rc.code >= 8) fail('Could not stage the backend folder.', `${rc.out}${rc.err}`)
-    const own = join(folder, 'deploy', 'docker-compose.yaml')
     let composeFrom: string
-    if (exists(own)) {
+    if (exists(ownCompose)) {
       await writeText(
         join(stage, 'deploy', 'docker-compose.yaml'),
-        toLf((await readText(own)) ?? '')
+        toLf((await readText(ownCompose)) ?? '')
       )
       composeFrom = 'the service folder'
     } else {
@@ -370,6 +396,7 @@ export async function deployShip(
     }
     const hasRoutes = await shipOptional(ROUTES_FILE)
     const hasRelayer = await shipOptional(RELAYER_FILE)
+    const hasSettings = await shipOptional(SETTINGS_FILE)
     const bundle = join(work, 'bundle.tar')
     const tr = await runNative(toolPath('tar'), ['-cf', bundle, '-C', stage, 'backend', 'deploy'], {
       timeoutMs: ctx.timeoutMs,
@@ -384,9 +411,11 @@ export async function deployShip(
       fail('Could not create the service directory on the server.', cleanErr(mk.err))
     const cp = await runScp(conn, [bundle, `${conn.target}:${dest}/bundle.tar`], ctx)
     if (cp.code !== 0) fail('Could not copy the archive to the server.', cleanErr(cp.err))
+    // The values file is made here as well as by supplier.sh deploy, so the compose's
+    // env_file is satisfied even on a server whose helper predates service settings.
     const x = await runSsh(
       conn,
-      `cd '${dest}' && rm -f '${ROUTES_FILE}' '${RELAYER_FILE}' && tar -xf bundle.tar && rm -f bundle.tar && find backend deploy -type f | wc -l`,
+      `cd '${dest}' && rm -f '${ROUTES_FILE}' '${RELAYER_FILE}' '${SETTINGS_FILE}' && tar -xf bundle.tar && rm -f bundle.tar && { test -f '${SETTINGS_ENV_FILE}' || (umask 077 && : > '${SETTINGS_ENV_FILE}'); } && chmod 600 '${SETTINGS_ENV_FILE}' && find backend deploy -type f | wc -l`,
       ctx
     )
     if (x.code !== 0)
@@ -404,7 +433,163 @@ export async function deployShip(
       files: firstLine(x.out),
       compose_from: composeFrom,
       routes: hasRoutes,
-      relayer: hasRelayer
+      relayer: hasRelayer,
+      settings: hasSettings,
+      settings_warnings: settingsWarnings
     }
   })
+}
+
+// ---- a service's settings on the server (supplier.sh settings-*, backend-restart) ----
+
+function settingsTarget(req: Req<'service-settings-read'>): {
+  path: string
+  sid: string
+  root: string
+} {
+  return {
+    path: validateLinuxPath(req.path, 'Stack directory'),
+    sid: validateServiceId(req.service_id),
+    root: validateLinuxPath(req.deploy_root, 'Deploy root')
+  }
+}
+
+/** The remote command for a settings step; every argument has passed a strict pattern. */
+function settingsCmd(
+  t: ReturnType<typeof settingsTarget>,
+  step: string,
+  extra: string[] = []
+): string {
+  return (
+    `bash '${t.path}/supplier.sh' ${step} '${t.sid}' '${t.root}'` +
+    extra.map((a) => ` '${a}'`).join('')
+  )
+}
+
+/** Fails with the helper's own error line, or the old-helper note, or the fallback. */
+function settingsFail(r: { code: number; out: string; err: string }, fallback: string): void {
+  if (helperTooOld(r.out)) fail(SETTINGS_HELPER_TOO_OLD)
+  const lines = nonEmptyLines(tail(r.out, 20_000))
+  const err = lastErrorLine(lines)
+  if (err) fail(err, lines.length > 1 ? lines.join('\n') : '')
+  if (r.code !== 0) fail(fallback, cleanErr(r.err + '\n' + r.out))
+}
+
+async function readSettingsOn(
+  conn: ReturnType<typeof resolveSsh>,
+  t: ReturnType<typeof settingsTarget>,
+  ctx: OpContext
+): Promise<Omit<Res<'service-settings-read'>, 'ok'>> {
+  const r = await runSsh(conn, settingsCmd(t, 'settings-read'), ctx, 60_000)
+  // Not deployed here yet is a state the screen shows, not a failure.
+  if (/^error: \S+ is not deployed on this server$/m.test(r.out))
+    return { declared: null, declared_error: '', values: {}, container: false, served: [] }
+  settingsFail(r, 'Could not read the settings on the server.')
+  const p = parseSettingsRead(r.out)
+  if (typeof p === 'string') fail(p)
+  return p as Omit<Res<'service-settings-read'>, 'ok'>
+}
+
+/**
+ * service-settings-read: what is in force on the server. Non-secret values come back;
+ * secrets only as set or not set. The server is the source of truth, so a second PC sees
+ * the same.
+ */
+export async function serviceSettingsRead(
+  req: Req<'service-settings-read'>,
+  ctx: OpContext
+): Promise<Res<'service-settings-read'>> {
+  const conn = resolveSsh(req)
+  const t = settingsTarget(req)
+  ctx.progress('info', `Reading ${t.sid}'s settings on ${conn.target}`, undefined, 'read')
+  return { ok: true, ...(await readSettingsOn(conn, t, ctx)) }
+}
+
+/**
+ * service-settings-write: checks the edits against the server's own copy of
+ * deploy/settings.json, then sends them once on SSH's standard input. Values never reach a
+ * command line, the log, history, or an error message; history keeps the names only.
+ */
+export async function serviceSettingsWrite(
+  req: Req<'service-settings-write'>,
+  ctx: OpContext
+): Promise<Res<'service-settings-write'>> {
+  const conn = resolveSsh(req)
+  const t = settingsTarget(req)
+  const state = await readSettingsOn(conn, t, ctx)
+  if (!state.declared)
+    fail(
+      state.declared_error ||
+        `${t.sid} has no deploy/settings.json on ${conn.target}. Deploy it again first.`
+    )
+  const patch = settingsPatch(state.declared!, req.edits)
+  ctx.progress('info', `Saving ${t.sid}'s settings on ${conn.target}`, undefined, 'write')
+  const r = await runSsh(
+    conn,
+    settingsCmd(t, 'settings-write'),
+    ctx,
+    60_000,
+    JSON.stringify(patch) + '\n'
+  )
+  settingsFail(r, 'Could not save the settings on the server.')
+  const lines = nonEmptyLines(r.out)
+  const set = lines.filter((l) => l.startsWith('saved: set ')).map((l) => l.slice(11))
+  const cleared = lines.filter((l) => l.startsWith('saved: cleared ')).map((l) => l.slice(15))
+  await addHistory({
+    op: 'service-settings-write',
+    service_id: t.sid,
+    extra: `host=${conn.target} set=${set.join(',')} cleared=${cleared.join(',')}`
+  })
+  return { ok: true, set, cleared }
+}
+
+/** service-settings-check: runs the deployed declaration's check inside the backend. */
+export async function serviceSettingsCheck(
+  req: Req<'service-settings-check'>,
+  ctx: OpContext
+): Promise<Res<'service-settings-check'>> {
+  const conn = resolveSsh(req)
+  const t = settingsTarget(req)
+  const extra = req.network ? [requireNetwork(req.network)] : []
+  ctx.progress('info', `Running ${t.sid}'s check on ${conn.target}`, undefined, 'check')
+  const r = await runSsh(conn, settingsCmd(t, 'settings-check', extra), ctx, 110_000)
+  const res = parseSettingsCheck(r.out)
+  // A check that ran and failed is a result, not a failure of the operation.
+  if (!res.summary) settingsFail(r, 'The check could not run on the server.')
+  if (!res.summary) fail('The server did not report how the check went.', cleanErr(r.out))
+  await addHistory({
+    op: 'service-settings-check',
+    service_id: t.sid,
+    network: req.network,
+    extra: `host=${conn.target} ${res.summary}`
+  })
+  return { ok: true, ...res }
+}
+
+/** service-restart: recreates only the service's backend, so saved settings apply. */
+export async function serviceRestart(
+  req: Req<'service-restart'>,
+  ctx: OpContext
+): Promise<Res<'service-restart'>> {
+  const conn = resolveSsh(req)
+  const t = settingsTarget(req)
+  const hp = validateHealthPath(req.health_path)
+  const ports = restartPorts(req.ports)
+  ctx.progress('info', `Restarting ${t.sid}-backend on ${conn.target}`, undefined, 'restart')
+  const r = await runSsh(
+    conn,
+    settingsCmd(t, 'backend-restart', [hp, ...ports.map(String)]),
+    ctx,
+    290_000
+  )
+  settingsFail(r, 'The backend did not restart.')
+  const lines = nonEmptyLines(tail(r.out, 20_000))
+  if (!lines.some((l) => l.startsWith('restarted: ')))
+    fail('The server did not confirm the restart.', lines.join('\n'))
+  await addHistory({
+    op: 'service-restart',
+    service_id: t.sid,
+    extra: `host=${conn.target} ports=${ports.join(',')}`
+  })
+  return { ok: true, lines }
 }

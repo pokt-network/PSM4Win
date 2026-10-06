@@ -211,6 +211,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       hasCard: boolean
       hasDockerfile: boolean
       hasCompose: boolean
+      hasSettings: boolean
     }[] = []
     for (const d of await fs.readdir(root, { withFileTypes: true })) {
       if (!d.isDirectory()) continue
@@ -233,7 +234,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
         manifest,
         hasCard: exists(isAbsolute(cardRel) ? cardRel : join(root, d.name, cardRel)),
         hasDockerfile: exists(join(root, d.name, 'backend', 'Dockerfile')),
-        hasCompose: exists(join(root, d.name, 'deploy', 'docker-compose.yaml'))
+        hasCompose: exists(join(root, d.name, 'deploy', 'docker-compose.yaml')),
+        hasSettings: exists(join(root, d.name, 'deploy', 'settings.json'))
       })
     }
     return { root, folders }

@@ -34,6 +34,18 @@
 #                                            its own) their RelayMiner or proxy; refuses anything else
 #   supplier.sh halt                         import, the way back: stop this stack, and the shared
 #                                            Caddy when it serves no other stack
+#   supplier.sh settings-read <id> <deploy-root>
+#                                            a service's settings (deploy/settings.json) as they are
+#                                            on this server: one "settings: <json>" line; secrets
+#                                            only as set or not set
+#   supplier.sh settings-write <id> <deploy-root>
+#                                            set and clear settings, read as one JSON line from standard
+#                                            input (never an argument), into <deploy-root>/<id>/settings.env
+#   supplier.sh settings-check <id> <deploy-root> [<network>]
+#                                            run the check the service declares, inside its container
+#   supplier.sh backend-restart <id> <deploy-root> <health-path> <port> [<port> ...]
+#                                            recreate the service's backend so new settings apply; wait
+#                                            for <health-path> on each port a relayer calls
 #
 # The stack's images are pinned in stack.env by the app release that provisioned it
 # (STACK_LAYOUT 2 and later); `start` sizes memory from this server and validates both
@@ -207,6 +219,178 @@ import_record() {
   echo "created: operator key imported ($how)"
   echo "operator: $want"
 }
+
+# ---- a service's backend and its settings ----
+# Checks the id and deploy root a service step takes, and sets SVC to the service's directory.
+svc_args() {
+  [[ "${1:-}" =~ ^[A-Za-z0-9_-]{1,42}$ ]] || { echo "error: bad service id"; exit 2; }
+  [[ "${2:-}" =~ ^/[A-Za-z0-9._/-]+$ ]] || { echo "error: bad deploy root"; exit 2; }
+  SVC="$2/$1"
+}
+# The values file the service's compose reads with env_file. It lives beside backend/ and
+# deploy/, outside what Deploy ships, so a redeploy never touches it. Always present, so a
+# plain "env_file: ../settings.env" works on any version of Compose.
+settings_env_ensure() { [ -f "$SVC/settings.env" ] || (umask 077; : > "$SVC/settings.env"); chmod 600 "$SVC/settings.env"; }
+# Waits for a backend's health path on one port, as the relayer on the shared network sees it.
+wait_backend() {
+  local id="$1" port="$2" hp="$3" i
+  [[ "$port" =~ ^[0-9]{4,5}$ ]] && [ "$port" -ge 1024 ] && [ "$port" -le 65535 ] || { echo "error: bad backend port $port"; exit 2; }
+  for i in $(seq 1 60); do
+    if docker run --rm --network "$NET_NAME" alpine:3 wget -qO- "http://$id-backend:$port$hp" 2>/dev/null | grep -q '"'; then echo "backend: healthy at http://$id-backend:$port$hp"; return 0; fi
+    sleep 2
+  done
+  echo "error: backend did not answer $hp on port $port within 120 s"; docker logs --tail 20 "$id-backend" 2>&1 | tail -20; return 1
+}
+# Reads the deployed deploy/settings.json and settings.env. Modes: read (state as JSON, with
+# the running container's environment on standard input to tell what is applied), write (a
+# {"set": {...}, "clear": [...]} line on standard input), check (the check's timeout and
+# arguments, NUL-separated). Prints names, never a secret's value. The program is held in a
+# variable so that its standard input stays free for what the app sends.
+settings_py() { python3 -c "$SETTINGS_PY" "$@"; }
+IFS= read -r -d '' SETTINGS_PY <<'PY' || true
+import glob, json, os, re, sys
+NETS = ("BETA", "MAIN")  # the app's network ids as {NETWORK} becomes them
+NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
+mode, svc = sys.argv[1], sys.argv[2]
+decl_path = os.path.join(svc, "deploy", "settings.json")
+env_path = os.path.join(svc, "settings.env")
+def die(m):
+    print("error: " + m); sys.exit(1)
+def load_decl():
+    try:
+        d = json.load(open(decl_path))
+    except FileNotFoundError:
+        return None
+    except Exception:
+        die("the deployed deploy/settings.json is not valid JSON")
+    if not isinstance(d, dict) or not isinstance(d.get("settings"), list):
+        die("the deployed deploy/settings.json has no settings list")
+    return d
+def declared(d):
+    """Every name the declaration makes, mapped to whether it is a secret."""
+    m = {}
+    for s in d.get("settings", []):
+        if not isinstance(s, dict) or not isinstance(s.get("env"), str):
+            continue
+        e = s["env"]
+        for n in ([e.replace("{NETWORK}", x) for x in NETS] if s.get("scope") == "network" else [e]):
+            if NAME_RE.match(n):
+                m[n] = s.get("secret") is True
+    return m
+def read_env():
+    v = {}
+    try:
+        lines = open(env_path).read().splitlines()
+    except FileNotFoundError:
+        return v
+    for l in lines:
+        mm = re.match(r"^([A-Z][A-Z0-9_]*)='([^']*)'$", l) or re.match(r"^([A-Z][A-Z0-9_]*)=(.*)$", l)
+        if mm:
+            v[mm.group(1)] = mm.group(2)
+    return v
+def writable(x):
+    return isinstance(x, str) and len(x) <= 1024 and not re.search(r"[\r\n\0']", x)
+
+if mode == "read":
+    sid, stacks = sys.argv[3], sys.argv[4]
+    d = load_decl()
+    vals = read_env()
+    names = declared(d) if d else {}
+    raw = sys.stdin.read().strip()
+    running = None
+    if raw:
+        try:
+            running = {k: v for k, _, v in (e.partition("=") for e in (json.loads(raw) or []))}
+        except Exception:
+            running = None
+    values = {}
+    for n in sorted(set(names) | set(vals)):
+        st = {"set": vals.get(n, "") != ""}
+        # Only a declared, non-secret value is read back. A name the declaration no longer
+        # makes may have been a secret, so it is reported as set or not set only.
+        if names.get(n) is False and st["set"]:
+            st["value"] = vals[n]
+        if n not in names:
+            st["declared"] = False
+        if running is not None:
+            st["applied"] = running.get(n, "") == vals.get(n, "")
+        values[n] = st
+    # The networks whose stacks on this server send relays to this backend, and on which port.
+    served = []
+    for cfg in sorted(glob.glob(os.path.join(stacks, "*", "relayer-config.yaml"))):
+        try:
+            t = open(cfg).read()
+        except Exception:
+            continue
+        mm = re.search(r"http://" + re.escape(sid) + r"-backend:([0-9]+)", t)
+        if not mm:
+            continue
+        net = ""
+        try:
+            for l in open(os.path.join(os.path.dirname(cfg), "stack.env")):
+                if l.startswith("NET="):
+                    net = l[4:].strip().strip("\"'")
+        except Exception:
+            pass
+        if net:
+            served.append({"network": net, "port": int(mm.group(1))})
+    print("settings: " + json.dumps({"declared": d, "values": values, "container": running is not None, "served": served}, separators=(",", ":")))
+elif mode == "write":
+    d = load_decl()
+    if d is None:
+        die("this service has no deploy/settings.json on the server; deploy it again first")
+    names = declared(d)
+    try:
+        p = json.loads(sys.stdin.readline())
+        sets, clears = p.get("set") or {}, p.get("clear") or []
+        assert isinstance(sets, dict) and isinstance(clears, list)
+    except Exception:
+        die("the settings sent could not be read")
+    for n in list(sets) + clears:
+        if not isinstance(n, str) or n not in names:
+            die((n if isinstance(n, str) and NAME_RE.match(n) else "a setting") + " is not declared in the deployed deploy/settings.json; deploy the service again first")
+    for n, v in sets.items():
+        if not writable(v):
+            die("the value for " + n + " cannot be written: one line, no single quote, at most 1024 characters")
+    vals = read_env()
+    for n in clears:
+        vals.pop(n, None)
+    vals.update(sets)
+    os.umask(0o077)
+    tmp = env_path + ".new"
+    with open(tmp, "w") as f:
+        f.write("# This service's settings, written by the Pocket Service Manager (Services, Settings).\n")
+        for n in sorted(vals):
+            if writable(vals[n]):
+                f.write(n + "='" + vals[n] + "'\n")
+            else:
+                print("warning: " + n + " held a value this file cannot keep, so it was dropped")
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, env_path)
+    for n in sorted(sets):
+        print("saved: set " + n)
+    for n in sorted(clears):
+        print("saved: cleared " + n)
+elif mode == "check":
+    net = sys.argv[3] if len(sys.argv) > 3 else ""
+    d = load_decl()
+    c = d.get("check") if d else None
+    if not isinstance(c, dict):
+        die("this service declares no check in its deployed deploy/settings.json")
+    cmd = c.get("command")
+    if not (isinstance(cmd, list) and 0 < len(cmd) <= 16 and all(isinstance(a, str) and a and len(a) <= 200 and not re.search(r"[\0\r\n]", a) for a in cmd)):
+        die("the check's command in the deployed deploy/settings.json cannot be run")
+    if c.get("scope", "service") == "network":
+        if net.upper() not in NETS:
+            die("say which network the check is for")
+        cmd = [a.replace("{network}", net) for a in cmd]
+    to = c.get("timeout_s", 30)
+    if not (isinstance(to, int) and 1 <= to <= 60):
+        to = 30
+    sys.stdout.write("\0".join([str(to)] + cmd) + "\0")
+else:
+    die("unknown settings mode " + mode)
+PY
 
 case "$step" in
   prepare)
@@ -399,17 +583,56 @@ except Exception: print("", "parse")' 2>/dev/null)
     ID="${1:?service id}"; ROOT="${2:-/opt/pocket/services}"
     SVC="$ROOT/$ID"
     [ -f "$SVC/deploy/docker-compose.yaml" ] || { echo "error: $SVC/deploy/docker-compose.yaml missing"; exit 1; }
+    settings_env_ensure
     docker network inspect "$NET_NAME" >/dev/null 2>&1 || docker network create "$NET_NAME" >/dev/null
     cd "$SVC/deploy" && docker compose -p "$ID" up -d --build 2>&1 | tail -3
     HP="${3:-/healthz}"
     # The port this network's relayer calls (the service's deploy/relayer.json; 8080 by default).
     PORT="${4:-8080}"
-    [[ "$PORT" =~ ^[0-9]{4,5}$ ]] && [ "$PORT" -ge 1024 ] && [ "$PORT" -le 65535 ] || { echo "error: bad backend port $PORT"; exit 2; }
-    for i in $(seq 1 60); do
-      if docker run --rm --network "$NET_NAME" alpine:3 wget -qO- "http://$ID-backend:$PORT$HP" 2>/dev/null | grep -q '"'; then echo "backend: healthy at http://$ID-backend:$PORT$HP"; exit 0; fi
-      sleep 2
-    done
-    echo "error: backend did not answer $HP on port $PORT within 120 s"; docker logs --tail 20 "$ID-backend" 2>&1 | tail -20; exit 1
+    wait_backend "$ID" "$PORT" "$HP" || exit 1
+    ;;
+  backend-restart)
+    # New settings apply when the container is created again: a plain restart keeps the
+    # environment it was created with. Only this service's backend is recreated.
+    svc_args "${1:-}" "${2:-}"; ID="$1"; HP="${3:-/healthz}"; shift $(( $# < 3 ? $# : 3 ))
+    [ $# -gt 0 ] || set -- 8080
+    [ -f "$SVC/deploy/docker-compose.yaml" ] || { echo "error: $ID is not deployed on this server"; exit 1; }
+    settings_env_ensure
+    (cd "$SVC/deploy" && docker compose -p "$ID" up -d --no-build --force-recreate 2>&1 | tail -3)
+    for PORT in "$@"; do wait_backend "$ID" "$PORT" "$HP" || exit 1; done
+    echo "restarted: $ID-backend"
+    ;;
+  settings-read)
+    svc_args "${1:-}" "${2:-}"; ID="$1"
+    [ -d "$SVC" ] || { echo "error: $ID is not deployed on this server"; exit 1; }
+    # The running container's environment, to tell which saved values it was created with.
+    # It reaches the reader on standard input, never as an argument.
+    ENVJSON=$(docker inspect --format '{{json .Config.Env}}' "$ID-backend" 2>/dev/null || true)
+    printf '%s' "$ENVJSON" | settings_py read "$SVC" "$ID" "$(dirname "$D")"
+    unset ENVJSON
+    ;;
+  settings-write)
+    svc_args "${1:-}" "${2:-}"; ID="$1"
+    [ -d "$SVC" ] || { echo "error: $ID is not deployed on this server"; exit 1; }
+    settings_py write "$SVC"
+    echo "settings: saved; they apply when the backend restarts"
+    ;;
+  settings-check)
+    svc_args "${1:-}" "${2:-}"; ID="$1"; CNET="${3:-}"
+    [ "$(docker inspect --format '{{.State.Running}}' "$ID-backend" 2>/dev/null || true)" = true ] ||
+      { echo "error: $ID-backend is not running"; exit 1; }
+    ARGF=$(mktemp)
+    if ! settings_py check "$SVC" "$CNET" > "$ARGF"; then cat "$ARGF"; rm -f "$ARGF"; exit 1; fi
+    mapfile -d '' ARGS < "$ARGF"; rm -f "$ARGF"
+    T="${ARGS[0]}"
+    set +e
+    OUT=$(timeout "$T" docker exec "$ID-backend" "${ARGS[@]:1}" 2>&1); RC=$?
+    set -e
+    if [ "$RC" -eq 0 ]; then echo "check: passed"
+    elif [ "$RC" -eq 124 ]; then echo "check: timed out after $T s"
+    else echo "check: failed (exit $RC)"; fi
+    printf '%s\n' "$OUT" | tail -20 | cut -c1-300 | sed 's/^/output: /'
+    [ "$RC" -eq 0 ]
     ;;
   add-service)
     ID="${1:?service id}"; URL="${2:?backend url}"; HP="${3:-/healthz}"

@@ -689,19 +689,57 @@ Request: `host`, `port`, `user`, `key_path`, `deploy_root` (absolute Linux path)
 
 Local steps:
 
+0. Electron 0.1.24: when `<folder>\deploy\settings.json` exists it must parse under the rules of `src/core/service-settings.ts` (section 3.4.1), and a service's own `deploy\docker-compose.yaml` must name `../settings.env` under `env_file`; otherwise the operation fails with that reason before anything is copied. A declared variable that the compose file also lists under `environment:` (which would override the setting) is a warning, returned in `settings_warnings`.
 1. `robocopy <folder>\backend <work>\stage\backend /E /XD node_modules .git __pycache__ test /XF *.pyc /NFL /NDL /NJH /NJS /NP` (exit code 8 or higher is a failure).
-2. Compose file: `<folder>\deploy\docker-compose.yaml` if present (`compose_from = "the service folder"`), else `server\backend-compose.yaml.tmpl` with `{{SERVICE_ID}}` replaced (`compose_from = "the template"`); written to `<work>\stage\deploy\docker-compose.yaml` with LF line endings, no BOM. Electron 0.1.9: `<folder>\deploy\routes.json`, when present, is staged beside it with LF line endings, and the remote unpack deletes any earlier `deploy/routes.json` first, so the server copy mirrors the folder. Electron 0.1.11: the same for `deploy/relayer.json`.
+2. Compose file: `<folder>\deploy\docker-compose.yaml` if present (`compose_from = "the service folder"`), else `server\backend-compose.yaml.tmpl` with `{{SERVICE_ID}}` replaced (`compose_from = "the template"`); written to `<work>\stage\deploy\docker-compose.yaml` with LF line endings, no BOM. Electron 0.1.9: `<folder>\deploy\routes.json`, when present, is staged beside it with LF line endings, and the remote unpack deletes any earlier `deploy/routes.json` first, so the server copy mirrors the folder. Electron 0.1.11: the same for `deploy/relayer.json`. Electron 0.1.24: the same for `deploy/settings.json`.
 3. `%SystemRoot%\System32\tar.exe -cf <work>\bundle.tar -C <work>\stage backend deploy` (falls back to `tar` on `PATH`).
 
 Remote steps:
 
 1. `ssh <target> "mkdir -p '<root>/<id>'"`
 2. `scp -q <work>\bundle.tar <target>:<root>/<id>/bundle.tar`
-3. `ssh <target> "cd '<root>/<id>' && tar -xf bundle.tar && rm -f bundle.tar && find backend deploy -type f | wc -l"`
+3. `ssh <target> "cd '<root>/<id>' && tar -xf bundle.tar && rm -f bundle.tar && find backend deploy -type f | wc -l"` (Electron: first `rm -f` of `deploy/routes.json`, `deploy/relayer.json`, and `deploy/settings.json`; then, 0.1.24, `settings.env` is created empty with mode 600 when missing, so a compose that reads it starts even on a server whose helper predates service settings. The unpack never touches an existing `settings.env`.)
 
-Result: `{ ok: true, dest: "<root>/<id>", bytes: <archive size>, files: <file count>, compose_from, routes, relayer }` (`routes`, Electron 0.1.9: whether `deploy/routes.json` was shipped; `relayer`, Electron 0.1.11: whether `deploy/relayer.json` was). History `{ op: "deploy-ship", service_id, extra: "host=<target> dest=<dest> bytes=<n>" }`. Disk: `work/` (removed). UI: second step of `runDeploy` (`timeoutMs: 600000`), `deploy_root = server.deployRoot || "/opt/pocket/services"`.
+Result: `{ ok: true, dest: "<root>/<id>", bytes: <archive size>, files: <file count>, compose_from, routes, relayer, settings, settings_warnings }` (`routes`, Electron 0.1.9: whether `deploy/routes.json` was shipped; `relayer`, Electron 0.1.11: whether `deploy/relayer.json` was; `settings`, Electron 0.1.24: whether `deploy/settings.json` was, and `settings_warnings` the compose warnings from step 0). History `{ op: "deploy-ship", service_id, extra: "host=<target> dest=<dest> bytes=<n>" }`. Disk: `work/` (removed). UI: second step of `runDeploy` (`timeoutMs: 600000`), `deploy_root = server.deployRoot || "/opt/pocket/services"`.
 
 The individual `supplier-run` steps the request listed by name (`deploy`, `add-service`, `remove-service`, `keys`, `operator`, `publish`, `start`, `status`, and in Electron `add-routes` and `remove-routes`) are steps of `supplier-run`, not separate operations; see the table above.
+
+#### 3.4.1 Service settings (Electron 0.1.24; not in the HTA)
+
+A service declares the configuration its operator gives it (a webhook, an interval, a mode) in `deploy/settings.json`, next to `routes.json` and `relayer.json`. Each setting becomes one environment variable of the backend container. The values live on the server in `<deploy_root>/<service_id>/settings.env`, beside `backend/` and `deploy/` and so outside what Deploy ships; the service's compose reads it with `env_file: ../settings.env` (the standard backend compose template does). The server is the source of truth: nothing secret is kept on the PC.
+
+The declaration (`validateSettingsDecl` in `src/core/service-settings.ts`; unknown keys and types are refused, never ignored):
+
+- Top level: `settings` (a list, at most 32) and optionally `check`. Nothing else.
+- Each setting: `env` (the variable; `^[A-Z][A-Z0-9_]{0,63}$` once filled in; names a container relies on, such as `PATH`, `HOME`, `NODE_OPTIONS`, and the prefixes `LD_`, `DOCKER_`, `COMPOSE_`, are refused), `scope` (`"service"`, the default, or `"network"`: then `env` holds `{NETWORK}` exactly once, which becomes `MAIN` or `BETA`), `label` (required), `help`, `type` (`text`, `number`, `choice`, `boolean`, `url`), `secret` (text and url only), `required`, `default` (checked against the setting's own rules; a number's default is a JSON number, a boolean's `true` or `false`; never on a secret). Per type: text `pattern` (anchored with `^` and `$`, at most 200 characters), `min_length`, `max_length` (at most 1024); number `min`, `max`, `integer` (default true); choice `choices` (strings or `{ value, label }`, values `^[A-Za-z0-9_.:-]{1,64}$`); url `hosts` (exact lowercase hosts or `*.domain`; urls are always `https://`, without user or password).
+- `check`: `label` (the button), `command` (1 to 16 words, each at most 200 characters, run with `docker exec` as an argument list, never through a shell), `scope` (`"network"` requires `{network}` in the command, which becomes `main` or `beta`), `timeout_s` (1 to 60, default 30).
+- Every value is one line, at most 1024 characters, without a single quote; the file writes each as `NAME='value'`, which Compose reads literally (`$` is not expanded).
+
+All four operations take `host`, `port`, `user`, `key_path`, `path` (any provisioned stack directory on the server; its `supplier.sh` runs the step, and settings belong to the service, not to a network), `deploy_root`, and `service_id`, each checked by the same patterns as `supplier-run`. A helper that does not know a step (a stack provisioned before 0.1.24) prints `error: unknown step ...`, and the operation fails with "This server's helper predates service settings. Press Update stack for this server under Suppliers, then try again."
+
+##### `service-settings-read`
+
+Remote: `bash '<path>/supplier.sh' settings-read '<id>' '<root>'`. The helper passes the backend container's environment (`docker inspect --format '{{json .Config.Env}}' <id>-backend`) to its reader on standard input, never as an argument, and prints one line `settings: <json>`. A service directory that does not exist (`error: <id> is not deployed on this server`) is not a failure: the result has `declared: null`.
+
+Result: `{ ok: true, declared, declared_error, values, container, served }`. `declared` is the server's copy of `deploy/settings.json`, re-checked by the app (`null` when there is none; `declared_error` says why one cannot be used). `values` maps every variable the declaration makes, and every other one in the file, to `{ set, value?, applied?, declared? }`: `value` only for a declared setting that is not a secret; `applied` (only when the container exists) whether the running container was created with the value in the file, compared on the server so a secret never leaves it; `declared: false` for a name the declaration no longer makes, shown as set or not set only. `served` lists `{ network, port }` for each stack on the server whose relayer calls `http://<id>-backend:<port>`. No history, no disk writes.
+
+##### `service-settings-write`
+
+Request adds `edits`: 1 to 64 of `{ name, value }`, `value` a string or `null` (an empty string also clears). The main process first runs `settings-read` and checks every edit against the server's own declaration (`settingsPatch`): an undeclared name, a name twice, or a value that breaks its setting's rules fails with the setting's label and the reason, never the value. Then `bash '<path>/supplier.sh' settings-write '<id>' '<root>'` with one line `{"set": {...}, "clear": [...]}` on SSH's standard input. The helper refuses a name its deployed declaration does not make, merges the change into `settings.env` (variables not named are kept, so a second PC can change one setting without knowing the secrets), and writes it atomically with mode 600 under umask 077. It prints `saved: set <name>` and `saved: cleared <name>` lines, names only.
+
+Result: `{ ok: true, set: [names], cleared: [names] }`. History `{ op: "service-settings-write", service_id, extra: "host=<target> set=<names> cleared=<names>" }`. The request's `edits` are replaced by `[redacted]` in the structured log. Not on the action bridge: it carries secrets.
+
+##### `service-settings-check`
+
+Request adds an optional `network`. Remote: `bash '<path>/supplier.sh' settings-check '<id>' '<root>' ['<network>']`. The helper reads the command from its own copy of the declaration (the app never sends one), fills in `{network}`, and runs `timeout <timeout_s> docker exec <id>-backend <args...>`. It prints `check: passed`, `check: failed (exit <n>)` or `check: timed out after <n> s`, then up to 20 `output: ` lines of at most 300 characters. A check that runs and fails is a result, not a failed operation. The check runs with the values the container was created with, so a value saved but not yet applied is not tested.
+
+Result: `{ ok: true, passed, summary, output: [lines] }`. History `{ op: "service-settings-check", service_id, network, extra: "host=<target> <summary>" }`.
+
+##### `service-restart`
+
+Request adds `health_path` (as `deploy`) and `ports` (up to 4 backend ports, 1024 to 65535; `[8080]` when empty). Remote: `bash '<path>/supplier.sh' backend-restart '<id>' '<root>' '<health_path>' '<port>'...`: makes `settings.env` if missing, then `docker compose -p <id> up -d --no-build --force-recreate` in `<root>/<id>/deploy` (a plain `docker restart` keeps the environment the container was created with), then waits for `<health_path>` on each port as `deploy` does. Prints `restarted: <id>-backend`. Only that service's backend is recreated; when it serves both networks' relayers, both pause for the restart, which the app says before it asks.
+
+Result: `{ ok: true, lines }`. History `{ op: "service-restart", service_id, extra: "host=<target> ports=<ports>" }`. Not on the action bridge (kept in the app window).
 
 ### 3.5 Testing
 
@@ -882,7 +920,11 @@ interface DryResult { ok: true; dry: true; command: string }
 | `signer:ssh-test` | `SshConn & { path?: string }` | `{ ok: true; hostname: string; docker: string; keyring: boolean } \| Fail` |
 | `signer:supplier-ship` | `SshConn & { path: string; network: Network; hostname: string; project?: string; caddy_dir?: string; health_port?: number; relayer_metrics_port?: number; miner_metrics_port?: number; block_time?: number }` | `{ ok: true; files: string[]; relayer_kept: boolean; out: string } \| Fail` |
 | `signer:supplier-run` | `SshConn & { path: string; step: 'operator' \| 'keys' \| 'start' \| 'status' } \| SshConn & { path: string; step: 'publish'; network: Network } \| SshConn & { path: string; step: 'deploy'; service_id: string; deploy_root: string; health_path?: string; backend_port?: number } \| SshConn & { path: string; step: 'add-service'; service_id: string; backend_url: string; health_path?: string } \| SshConn & { path: string; step: 'remove-service' \| 'remove-routes'; service_id: string } \| SshConn & { path: string; step: 'add-routes'; service_id: string; routes: Array<{ path: string; port: number }> }` | `{ ok: boolean; step: string; out: string; err: string; address: string; lines: string[] } \| Fail` (the port should always include `lines: []` on `Fail`, see 6.14) |
-| `signer:deploy-ship` | `SshConn & { deploy_root: string; service_id: string; folder: string }` | `{ ok: true; dest: string; bytes: number; files: string; compose_from: string; routes: boolean; relayer: boolean } \| Fail` |
+| `signer:deploy-ship` | `SshConn & { deploy_root: string; service_id: string; folder: string }` | `{ ok: true; dest: string; bytes: number; files: string; compose_from: string; routes: boolean; relayer: boolean; settings: boolean; settings_warnings: string[] } \| Fail` |
+| `signer:service-settings-read` | `SshConn & { path; deploy_root; service_id }` | `{ ok: true; declared; declared_error; values; container; served } \| Fail` |
+| `signer:service-settings-write` | `SshConn & { path; deploy_root; service_id; edits: { name; value: string \| null }[] }` | `{ ok: true; set: string[]; cleared: string[] } \| Fail` |
+| `signer:service-settings-check` | `SshConn & { path; deploy_root; service_id; network? }` | `{ ok: true; passed; summary; output: string[] } \| Fail` |
+| `signer:service-restart` | `SshConn & { path; deploy_root; service_id; health_path?; ports: number[] }` | `{ ok: true; lines: string[] } \| Fail` |
 | `signer:relay-call` | `{ network: Network; wallet?: string; service_id: string; method: string; path: string; body?: string }` | `{ ok: boolean; exit_code: number; http: number; ms: number; body: string; diagnostics: string; wallet: string } \| Fail` |
 | `signer:validate-card` | `{ card_path: string; script: string }` | `{ ok: true; skipped: true; reason: string } \| { ok: boolean; code: number; output: string } \| Fail` |
 | `signer:history` | `{}` | `{ ok: true; entries: Array<{ time: string; op: string; network?: string; service_id?: string; txhash?: string; code?: number; extra?: string; address?: string }> }` |
@@ -939,7 +981,7 @@ The signer returns at mempool acceptance. `app.js` `pollTx(hash, cb)` queries `<
 
 ### 6.9 Timeouts (all in the UI today; none in the signer)
 
-Default 240 s. Overrides: `image-pull` and `pocketap-pull` 900 s; `ssh-test` 60 s; `supplier-ship` 180 s; `supplier-run` operator 120 s, keys 120 s, publish 420 s, start 300 s, status 120 s, deploy 600 s, add-service 240 s, add-routes 120 s, remove-routes 120 s; `deploy-ship` 600 s; `relay-call` 120 s. `Invoke-Native` has no timeout, so a hung child outlives the UI's timer today; the port should kill the child.
+Default 240 s. Overrides: `image-pull` and `pocketap-pull` 900 s; `ssh-test` 60 s; `supplier-ship` 180 s; `supplier-run` operator 120 s, keys 120 s, publish 420 s, start 300 s, status 120 s, deploy 600 s, add-service 240 s, add-routes 120 s, remove-routes 120 s; `deploy-ship` 600 s; `service-settings-read` 60 s, `service-settings-write` 90 s, `service-settings-check` 120 s, `service-restart` 300 s (Electron 0.1.24); `relay-call` 120 s. `Invoke-Native` has no timeout, so a hung child outlives the UI's timer today; the port should kill the child.
 
 ### 6.10 Network-specific defaults
 

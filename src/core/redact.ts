@@ -31,7 +31,7 @@ export function redactDeep<T>(value: T): T {
     const out: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
       if (
-        /^(privateKeyHex|mnemonic|secret|hex|env|PSM_STDIN|PSM_IMPORT_KEY|PSM_IMPORT_MNEMONIC|POCKET_APP_PRIVATE_KEY)$/.test(
+        /^(privateKeyHex|mnemonic|secret|hex|env|edits|PSM_STDIN|PSM_IMPORT_KEY|PSM_IMPORT_MNEMONIC|POCKET_APP_PRIVATE_KEY)$/.test(
           k
         )
       )

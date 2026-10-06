@@ -444,6 +444,45 @@ export const BRIDGE_TOOLS: readonly BridgeTool[] = [
     server: true
   },
   {
+    name: 'psm_service_settings',
+    description:
+      "Read a deployed service's settings (its deploy/settings.json) as they are on a server: the declaration, each variable's value (secrets only as set or not set), whether the running backend has it yet (applied), and which networks this backend serves. Changing settings and restarting the backend are done in the app window (Services, Settings).",
+    inputSchema: obj(
+      {
+        server,
+        service_id: { type: 'string' },
+        network: {
+          ...network,
+          description:
+            "Which network's stack runs the helper; any will do. Defaults to the app's network."
+        }
+      },
+      ['server', 'service_id']
+    ),
+    op: 'service-settings-read',
+    confirm: 'never',
+    server: true
+  },
+  {
+    name: 'psm_service_settings_check',
+    description:
+      'Run the check a deployed service declares in its deploy/settings.json (for example sending a test alert), inside its backend container. It uses the values the backend is running with, so a setting saved but not yet applied is not tested. Returns passed, a summary, and the last lines of output.',
+    inputSchema: obj(
+      {
+        server,
+        service_id: { type: 'string' },
+        network: {
+          ...network,
+          description: 'The network to check, for a check that runs per network'
+        }
+      },
+      ['server', 'service_id']
+    ),
+    op: 'service-settings-check',
+    confirm: 'never',
+    server: true
+  },
+  {
     name: 'psm_relay_call',
     description:
       'Send one relay through the protocol with pocket-ap, signed by an application wallet staked for the service. Returns status, timing, and the body. Every response must be a JSON object (first byte { or [).',
@@ -485,7 +524,9 @@ export const BRIDGE_EXCLUDED_OPS: readonly SignerOp[] = [
   'wallet-export',
   'wallet-delete',
   // Import: carries a pasted operator key.
-  'supplier-import-operator'
+  'supplier-import-operator',
+  // Carries a service's settings, secrets among them, to the server.
+  'service-settings-write'
 ]
 
 /**
@@ -511,7 +552,12 @@ export const BRIDGE_REFUSED_STEPS: readonly string[] = [
  * it, so both are decisions to take deliberately rather than hand to an agent (product
  * owner, 2026-09-20).
  */
-export const BRIDGE_APP_ONLY_OPS: readonly SignerOp[] = ['tx-unstake-app', 'tx-return-to-owner']
+export const BRIDGE_APP_ONLY_OPS: readonly SignerOp[] = [
+  'tx-unstake-app',
+  'tx-return-to-owner',
+  // A restart briefly interrupts every network the backend serves (product owner, 2026-10-05).
+  'service-restart'
+]
 
 /**
  * What an assistant is told when the network has no provisioned server: set one up in

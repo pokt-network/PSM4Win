@@ -64,6 +64,10 @@ const handlers: { [K in SignerOp]: Handler<K> } = {
   'supplier-ship': server.supplierShip,
   'supplier-run': server.supplierRun,
   'deploy-ship': server.deployShip,
+  'service-settings-read': server.serviceSettingsRead,
+  'service-settings-write': server.serviceSettingsWrite,
+  'service-settings-check': server.serviceSettingsCheck,
+  'service-restart': server.serviceRestart,
   'relay-call': test.relayCall,
   'validate-card': (r) => test.validateCard(r),
   history: async () => ({ ok: true as const, entries: await readHistory() })

@@ -162,6 +162,7 @@ export async function installDemo(): Promise<void> {
         hasCard: true,
         hasDockerfile: true,
         hasCompose: true,
+        hasSettings: true,
         manifest: {
           service_id: 'example-charts',
           name: 'Example Charts',
@@ -176,6 +177,7 @@ export async function installDemo(): Promise<void> {
         hasCard: true,
         hasDockerfile: true,
         hasCompose: false,
+        hasSettings: false,
         manifest: {
           service_id: 'example-builder-test',
           name: 'Service Builder Test',

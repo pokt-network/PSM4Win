@@ -196,7 +196,11 @@ function TheSteps(): React.JSX.Element {
           opens it too and shows you the web address it answers on. Everything else on your
           server&apos;s address still goes to the RelayMiner. An app that keeps its Beta TestNet
           data apart from its MainNet data can also ask for each network&apos;s RelayMiner to reach
-          it on its own port; Deploy does that for you and shows the ports under the service.
+          it on its own port; Deploy does that for you and shows the ports under the service. An app
+          may also ask you for settings, such as where to send its alerts. Fill them in under{' '}
+          <Go screen="svcsettings">Service settings</Go>: they are saved on your server, secret ones
+          stay there and show only as set, and they take effect when you press Restart now. If a
+          setting is required, Deploy tells you and waits until it is set.
         </li>
         <li>
           <b>Stake the supplier.</b> <Go screen="supply">Suppliers</Go>, Manage, tick the service,
