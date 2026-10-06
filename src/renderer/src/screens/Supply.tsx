@@ -2,7 +2,7 @@
 // (services, stake, operator funding, preflight, execute, unstake).
 import { useCallback, useEffect, useState } from 'react'
 import { useStore, S, type SupplyRow } from '../store'
-import type { ChainSupplier } from '@core/lcd'
+import type { ChainSupplier, OwnedSupplierServices } from '@core/lcd'
 import { account, readAfterTx, ownedSuppliers, withServices } from '@core/lcd'
 import { stackNeedsUpdate } from '@core/stack'
 import { fmtPokt, fmtInt, fmtDuration, shortAddr, POKT } from '@core/format'
@@ -251,14 +251,6 @@ function SuppliersList(): React.JSX.Element {
   )
 }
 
-interface Unmanaged {
-  operator: string
-  status: string
-  stakeUpokt: number
-  services: string[]
-  url: string
-}
-
 /**
  * Suppliers the owner wallet has on this network that no server in the app manages:
  * set up by hand with pocketd, or on a server not added here. Each can be imported (the
@@ -268,7 +260,7 @@ interface Unmanaged {
  */
 function UnmanagedSuppliers({ reread }: { reread: number }): React.JSX.Element | null {
   const { net, address, imported, settings } = useStore()
-  const [list, setList] = useState<Unmanaged[] | null>(null)
+  const [list, setList] = useState<OwnedSupplierServices[] | null>(null)
   const [error, setError] = useState('')
   useEffect(() => {
     let live = true
@@ -282,7 +274,7 @@ function UnmanagedSuppliers({ reread }: { reread: number }): React.JSX.Element |
             .filter((o): o is string => !!o)
         )
         const owned = (await ownedSuppliers(net, address)).filter((o) => !known.has(o.operator))
-        const out: Unmanaged[] = await withServices(net, owned)
+        const out = await withServices(net, owned)
         if (live) setList(out)
       } catch (e) {
         if (live) setError(e instanceof Error ? e.message : String(e))
