@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useStore, S, type SupplyRow } from '../store'
 import type { ChainSupplier } from '@core/lcd'
-import { account, readAfterTx, ownedSuppliers, supplier as supplierAt } from '@core/lcd'
+import { account, readAfterTx, ownedSuppliers, withServices } from '@core/lcd'
 import { stackNeedsUpdate } from '@core/stack'
 import { fmtPokt, fmtInt, fmtDuration, shortAddr, POKT } from '@core/format'
 import { unbondingOf, unbondingNote, nextSessionBoundary, supplierServiceIds } from '@core/chain'
@@ -282,21 +282,7 @@ function UnmanagedSuppliers({ reread }: { reread: number }): React.JSX.Element |
             .filter((o): o is string => !!o)
         )
         const owned = (await ownedSuppliers(net, address)).filter((o) => !known.has(o.operator))
-        const out: Unmanaged[] = []
-        // One LCD read per supplier, eight at a time: an owner can have hundreds.
-        for (let i = 0; i < owned.length; i += 8) {
-          const batch = owned.slice(i, i + 8)
-          const recs = await Promise.all(
-            batch.map((o) => supplierAt(net, o.operator).catch(() => null))
-          )
-          batch.forEach((o, k) =>
-            out.push({
-              ...o,
-              services: (recs[k]?.services ?? []).map((s) => s.service_id),
-              url: recs[k]?.services?.[0]?.endpoints?.[0]?.url ?? ''
-            })
-          )
-        }
+        const out: Unmanaged[] = await withServices(net, owned)
         if (live) setList(out)
       } catch (e) {
         if (live) setError(e instanceof Error ? e.message : String(e))

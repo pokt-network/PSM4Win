@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { ownedSuppliers } from '@core/lcd'
+import { ownedSuppliers, withServices, clearLcdCache } from '@core/lcd'
 import { NETWORK_INFO } from '@core/networks'
 
 const OWNER = 'pokt1' + 'q'.repeat(38)
@@ -132,5 +132,40 @@ describe('ownedSuppliers (indexer)', () => {
     await expect(ownedSuppliers('main', OWNER)).rejects.toThrow('boom')
     answer({}, false)
     await expect(ownedSuppliers('main', OWNER)).rejects.toThrow('HTTP 502')
+  })
+})
+
+describe('withServices (LCD)', () => {
+  afterEach(() => clearLcdCache())
+
+  it('reads eight at a time, keeps the order given, and leaves a failed read with no services', async () => {
+    const ops = Array.from({ length: 17 }, (_, i) => 'pokt1' + String(i).padStart(38, '0'))
+    const owned = ops.map((operator) => ({ operator, status: 'Staked', stakeUpokt: 1 }))
+    let done = 0
+    const startedAfter: number[] = []
+    const f = vi.fn(async (url: string) => {
+      const i = ops.indexOf(url.split('/').at(-1) ?? '')
+      startedAfter.push(done)
+      // Later suppliers answer first, so the order out cannot come from the order answered.
+      await new Promise((r) => setTimeout(r, 17 - i))
+      done++
+      if (i === 5) return { ok: false, status: 500, text: async () => 'boom' }
+      const service = {
+        service_id: `svc${i}`,
+        endpoints: [{ url: `https://s${i}`, rpc_type: 'JSON_RPC' }]
+      }
+      return { ok: true, status: 200, json: async () => ({ supplier: { services: [service] } }) }
+    })
+    vi.stubGlobal('fetch', f)
+    const got = await withServices('main', owned)
+    // Each read starts only after every read of the batch before it answered: 8, 8, then 1.
+    expect(startedAfter).toEqual([...Array(8).fill(0), ...Array(8).fill(8), 16])
+    expect(got).toEqual(
+      owned.map((o, i) =>
+        i === 5
+          ? { ...o, services: [], url: '' }
+          : { ...o, services: [`svc${i}`], url: `https://s${i}` }
+      )
+    )
   })
 })

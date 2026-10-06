@@ -530,3 +530,34 @@ export async function ownedSuppliers(net: Network, owner: string): Promise<Owned
     .filter((n) => n.stakeStatus !== 'Unstaked')
     .map((n) => ({ operator: n.id, status: n.stakeStatus, stakeUpokt: Number(n.stakeAmount) || 0 }))
 }
+
+/** An owned supplier with what its LCD record says it serves. */
+export interface OwnedSupplierServices extends OwnedSupplier {
+  services: string[]
+  /** The first endpoint of its first service, or '' when there is none. */
+  url: string
+}
+
+/**
+ * The services and first endpoint of each owned supplier, in the order given. One LCD
+ * read per supplier, eight at a time: an owner can have hundreds. A read that fails
+ * leaves that supplier with no services and no url instead of failing the whole list.
+ */
+export async function withServices(
+  net: Network,
+  owned: OwnedSupplier[]
+): Promise<OwnedSupplierServices[]> {
+  const out: OwnedSupplierServices[] = []
+  for (let i = 0; i < owned.length; i += 8) {
+    const batch = owned.slice(i, i + 8)
+    const recs = await Promise.all(batch.map((o) => supplier(net, o.operator).catch(() => null)))
+    batch.forEach((o, k) =>
+      out.push({
+        ...o,
+        services: (recs[k]?.services ?? []).map((s) => s.service_id),
+        url: recs[k]?.services?.[0]?.endpoints?.[0]?.url ?? ''
+      })
+    )
+  }
+  return out
+}
