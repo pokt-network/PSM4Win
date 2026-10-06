@@ -2,6 +2,11 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
+## 0.1.23
+
+- Every operator address now has a Copy button beside it: in Suppliers, on the Dashboard, and in Settings under Servers. Hover over a shortened address to see it in full. The supplier editor's operator field has a Copy button too.
+- My services shows each service's supplier operator address, for Beta and MainNet, with a Copy button: the operator on the server that serves the service on that network.
+
 ## 0.1.22
 
 **Priority update.** Pressing Update failed when the app had been opened from the Start menu: Scoop stopped with "Cannot remove the item ... because it is in use". This version fixes it, but the fix cannot reach you through the old button, so update once by hand: quit the app, open PowerShell from the Start menu, run scoop update, then scoop update pocket-service-manager, and open the app again. From this version on, Update in the app works.

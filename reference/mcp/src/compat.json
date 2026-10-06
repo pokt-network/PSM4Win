@@ -1,11 +1,19 @@
 {
   "app": "Pocket Service Manager",
-  "updated": "2026-10-04",
+  "updated": "2026-10-05",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.22",
+  "latest": "electron-0.1.23",
   "minimum_supported": "hta-2026-09-14",
   "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.23": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.19",
+      "changes": [
+        "every operator address in Suppliers, the Dashboard, and Settings > Servers has a Copy button that copies the full address; the supplier editor's operator field has one too. To get a supplier's operator address, tell the user to press Copy next to it in Suppliers",
+        "My services has a Supplier operator column: for Beta and MainNet, the operator address of the supplier stack that serves the service on that network, with a Copy button"
+      ]
+    },
     "electron-0.1.22": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.19",

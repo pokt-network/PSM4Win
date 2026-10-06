@@ -5,7 +5,7 @@ import { useStore, S, type SupplyRow } from '../store'
 import type { ChainSupplier } from '@core/lcd'
 import { account, readAfterTx, ownedSuppliers, supplier as supplierAt } from '@core/lcd'
 import { stackNeedsUpdate } from '@core/stack'
-import { fmtPokt, fmtInt, fmtDuration, shortAddr, POKT } from '@core/format'
+import { fmtPokt, fmtInt, fmtDuration, POKT } from '@core/format'
 import { unbondingOf, unbondingNote, nextSessionBoundary, supplierServiceIds } from '@core/chain'
 import { RPC_TYPES } from '@core/validate'
 import {
@@ -53,6 +53,7 @@ import { confirmTx, fundOperator, TxLink } from '../lib/flows'
 import { provisionOn } from './Settings'
 import { openSupplier } from './Services'
 import { ImportWizard, openImport } from './ImportSupplier'
+import { Addr } from '../components/Addr'
 
 export function SupplyScreen(): React.JSX.Element {
   const supOpen = useStore((s) => s.supOpen)
@@ -147,9 +148,11 @@ function SuppliersList(): React.JSX.Element {
                     <tr key={x.server.name}>
                       <td className="svcid">
                         {x.server.name}
-                        <div className="hint mono">
-                          {st?.operator ? shortAddr(st.operator) : ''}
-                        </div>
+                        {st?.operator ? (
+                          <div>
+                            <Addr value={st.operator} />
+                          </div>
+                        ) : null}
                       </td>
                       <td>
                         {supplierStatusCell(x, params, net)}
@@ -339,13 +342,7 @@ function UnmanagedSuppliers({ reread }: { reread: number }): React.JSX.Element |
           {list.map((x) => (
             <tr key={x.operator}>
               <td>
-                <a
-                  className="mono"
-                  title={`${x.operator} (click to copy)`}
-                  onClick={() => copy(x.operator)}
-                >
-                  {shortAddr(x.operator)}
-                </a>
+                <Addr value={x.operator} />
               </td>
               <td>
                 {x.services.length ? x.services.join(', ') : <span className="hint">none</span>}
@@ -1108,14 +1105,23 @@ function SupplierEditor({
         <div className="row">
           <div>
             <label>Operator address</label>
-            <input
-              type="text"
-              id="supOperator"
-              placeholder="pokt1..."
-              maxLength={43}
-              value={operator}
-              onChange={(e) => setOperator(e.target.value)}
-            />
+            <div className="filerow">
+              <input
+                type="text"
+                id="supOperator"
+                placeholder="pokt1..."
+                maxLength={43}
+                value={operator}
+                onChange={(e) => setOperator(e.target.value)}
+              />
+              <button
+                className="btn small"
+                disabled={!operator.trim()}
+                onClick={() => copy(operator.trim())}
+              >
+                Copy
+              </button>
+            </div>
             <div className="hint" id="supServerHint">
               Signs on {`${s.user}@${s.host}`} with the {label} operator keyring in{' '}
               {st?.dir ? (
