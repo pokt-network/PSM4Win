@@ -1,11 +1,19 @@
 {
   "app": "Pocket Service Manager",
-  "updated": "2026-10-05",
+  "updated": "2026-10-07",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.24",
+  "latest": "electron-0.1.25",
   "minimum_supported": "hta-2026-09-14",
   "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.25": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.24",
+      "changes": [
+        "Provision recognises a supplier stack the app made on the server from another PC (the same directory, operator-key.json, supplier.sh): when this PC has no record of it, Settings, Suppliers, Provision a supplier looks on the server first, names the operator, says whether it is staked and whether its owner is this PC's owner wallet, fills the hostname and port the supplier stakes, and offers Adopt stack. Adopting keeps the operator key, the relayer config with its services, and the stake; nothing is signed when the operator is funded and published. To move management of an app-made stack to another PC, tell the user to add the server under Settings and press Adopt stack there (the owner wallet that owns the supplier must be imported on that PC to manage the stake); never suggest the Import wizard (it is for suppliers set up by hand) or a new stack. On 0.1.24, Start provisioning with the same directory and the stake's hostname does the same without the detection",
+        "ssh-test with a stack directory also returns stack: the operator, project, network, hostname, and layout the app's stack there declares"
+      ]
+    },
     "electron-0.1.24": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.19",
