@@ -575,7 +575,9 @@ Request: `host`, `port`, `user`, `key_path`, `path` (optional; when given must b
 
 Remote command: `hostname; docker compose version 2>/dev/null | head -1[; test -d '<path>/pocket-home' && echo PSM_KEYRING_OK]; true` (the probe always exits 0; ssh itself exits 255 when it cannot connect or authenticate -> `Could not connect over SSH.`).
 
-Result: `{ ok: true, hostname: <first non-empty line>, docker: <the line containing "Docker Compose", or ""> , keyring: <bool> }`. No disk side effects. UI: Settings "Test connection" (`timeoutMs: 60000`), the first step of Provision (without `path`), and the first step of Deploy (with `path`; `keyring` must be true).
+Electron (unreleased): with `path`, the probe also prints, when `<path>/stack.env` and `<path>/supplier.sh` exist, `PSM_STACK_ENV <PROJECT=... NET=... HOSTNAME_PUBLIC=... STACK_LAYOUT=...>` (those four lines of `stack.env` only) and `PSM_STACK_OP <the pokt1 address in operator-key.json, or nothing when the SSH user cannot read it>` (`stackProbeCommand` in `src/core/stack.ts`). Nothing else is read; no key material.
+
+Result: `{ ok: true, hostname: <first non-empty line>, docker: <the line containing "Docker Compose", or ""> , keyring: <bool>, stack }`, `stack` (Electron, unreleased) being `{ operator, project, network, hostname, layout }` from those lines, each blanked when it does not match its pattern (`parseStackProbe`), or `null` without `path` or without the app's stack there. No disk side effects. UI: Settings "Test connection" (`timeoutMs: 60000`), the first step of Provision (without `path`), and the first step of Deploy (with `path`; `keyring` must be true).
 
 #### `server-survey` (Electron 0.1.19; not in the HTA)
 

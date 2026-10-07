@@ -1,6 +1,6 @@
 // Pure rendering of a supplier stack from the server templates (supplier-ship)
 // and of the YAML files the transactions mount. Nothing here touches disk.
-import { NETWORK_INFO, type Network } from './networks'
+import { NETWORK_INFO, isNetwork, type Network } from './networks'
 import { renderTemplate, toLf } from './text'
 import type { StakeService } from './contract'
 import { POCKETD_IMAGE, RELAYMINER_IMAGE, REDIS_IMAGE, STACK_LAYOUT } from './versions'
@@ -98,6 +98,52 @@ export function stackNeedsUpdate(
   st: { provisioned_at?: string; layout?: number } | null | undefined
 ): boolean {
   return !!st?.provisioned_at && (st.layout ?? 1) < STACK_LAYOUT
+}
+
+/**
+ * What the app's own stack in a directory declares, read by ssh-test (read-only) so a PC
+ * that has no record of a stack another PC provisioned can adopt it instead of making a
+ * new one: provisioning keeps an existing operator key and relayer config.
+ */
+export interface StackProbe {
+  /** From operator-key.json; '' when the SSH user cannot read it. */
+  operator: string
+  project: string
+  network: Network | ''
+  hostname: string
+  layout: number
+}
+
+/** The shell lines ssh-test appends for a stack directory (already checked as a Linux path). */
+export function stackProbeCommand(dir: string): string {
+  return (
+    ` if [ -f '${dir}/stack.env' ] && [ -f '${dir}/supplier.sh' ]; then` +
+    ` echo "PSM_STACK_ENV $(grep -E '^(PROJECT|NET|HOSTNAME_PUBLIC|STACK_LAYOUT)=' '${dir}/stack.env' | tr '\\n' ' ')";` +
+    ` echo "PSM_STACK_OP $(grep -o 'pokt1[0-9a-z]\\{38\\}' '${dir}/operator-key.json' 2>/dev/null | head -1)"; fi`
+  )
+}
+
+/** The app's stack ssh-test found in the directory, or null when there is none. */
+export function parseStackProbe(out: string): StackProbe | null {
+  const lines = out.split(/\r?\n/)
+  const env = lines.find((l) => l.startsWith('PSM_STACK_ENV '))
+  if (env === undefined) return null
+  const kv: Record<string, string> = {}
+  for (const tok of env.slice('PSM_STACK_ENV '.length).trim().split(/\s+/)) {
+    const i = tok.indexOf('=')
+    if (i > 0) kv[tok.slice(0, i)] = tok.slice(i + 1).replace(/^["']|["']$/g, '')
+  }
+  const op = (lines.find((l) => l.startsWith('PSM_STACK_OP ')) ?? '')
+    .slice('PSM_STACK_OP '.length)
+    .trim()
+  const net = kv.NET ?? ''
+  return {
+    operator: /^pokt1[0-9a-z]{38}$/.test(op) ? op : '',
+    project: /^[a-z0-9][a-z0-9-]{0,40}$/.test(kv.PROJECT ?? '') ? kv.PROJECT : '',
+    network: isNetwork(net) ? net : '',
+    hostname: /^[A-Za-z0-9.-]+$/.test(kv.HOSTNAME_PUBLIC ?? '') ? kv.HOSTNAME_PUBLIC : '',
+    layout: /^\d{1,3}$/.test(kv.STACK_LAYOUT ?? '') ? Number(kv.STACK_LAYOUT) : 1
+  }
 }
 
 /** The part of a server entry that says whether a network's stack finished provisioning. */

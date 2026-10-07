@@ -6,7 +6,13 @@ import type { Network } from '@core/networks'
 import type { RemoteClaudeStatus } from '../../../preload/index'
 import { RE } from '@core/validate'
 import { STACK_LAYOUT } from '@core/versions'
-import { stackNeedsUpdate, stackUrl, portOfStackUrl, publicPortError } from '@core/stack'
+import {
+  stackNeedsUpdate,
+  stackUrl,
+  portOfStackUrl,
+  publicPortError,
+  type StackProbe
+} from '@core/stack'
 import { fmtPokt, fmtInt, POKT } from '@core/format'
 import {
   Badge,
@@ -43,6 +49,7 @@ import {
   setNetwork,
   psm,
   pollTx,
+  supplierRecord,
   type ServerEntry
 } from '../lib/actions'
 import { confirmDialog } from '../lib/modal'
@@ -527,13 +534,28 @@ export async function provisionOn(name: string, net: Network): Promise<void> {
   openProvision(name, net)
 }
 
+/** A stack the app found on a server that this PC has no record of (another PC made it). */
+interface FoundStack {
+  /** Which server, network and directory it was found for. */
+  key: string
+  probe: StackProbe
+  /** The owner of its supplier on the network, or null when the operator is not staked there. */
+  owner: string | null
+  /** The hostname and public port its supplier stakes, from the network; else from stack.env. */
+  host: string
+  port: string
+}
+
 function ProvisionPanel(): React.JSX.Element {
-  const { prov, settings, net: appNet, params, busy } = useStore()
+  const { prov, settings, net: appNet, params, busy, address } = useStore()
   const list = (settings?.servers ?? []) as ServerEntry[]
   const panelRef = useRef<HTMLDivElement>(null)
   const [status, setStatus] = useStatus()
   const [checks, setChecks] = useState<CheckNode[]>([])
   const { lines, log, clear } = useLog()
+  const [found, setFound] = useState<FoundStack | null>(null)
+  const [probing, setProbing] = useState(false)
+  const probeSeq = useRef(0)
   const setProv = (patch: Partial<typeof prov>): void =>
     useStore.setState((s) => ({ prov: { ...s.prov, ...patch } }))
 
@@ -574,6 +596,66 @@ function ProvisionPanel(): React.JSX.Element {
   const s = serverByName(prov.server)
   const st = s ? stackOf(s, appNet) : null
   const ss = stackState(st)
+
+  // A stack this PC has no record of may still be on the server: the app made it from
+  // another PC. Look (read-only) before offering a new one, so the user adopts it, keeping
+  // its operator key, its services, and its stake, and fills in the hostname it stakes.
+  const probeKey = s ? `${s.name}|${appNet}|${prov.dir.trim()}` : ''
+  useEffect(() => {
+    const mine = ++probeSeq.current
+    setFound(null)
+    setProbing(false)
+    const dir = prov.dir.trim()
+    if (!s || ss !== 'none' || !RE.linuxPath.test(dir)) return
+    const t = window.setTimeout(async () => {
+      if (!(await psm().files.fileExists(s.keyPath)) || mine !== probeSeq.current) return
+      setProbing(true)
+      try {
+        const r = await psm().signer['ssh-test']({
+          host: s.host,
+          port: s.port,
+          user: s.user,
+          key_path: s.keyPath,
+          path: dir
+        })
+        if (mine !== probeSeq.current || !r.ok || !r.stack) return
+        let owner: string | null = null
+        let host = r.stack.hostname
+        let port = ''
+        if (r.stack.operator && (!r.stack.network || r.stack.network === appNet)) {
+          const rec = (await supplierRecord(r.stack.operator)).rec
+          if (mine !== probeSeq.current) return
+          if (rec) {
+            owner = rec.owner_address
+            const url = rec.services.flatMap((x) => x.endpoints).find((e) => e.url)?.url
+            if (url) {
+              host = hostOfUrl(url) || host
+              port = portOfStackUrl(url)
+            }
+          }
+        }
+        setFound({ key: `${s.name}|${appNet}|${dir}`, probe: r.stack, owner, host, port })
+        if (!S().prov.host.trim() && host) setProv({ host, port })
+      } finally {
+        if (mine === probeSeq.current) setProbing(false)
+      }
+    }, 600)
+    return () => window.clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [probeKey, ss])
+
+  const adopt = found && found.key === probeKey ? found : null
+  const adoptOtherNet = !!adopt?.probe.network && adopt.probe.network !== appNet
+  const adoptHint = !adopt
+    ? ''
+    : adoptOtherNet
+      ? `That directory holds this server's ${netLabel(adopt.probe.network as Network)} stack. Each network needs its own directory.`
+      : `This server already has the app's ${netLabel(appNet)} stack in this directory, made from another PC: operator ${adopt.probe.operator || 'unknown'}, layout ${adopt.probe.layout}. Adopt stack keeps its operator key, its services, and its stake, and brings its files up to this version.` +
+        (adopt.probe.operator && !adopt.owner
+          ? ` Its operator is not staked on ${netLabel(appNet)}.`
+          : adopt.owner && adopt.owner !== address
+            ? ` Its supplier is owned by ${adopt.owner}, not by this PC's owner wallet: the app can run the stack, but import that owner wallet to see and change the stake.`
+            : '')
   const dirHint = !list.length
     ? "Holds this network's RelayMiner, operator keyring, and relayer config."
     : ss === 'ready' && stackNeedsUpdate(st)
@@ -582,15 +664,20 @@ function ProvisionPanel(): React.JSX.Element {
         ? `This server already has a ${netLabel(appNet)} stack there; its operator key and relayer config are kept.`
         : ss === 'pending'
           ? 'Provisioning of this stack was interrupted after its operator key was created. Start provisioning resumes it; finished steps are not repeated.'
-          : `A new stack for ${netLabel(appNet)}; a new operator key is created on the server.`
+          : probing
+            ? 'Looking on the server for a stack the app made there before.'
+            : adoptHint ||
+              `A new stack for ${netLabel(appNet)}; a new operator key is created on the server. If the app made a stack in this directory before, from this PC or another, it is adopted instead and its key is kept.`
   const btnLabel =
-    ss === 'pending'
-      ? 'Continue provisioning'
-      : ss === 'ready' && stackNeedsUpdate(st)
-        ? 'Update stack'
-        : ss === 'ready'
-          ? 'Re-provision'
-          : 'Start provisioning'
+    adopt && !adoptOtherNet && ss === 'none'
+      ? 'Adopt stack'
+      : ss === 'pending'
+        ? 'Continue provisioning'
+        : ss === 'ready' && stackNeedsUpdate(st)
+          ? 'Update stack'
+          : ss === 'ready'
+            ? 'Re-provision'
+            : 'Start provisioning'
 
   // Busy from the first click, so a second click cannot start another provisioning while this one
   // reads its files; and cleared however the run ends, with the reason shown, so a failed
@@ -623,7 +710,17 @@ function ProvisionPanel(): React.JSX.Element {
         )
     }
     const existing = stackOf(s, net) ?? ({} as Partial<typeof st>)
-    const project = existing?.project || stackProjectDefault(net)
+    if (adoptOtherNet)
+      return setStatus(
+        'That directory holds the stack for the other network. Each network needs its own directory.',
+        'err'
+      )
+    if (adopt?.probe.hostname && host !== adopt.probe.hostname)
+      return setStatus(
+        `This stack serves ${adopt.probe.hostname}. Enter that hostname to adopt it; another one would change what the server answers on.`,
+        'err'
+      )
+    const project = existing?.project || adopt?.probe.project || stackProjectDefault(net)
     const ports = stackPorts(net)
     if (!/^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(host))
       return setStatus('Enter the public hostname (a DNS name pointing at the server).', 'err')
@@ -639,6 +736,7 @@ function ProvisionPanel(): React.JSX.Element {
     const conn = { host: s.host, port: s.port, user: s.user, key_path: s.keyPath, path: dir }
     const results: CheckNode[] = []
     let operator = existing?.operator || ''
+    const adopted = !!adopt && ss === 'none'
     setBusy(true)
     clear()
     setChecks([])
@@ -665,7 +763,9 @@ function ProvisionPanel(): React.JSX.Element {
         layout: STACK_LAYOUT
       })
       log(
-        `Server ${s.name} now has a ${netLabel(net)} supplier stack at ${dir}. Deploy a service to it next (Services, Deploy service).`,
+        adopted
+          ? `This PC now manages the ${netLabel(net)} stack at ${dir} on ${s.name}; its operator key and services were kept.`
+          : `Server ${s.name} now has a ${netLabel(net)} supplier stack at ${dir}. Deploy a service to it next (Services, Deploy service).`,
         'ok'
       )
       setStatus(`Provisioned. Operator ${operator}.`, 'ok')
@@ -724,6 +824,14 @@ function ProvisionPanel(): React.JSX.Element {
         r3.err || (r3 as { error?: string }).error || 'no address returned'
       )
       return fail('Operator key step failed.')
+    }
+    if (adopted && adopt?.probe.operator && r3.address !== adopt.probe.operator) {
+      mark(
+        'Operator key',
+        false,
+        `The server now reports ${r3.address}, not ${adopt.probe.operator}.`
+      )
+      return fail('The operator is not the one this stack had. Nothing else was changed.')
     }
     operator = r3.address
     await setStack(s.name, net, { dir, project, operator, url: stackUrl(host, prov.port) })
@@ -831,7 +939,8 @@ function ProvisionPanel(): React.JSX.Element {
         directory, creates that stack's operator key there (it never leaves), funds it from the
         owner wallet if needed, publishes its public key, starts the server's shared Caddy with the
         network's hostname, then Redis and the miner. The relayer starts when the first service is
-        deployed. Safe to run again on a provisioned stack; existing keys and configs are kept.
+        deployed. Safe to run again on a provisioned stack; existing keys and configs are kept. A
+        stack the app made on the server from another PC is adopted the same way, keeping its key.
       </p>
       <div className="row">
         <div>

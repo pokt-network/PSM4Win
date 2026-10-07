@@ -344,7 +344,14 @@ export interface SignerResults {
   'tx-unstake-supplier': TxResult | DryResult
   'tx-unstake-app': TxResult | DryResult
   'remote-stake-supplier': TxResult | (DryResult & { config: string })
-  'ssh-test': { ok: true; hostname: string; docker: string; keyring: boolean }
+  'ssh-test': {
+    ok: true
+    hostname: string
+    docker: string
+    keyring: boolean
+    /** With `path`: the app's stack found there (another PC may have provisioned it), or null. */
+    stack: import('./stack').StackProbe | null
+  }
   'supplier-import-operator': { ok: true; operator: string; lines: string[] }
   'server-survey': {
     ok: true

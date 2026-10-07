@@ -32,7 +32,13 @@ import {
   restartPorts,
   settingsPatch
 } from '@core/service-settings'
-import { renderStack, backendComposeFromTemplate, type StackTemplates } from '@core/stack'
+import {
+  renderStack,
+  backendComposeFromTemplate,
+  parseStackProbe,
+  stackProbeCommand,
+  type StackTemplates
+} from '@core/stack'
 import { cleanErr, operatorFromOutput, lastErrorLine } from '@core/pocketd-output'
 import { firstLine, nonEmptyLines, tail, toLf } from '@core/text'
 import type { SignerRequests, SignerResults } from '@core/contract'
@@ -54,7 +60,7 @@ export async function sshTest(req: Req<'ssh-test'>, ctx: OpContext): Promise<Res
   let probe = 'hostname; docker compose version 2>/dev/null | head -1'
   if (path !== '') {
     validateLinuxPath(path, 'Supplier directory')
-    probe += `; test -d '${path}/pocket-home' && echo PSM_KEYRING_OK`
+    probe += `; test -d '${path}/pocket-home' && echo PSM_KEYRING_OK;` + stackProbeCommand(path)
   }
   probe += '; true'
   const r = await runSsh(conn, probe, ctx)
@@ -67,7 +73,8 @@ export async function sshTest(req: Req<'ssh-test'>, ctx: OpContext): Promise<Res
     ok: true,
     hostname: lines.length ? lines[0].trim() : '',
     docker,
-    keyring: /PSM_KEYRING_OK/.test(r.out)
+    keyring: /PSM_KEYRING_OK/.test(r.out),
+    stack: path !== '' ? parseStackProbe(r.out) : null
   }
 }
 
