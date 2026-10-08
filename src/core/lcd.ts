@@ -494,27 +494,71 @@ export interface OwnedSupplier {
  * suppliers by owner (its owner_address filter answers nothing), and paging every
  * supplier on MainNet is thousands of records. Suppliers that finished unstaking are
  * left out. A custodial supplier, staked by its operator as its own owner, is not under
- * the owner wallet at all; it is found from its operator instead.
+ * the owner wallet at all; it is found from its operator instead. The indexer answers
+ * at most 1000 rows per request whatever `first` asks for, so the list is read in pages
+ * keyed on the last operator address seen, which a supplier changing status or a new one
+ * appearing mid-walk cannot shift, until a page holds every row that remains (its
+ * `totalCount`).
  */
 export async function ownedSuppliers(net: Network, owner: string): Promise<OwnedSupplier[]> {
   if (!/^pokt1[0-9a-z]{38}$/.test(owner)) return []
-  const res = await fetch(NETWORK_INFO[net].indexer, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({
-      query:
-        'query($owner: String!) { suppliers(filter: { ownerId: { equalTo: $owner } }) { nodes { id stakeStatus stakeAmount } } }',
-      variables: { owner }
-    }),
-    signal: AbortSignal.timeout(20_000)
-  })
-  if (!res.ok) throw new LcdError(`HTTP ${res.status} from the indexer`, res.status)
-  const j = (await res.json()) as {
-    data?: { suppliers?: { nodes?: { id: string; stakeStatus: string; stakeAmount: string }[] } }
-    errors?: { message: string }[]
+  type Node = { id: string; stakeStatus: string; stakeAmount: string }
+  const nodes: Node[] = []
+  for (;;) {
+    const res = await fetch(NETWORK_INFO[net].indexer, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        query:
+          'query($owner: String!, $after: String!) { suppliers(filter: { ownerId: { equalTo: $owner }, stakeStatus: { notEqualTo: Unstaked }, id: { greaterThan: $after } }, orderBy: ID_ASC, first: 1000) { totalCount nodes { id stakeStatus stakeAmount } } }',
+        variables: { owner, after: nodes.at(-1)?.id ?? '' }
+      }),
+      signal: AbortSignal.timeout(20_000)
+    })
+    if (!res.ok) throw new LcdError(`HTTP ${res.status} from the indexer`, res.status)
+    const j = (await res.json()) as {
+      data?: { suppliers?: { totalCount?: number; nodes?: Node[] } }
+      errors?: { message: string }[]
+    }
+    if (j.errors?.length) throw new Error(`the indexer answered: ${j.errors[0].message}`)
+    const page = j.data?.suppliers?.nodes ?? []
+    nodes.push(...page)
+    // totalCount counts the rows after the cursor, so this page held all that remained.
+    if (!page.length || page.length >= (j.data?.suppliers?.totalCount ?? 0)) break
   }
-  if (j.errors?.length) throw new Error(`the indexer answered: ${j.errors[0].message}`)
-  return (j.data?.suppliers?.nodes ?? [])
+  // The query already leaves Unstaked out; filtered again in case an indexer ignores that.
+  return nodes
     .filter((n) => n.stakeStatus !== 'Unstaked')
     .map((n) => ({ operator: n.id, status: n.stakeStatus, stakeUpokt: Number(n.stakeAmount) || 0 }))
+}
+
+/** An owned supplier with what its LCD record says it serves. */
+export interface OwnedSupplierServices extends OwnedSupplier {
+  services: string[]
+  /** The first endpoint of its first service, or '' when there is none. */
+  url: string
+}
+
+/**
+ * The services and first endpoint of each owned supplier, in the order given. One LCD
+ * read per supplier, eight at a time: an owner can have hundreds. A read that fails
+ * leaves that supplier with no services and no url instead of failing the whole list.
+ */
+export async function withServices(
+  net: Network,
+  owned: OwnedSupplier[]
+): Promise<OwnedSupplierServices[]> {
+  const out: OwnedSupplierServices[] = []
+  for (let i = 0; i < owned.length; i += 8) {
+    const batch = owned.slice(i, i + 8)
+    const recs = await Promise.all(batch.map((o) => supplier(net, o.operator).catch(() => null)))
+    batch.forEach((o, k) =>
+      out.push({
+        ...o,
+        services: (recs[k]?.services ?? []).map((s) => s.service_id),
+        url: recs[k]?.services?.[0]?.endpoints?.[0]?.url ?? ''
+      })
+    )
+  }
+  return out
 }
