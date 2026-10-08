@@ -1,11 +1,18 @@
 {
   "app": "Pocket Service Manager",
-  "updated": "2026-10-07",
+  "updated": "2026-10-08",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.25",
+  "latest": "electron-0.1.26",
   "minimum_supported": "hta-2026-09-14",
   "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.26": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.25",
+      "changes": [
+        "Suppliers, 'Suppliers set up outside this app' lists every live supplier of the owner wallet: the indexer answers at most 1000 rows a request, and earlier versions read one request and dropped unstaked rows from it, so an owner with more than about 1000 suppliers saw only part of them (on MainNet one owner with 1,037 staked suppliers saw 849). An owner who reports missing suppliers in that list on 0.1.25 or older should update"
+      ]
+    },
     "electron-0.1.25": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.24",

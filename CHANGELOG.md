@@ -2,6 +2,10 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
+## 0.1.26
+
+- Suppliers: "Suppliers set up outside this app" now lists every live supplier the owner wallet has, however many. An owner with more than about a thousand suppliers saw only part of them, because the network's indexer answers at most a thousand rows at a time and suppliers that had finished unstaking used up some of those. The list is now read page by page, and it loads faster for owners with many suppliers (by Jorge Cuesta).
+
 ## 0.1.25
 
 - Provision now recognises a supplier stack this app made on the server from another PC. When this PC has no record of it, the panel looks on the server first and says so: the operator it found, whether it is staked, and whether its owner is this PC's owner wallet. It fills in the hostname the supplier stakes, and the button reads Adopt stack. Adopting keeps the operator key, the services, and the stake, and brings the stack up to this version. Before, the panel said a new operator key would be created, which was never the case for an existing stack.
