@@ -489,6 +489,9 @@ export interface OwnedSupplier {
   stakeUpokt: number
 }
 
+/** Pages ownedSuppliers reads at most: 100,000 suppliers at the indexer's 1000 a page. */
+export const OWNED_SUPPLIERS_MAX_PAGES = 100
+
 /**
  * The suppliers an owner has on a network, from the indexer: the LCD cannot filter
  * suppliers by owner (its owner_address filter answers nothing), and paging every
@@ -504,14 +507,19 @@ export async function ownedSuppliers(net: Network, owner: string): Promise<Owned
   if (!/^pokt1[0-9a-z]{38}$/.test(owner)) return []
   type Node = { id: string; stakeStatus: string; stakeAmount: string }
   const nodes: Node[] = []
-  for (;;) {
+  for (let pageNo = 0; ; pageNo++) {
+    if (pageNo >= OWNED_SUPPLIERS_MAX_PAGES)
+      throw new Error(
+        `the indexer was still answering after ${OWNED_SUPPLIERS_MAX_PAGES} pages, so the list was not read to the end`
+      )
+    const after = nodes.at(-1)?.id ?? ''
     const res = await fetch(NETWORK_INFO[net].indexer, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({
         query:
           'query($owner: String!, $after: String!) { suppliers(filter: { ownerId: { equalTo: $owner }, stakeStatus: { notEqualTo: Unstaked }, id: { greaterThan: $after } }, orderBy: ID_ASC, first: 1000) { totalCount nodes { id stakeStatus stakeAmount } } }',
-        variables: { owner, after: nodes.at(-1)?.id ?? '' }
+        variables: { owner, after }
       }),
       signal: AbortSignal.timeout(20_000)
     })
@@ -522,6 +530,12 @@ export async function ownedSuppliers(net: Network, owner: string): Promise<Owned
     }
     if (j.errors?.length) throw new Error(`the indexer answered: ${j.errors[0].message}`)
     const page = j.data?.suppliers?.nodes ?? []
+    // Each page must move past the cursor. An indexer that ignored the filter would hand
+    // back the same rows forever; stop with an error rather than loop or show a short list.
+    if (page.length && !(page[page.length - 1].id > after))
+      throw new Error(
+        'the indexer did not move on to the next page, so the list was not read to the end'
+      )
     nodes.push(...page)
     // totalCount counts the rows after the cursor, so this page held all that remained.
     if (!page.length || page.length >= (j.data?.suppliers?.totalCount ?? 0)) break

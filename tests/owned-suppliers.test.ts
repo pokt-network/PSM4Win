@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { ownedSuppliers, withServices, clearLcdCache } from '@core/lcd'
+import { ownedSuppliers, withServices, clearLcdCache, OWNED_SUPPLIERS_MAX_PAGES } from '@core/lcd'
 import { NETWORK_INFO } from '@core/networks'
 
 const OWNER = 'pokt1' + 'q'.repeat(38)
@@ -121,6 +121,40 @@ describe('ownedSuppliers (indexer)', () => {
     const got = await ownedSuppliers('main', OWNER)
     expect(f).toHaveBeenCalledTimes(3)
     expect(got.map((g) => g.operator)).toEqual(all.map((n) => n.id))
+  })
+  it('stops with an error when the indexer hands back the same page instead of the next', async () => {
+    const page = Array.from({ length: 500 }, (_, i) => ({
+      id: 'pokt1' + String(i).padStart(38, '0'),
+      stakeStatus: 'Staked',
+      stakeAmount: '1'
+    }))
+    // An indexer that ignores the cursor: always the first rows, always more remaining.
+    const f = answer({ data: { suppliers: { totalCount: 1037, nodes: page } } })
+    await expect(ownedSuppliers('main', OWNER)).rejects.toThrow('did not move on')
+    expect(f).toHaveBeenCalledTimes(2)
+  })
+  it('gives up after a bounded number of pages rather than reading forever', async () => {
+    let n = 0
+    const f = vi.fn(async () => {
+      const id = 'pokt1' + String(n++).padStart(38, '0')
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: {
+            suppliers: {
+              totalCount: 1_000_000,
+              nodes: [{ id, stakeStatus: 'Staked', stakeAmount: '1' }]
+            }
+          }
+        })
+      }
+    })
+    vi.stubGlobal('fetch', f)
+    await expect(ownedSuppliers('main', OWNER)).rejects.toThrow(
+      `after ${OWNED_SUPPLIERS_MAX_PAGES} pages`
+    )
+    expect(f).toHaveBeenCalledTimes(OWNED_SUPPLIERS_MAX_PAGES)
   })
   it('never queries for something that is not an address', async () => {
     const f = answer({ data: { suppliers: { nodes: [] } } })
