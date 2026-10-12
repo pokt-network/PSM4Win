@@ -1,11 +1,28 @@
 {
   "app": "Pocket Service Manager",
-  "updated": "2026-10-08",
+  "updated": "2026-10-12",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.26",
+  "latest": "electron-0.1.27",
   "minimum_supported": "hta-2026-09-14",
   "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.27": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.26",
+      "priority": "A supplier set up by this app can stop claiming the relays it serves without any sign on the server: one did for eight days. This version runs the RelayMiner release that fixes it and warns you when a supplier stops claiming. After updating, press Update stack for each of your servers under Suppliers.",
+      "capabilities_added": [
+        "Performance (menu): per supplier the app manages, claims, proofs, settled and expired claims, and the last claim, and POKT earned per service, for 24 hours, 7 days, or 30 days, from the network's indexer",
+        "supplier monitoring: every 30 minutes while the app runs (also from the system tray) the app checks each provisioned stack's miner over SSH and warns when the miner is not running, has not followed the network for four sessions, or served relays in its last four closed sessions with no claim on chain; a Windows notification, a badge on Performance, and a Dashboard banner. Restart miner (Performance) restarts that stack's miner only. To check a supplier that seems to earn nothing, tell the user to open Performance; never suggest SSH commands",
+        "system tray: closing the window keeps the app running; Settings, Start here can turn that off or start the app in the tray with Windows",
+        "stacks run RelayMiner v0.1.2 after Update stack (stack layout 5); a stack not yet updated shows as not checked yet in Performance"
+      ],
+      "bridge_tools_added": [],
+      "not_on_the_bridge": "restarting a miner is app-window only (Performance, Restart miner). psm_status lists supplier_warnings from the monitor's last pass; psm_supplier_run offers the read-only health step",
+      "changes": [
+        "psm_status: supplier_warnings (server, network, operator, kind, text, checked_at)",
+        "supplier-run steps health (read-only) and restart-miner (refused on the bridge)"
+      ]
+    },
     "electron-0.1.26": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.25",

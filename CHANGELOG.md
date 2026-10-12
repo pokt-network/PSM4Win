@@ -2,6 +2,15 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
+## 0.1.27
+
+**Priority update.** A supplier set up by this app can stop claiming the relays it serves without any sign on the server: one did for eight days. This version runs the RelayMiner release that fixes it and warns you when a supplier stops claiming. After updating, press Update stack for each of your servers under Suppliers.
+
+- New: Performance, in the menu. For each of your suppliers it shows the claims and proofs it made, what its settled claims earned for each service, and when it last claimed, over the last day, week, or month.
+- The app now checks every half hour that your suppliers are still claiming what they serve. When one stops (its miner stopped, stopped following the network, or served relays in four sessions in a row and claimed none), Windows shows a notification, Performance shows a red badge and a Restart miner button, and the Dashboard says so. Until you press Update stack for a server, its suppliers show as not checked yet.
+- Closing the window now keeps the app running in the system tray, so it keeps checking; quit it from the tray icon. Under Settings, Start here, you can turn that off, or have it start in the tray when Windows starts.
+- Suppliers run RelayMiner v0.1.2 after Update stack. It stops claims and proofs being lost when the network's nodes answer from slightly different heights, and restarts its connection to the network when that goes quiet, which is what stopped a supplier from claiming for eight days.
+
 ## 0.1.26
 
 - Suppliers: "Suppliers set up outside this app" now lists every live supplier the owner wallet has, however many. An owner with more than about a thousand suppliers saw only part of them, because the network's indexer answers at most a thousand rows at a time and suppliers that had finished unstaking used up some of those. The list is now read page by page, and it loads faster for owners with many suppliers (by Jorge Cuesta).
