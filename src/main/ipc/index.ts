@@ -29,6 +29,7 @@ import { dataDir } from '../paths'
 import { log } from '../state/log'
 import { bridge } from '../bridge'
 import { performance } from '../performance'
+import { upgrades } from '../upgrades'
 import { applyPrefs } from '../tray'
 import { updater } from '../update'
 import { resolveConfirmation } from '../bridge/confirm'
@@ -187,6 +188,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   })
   ipcMain.handle('performance:status', () => performance.status())
   ipcMain.handle('performance:check', () => performance.check())
+  ipcMain.handle('upgrades:status', () => upgrades.status())
+  ipcMain.handle('upgrades:check', () => upgrades.check())
   ipcMain.handle('settings:set-window', async (_e, bounds: unknown) => {
     const parsed = windowBoundsSchema.safeParse(bounds)
     if (parsed.success) await writeSettings({ window: parsed.data })

@@ -12,6 +12,7 @@ import { runSelfTest } from './selftest'
 import { bridge } from './bridge'
 import { updater } from './update'
 import { performance } from './performance'
+import { upgrades } from './upgrades'
 import { readSettings } from './state/settings'
 import { applyPrefs, hideOnClose, initTray, setTrayWarnings, HIDDEN_ARG } from './tray'
 
@@ -43,6 +44,10 @@ if (!gotLock) {
   const openPerformance = async (): Promise<void> => {
     const w = await showWindow()
     w.webContents.send('psm:navigate', 'performance')
+  }
+  const openSuppliers = async (): Promise<void> => {
+    const w = await showWindow()
+    w.webContents.send('psm:navigate', 'supply')
   }
   const watchWindow = (w: BrowserWindow): void => {
     w.on('closed', () => {
@@ -119,6 +124,13 @@ if (!gotLock) {
         },
         () => void openPerformance()
       )
+      upgrades.init(
+        (st) => {
+          if (mainWindow && !mainWindow.isDestroyed())
+            mainWindow.webContents.send('psm:upgrades', st)
+        },
+        () => void openSuppliers()
+      )
     }
     // The local MCP action bridge starts only when Settings enabled it.
     await bridge.init(() => mainWindow)
@@ -153,6 +165,7 @@ if (!gotLock) {
     void bridge.stop()
     updater.stop()
     performance.stop()
+    upgrades.stop()
     app.quit()
   })
 }

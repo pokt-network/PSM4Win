@@ -51,8 +51,8 @@ describe('supplier-ship rendering', () => {
       '# Per-stack settings read by supplier.sh. Written by the Pocket Service Manager.\n' +
         'PROJECT=pocket-supplier\nNET=beta\nHEALTH_PORT=8081\nCADDY_DIR=/opt/pocket/caddy\n' +
         'HOSTNAME_PUBLIC=services-beta.example.org\n' +
-        '# The versions this stack runs, pinned by the app release that provisioned it. The\n' +
-        "# RelayMiner's relayer and miner always share one exact tag.\n" +
+        '# The versions this stack runs, chosen by the app when it provisioned it: the RelayMiner is\n' +
+        "# upstream's latest release then, and its relayer and miner always share one exact tag.\n" +
         `STACK_LAYOUT=${STACK_LAYOUT}\nRELAYMINER_IMAGE=${RELAYMINER_IMAGE}\n` +
         `REDIS_IMAGE=${REDIS_IMAGE}\nPOCKETD_IMAGE=${POCKETD_IMAGE}\n`
     )

@@ -202,6 +202,10 @@ export const settingsPatchSchema = z
                 operator: z.string(),
                 provisioned_at: z.string().optional(),
                 layout: z.coerce.number().int().optional(),
+                relayminer: z
+                  .string()
+                  .regex(/^vd{1,4}.d{1,4}.d{1,4}$/)
+                  .optional(),
                 import: z
                   .object({
                     stage: z.enum(['staged', 'draining', 'switching']),

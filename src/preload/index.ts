@@ -12,6 +12,7 @@ import {
 } from '../core/contract'
 import type { Settings } from '../main/state/settings'
 import type { PerformanceStatus, StackCheck } from '../main/performance'
+import type { UpgradeStatus } from '../main/upgrades'
 import type { HtaDetection, ImportResult } from '../main/migration/importer'
 import type { BridgeStatus } from '../main/bridge'
 import type { BridgeConfirmRequest } from '../main/bridge/confirm'
@@ -129,6 +130,15 @@ const api = {
       return () => ipcRenderer.removeListener('psm:navigate', l)
     }
   },
+  upgrades: {
+    status: (): Promise<UpgradeStatus> => ipcRenderer.invoke('upgrades:status'),
+    check: (): Promise<UpgradeStatus> => ipcRenderer.invoke('upgrades:check'),
+    onStatus: (cb: (s: UpgradeStatus) => void): (() => void) => {
+      const l = (_e: Electron.IpcRendererEvent, s: UpgradeStatus): void => cb(s)
+      ipcRenderer.on('psm:upgrades', l)
+      return () => ipcRenderer.removeListener('psm:upgrades', l)
+    }
+  },
   claudeCode: {
     remoteStatus: (): Promise<RemoteClaudeStatus> => ipcRenderer.invoke('claude:remote-status'),
     addRemote: (): Promise<RemoteClaudeStatus> => ipcRenderer.invoke('claude:remote-add'),
@@ -177,6 +187,7 @@ export type {
   Settings,
   PerformanceStatus,
   StackCheck,
+  UpgradeStatus,
   HtaDetection,
   ImportResult,
   BridgeStatus,

@@ -2,6 +2,11 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
+## Unreleased
+
+- New RelayMiner releases reach your suppliers without waiting for an app update. The app checks the RelayMiner's releases on start and every six hours; when a newer one is out, Windows tells you once, the Dashboard says which servers run an older one, and Suppliers shows "RelayMiner <version> available" with Update stack. Nothing changes until you press it. Update stack downloads the release, checks your configuration with it before anything restarts, and keeps the operator key, the services, and the stake.
+- The Dashboard and Settings, Start here, Updates say when the network's next upgrade is coming: its version, its height, and about when, once the release team has set it. Suppliers set up by this app use the public endpoints and need nothing for it; if this app needs an update for it, it offers one as usual.
+
 ## 0.1.27
 
 **Priority update.** A supplier set up by this app can stop claiming the relays it serves without any sign on the server: one did for eight days. This version runs the RelayMiner release that fixes it and warns you when a supplier stops claiming. After updating, press Update stack for each of your servers under Suppliers.

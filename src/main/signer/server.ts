@@ -45,6 +45,7 @@ import type { SignerRequests, SignerResults } from '@core/contract'
 import { SUPPLIER_STEP_TIMEOUTS_MS } from '@core/contract'
 import type { OpContext } from './context'
 import { resolveSsh, runSsh, runScp } from './ssh'
+import { getRelayminerTarget } from '../relayminer-target'
 import { runNative } from './native'
 import { withWorkDir } from './work'
 import { serverTemplatesDir, toolPath } from '../paths'
@@ -179,6 +180,8 @@ export async function supplierShip(
     }
   }
 
+  // Upstream's latest RelayMiner once the upgrade check has seen its image, else the pinned one.
+  const relayminer = getRelayminerTarget()
   const rendered = renderStack(await loadTemplates(), {
     network: net,
     blockTime: bt,
@@ -187,7 +190,8 @@ export async function supplierShip(
     healthPort: hp,
     relayerMetricsPort: rmp,
     minerMetricsPort: mmp,
-    caddyDir
+    caddyDir,
+    relayminer
   })
 
   return withWorkDir(async (work) => {
@@ -247,14 +251,14 @@ export async function supplierShip(
     await addHistory({
       op: 'supplier-ship',
       network: net,
-      extra: `host=${conn.target} path=${path} project=${project} hostname=${hostname} caddy=${caddyDir}`
+      extra: `host=${conn.target} path=${path} project=${project} hostname=${hostname} caddy=${caddyDir} relayminer=${relayminer}`
     })
     files.push(
       `${caddyDir}/docker-compose.yaml`,
       `${caddyDir}/Caddyfile`,
       `${caddyDir}/sites/${rendered.site.name}`
     )
-    return { ok: true, files, relayer_kept: keepRelayer, out: firstLine(r.out) }
+    return { ok: true, files, relayer_kept: keepRelayer, out: firstLine(r.out), relayminer }
   })
 }
 

@@ -6,7 +6,10 @@ import type { Network } from '@core/networks'
 import type { RemoteClaudeStatus } from '../../../preload/index'
 import { RE } from '@core/validate'
 import { STACK_LAYOUT } from '@core/versions'
+import { relayminerBehind, stackRelayminer } from '@core/upgrades'
+import { networkUpgradeText } from '../lib/upgrades'
 import {
+  stackLayoutBehind,
   stackNeedsUpdate,
   stackUrl,
   portOfStackUrl,
@@ -477,13 +480,16 @@ function ServersPanel(): React.JSX.Element {
 }
 
 function StackCell({ s, net }: { s: ServerEntry; net: Network }): React.JSX.Element {
+  const rm = useStore((x) => x.upg?.relayminer.target)
   const st = stackOf(s, net)
   const ss = stackState(st)
   if (ss === 'none') return <Badge cls="muted">not provisioned</Badge>
   return (
     <>
-      {ss === 'ready' && stackNeedsUpdate(st) ? (
+      {ss === 'ready' && stackLayoutBehind(st) ? (
         <Badge cls="warn">stack update needed</Badge>
+      ) : ss === 'ready' && rm && relayminerBehind(st, rm) ? (
+        <Badge cls="warn">RelayMiner {rm} available</Badge>
       ) : ss === 'ready' ? (
         <Badge cls="ok">provisioned</Badge>
       ) : (
@@ -549,6 +555,7 @@ interface FoundStack {
 
 function ProvisionPanel(): React.JSX.Element {
   const { prov, settings, net: appNet, params, busy, address } = useStore()
+  const rm = useStore((x) => x.upg?.relayminer.target)
   const list = (settings?.servers ?? []) as ServerEntry[]
   const panelRef = useRef<HTMLDivElement>(null)
   const [status, setStatus] = useStatus()
@@ -659,22 +666,24 @@ function ProvisionPanel(): React.JSX.Element {
             : '')
   const dirHint = !list.length
     ? "Holds this network's RelayMiner, operator keyring, and relayer config."
-    : ss === 'ready' && stackNeedsUpdate(st)
-      ? `This server runs an older ${netLabel(appNet)} stack than this version of the app ships. Updating downloads the pinned RelayMiner and Redis, checks both configs with them before anything restarts, and keeps the operator key, the services, and the stake.`
-      : ss === 'ready'
-        ? `This server already has a ${netLabel(appNet)} stack there; its operator key and relayer config are kept.`
-        : ss === 'pending'
-          ? 'Provisioning of this stack was interrupted after its operator key was created. Start provisioning resumes it; finished steps are not repeated.'
-          : probing
-            ? 'Looking on the server for a stack the app made there before.'
-            : adoptHint ||
-              `A new stack for ${netLabel(appNet)}; a new operator key is created on the server. If the app made a stack in this directory before, from this PC or another, it is adopted instead and its key is kept.`
+    : ss === 'ready' && stackLayoutBehind(st)
+      ? `This server runs an older ${netLabel(appNet)} stack than this version of the app ships. Updating downloads RelayMiner ${rm ?? ''} and the pinned Redis, checks both configs with them before anything restarts, and keeps the operator key, the services, and the stake.`
+      : ss === 'ready' && rm && relayminerBehind(st, rm)
+        ? `RelayMiner ${rm} is out; this ${netLabel(appNet)} stack runs ${stackRelayminer(st)}. Updating downloads it, checks both configs with it before anything restarts (the running stack stays up if the check fails), then restarts the miner and relayer; relays pause for about a minute. The operator key, the services, and the stake are kept.`
+        : ss === 'ready'
+          ? `This server already has a ${netLabel(appNet)} stack there; its operator key and relayer config are kept.`
+          : ss === 'pending'
+            ? 'Provisioning of this stack was interrupted after its operator key was created. Start provisioning resumes it; finished steps are not repeated.'
+            : probing
+              ? 'Looking on the server for a stack the app made there before.'
+              : adoptHint ||
+                `A new stack for ${netLabel(appNet)}; a new operator key is created on the server. If the app made a stack in this directory before, from this PC or another, it is adopted instead and its key is kept.`
   const btnLabel =
     adopt && !adoptOtherNet && ss === 'none'
       ? 'Adopt stack'
       : ss === 'pending'
         ? 'Continue provisioning'
-        : ss === 'ready' && stackNeedsUpdate(st)
+        : ss === 'ready' && stackNeedsUpdate(st, rm)
           ? 'Update stack'
           : ss === 'ready'
             ? 'Re-provision'
@@ -754,6 +763,8 @@ function ProvisionPanel(): React.JSX.Element {
       )
       setBusy(false)
     }
+    // The RelayMiner supplier-ship wrote into stack.env, recorded only once the stack is up.
+    let shippedRelayminer = ''
     const done = async (): Promise<void> => {
       await setStack(s.name, net, {
         dir,
@@ -761,7 +772,8 @@ function ProvisionPanel(): React.JSX.Element {
         url: stackUrl(host, prov.port),
         operator,
         provisioned_at: new Date().toISOString(),
-        layout: STACK_LAYOUT
+        layout: STACK_LAYOUT,
+        ...(shippedRelayminer ? { relayminer: shippedRelayminer } : {})
       })
       log(
         adopted
@@ -808,6 +820,7 @@ function ProvisionPanel(): React.JSX.Element {
       mark('Ship the stack', false, `${r2.error} ${r2.detail ?? ''}`)
       return fail('Shipping failed.')
     }
+    shippedRelayminer = r2.relayminer
     mark(
       'Ship the stack',
       true,
@@ -1462,12 +1475,15 @@ function BackgroundPanel(): React.JSX.Element {
 
 function UpdatesPanel(): React.JSX.Element {
   const u = useStore((s) => s.update)
+  const upg = useStore((s) => s.upg)
+  const net = useStore((s) => s.net)
+  const nu = upg?.networks[net]
   const [busy, setBusyLocal] = useState(false)
   const check = async (): Promise<void> => {
     setBusyLocal(true)
     try {
-      const r = await psm().update.check()
-      useStore.setState({ update: r })
+      const [r, g] = await Promise.all([psm().update.check(), psm().upgrades.check()])
+      useStore.setState({ update: r, upg: g })
       if (r.error) toast(`Could not check for updates: ${r.error}`, 'err')
       else if (!r.available) toast(`You have the latest version (${r.current}).`, 'info')
     } catch (e) {
@@ -1503,6 +1519,26 @@ function UpdatesPanel(): React.JSX.Element {
             <td>Last checked</td>
             <td>{when}</td>
           </tr>
+          <tr>
+            <td>RelayMiner for new and updated stacks</td>
+            <td>
+              {upg?.relayminer.target ?? '?'}
+              {upg?.relayminer.latest ? ' (latest release)' : ''}
+              {upg?.relayminer.error ? (
+                <div className="hint">Could not check: {upg.relayminer.error}</div>
+              ) : null}
+            </td>
+          </tr>
+          <tr>
+            <td>{netLabel(net)}</td>
+            <td>
+              {nu?.error
+                ? `Could not read: ${nu.error}`
+                : nu?.running
+                  ? (networkUpgradeText(nu) ?? `poktroll ${nu.running}; no upgrade announced`)
+                  : '?'}
+            </td>
+          </tr>
         </tbody>
       </table>
       {u?.state === 'error' && u.error ? <div className="dangerbox">{u.error}</div> : null}
@@ -1528,7 +1564,8 @@ function UpdatesPanel(): React.JSX.Element {
       </div>
       <div className="hint">
         The app checks the releases page on start and every six hours. The header shows a link when
-        a newer version is there.
+        a newer version is there. It checks the RelayMiner's releases and the network's next upgrade
+        on the same schedule; a newer RelayMiner shows as Update stack under Suppliers.
       </div>
     </div>
   )

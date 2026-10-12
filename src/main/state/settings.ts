@@ -12,6 +12,8 @@ export interface SupplierStack {
   provisioned_at?: string
   /** STACK_LAYOUT of the files Provision last shipped; absent means layout 1. */
   layout?: number
+  /** The RelayMiner release Provision last shipped (since 0.1.28; see stackRelayminer for older entries). */
+  relayminer?: string
   /** An import of a supplier set up by hand, while it is under way (src/core/import.ts). */
   import?: ImportProgress
 }

@@ -23,6 +23,7 @@ import { APP_VERSION_PREFIX, BRIDGE_DEFAULT_PORT, CHAIN_IDS } from '@core/versio
 import { fmtPokt } from '@core/format'
 import type { Network } from '@core/networks'
 import { hasProvisionedStack, stackNeedsUpdate } from '@core/stack'
+import { getRelayminerTarget } from '../relayminer-target'
 import { service as lcdService } from '@core/lcd'
 import { requestSchemas } from '../ipc/schemas'
 import { signer } from '../signer'
@@ -424,7 +425,7 @@ class BridgeService {
               url: st?.url ?? '',
               operator: st?.operator ?? '',
               provisioned: !!st?.provisioned_at,
-              update_needed: stackNeedsUpdate(st)
+              update_needed: stackNeedsUpdate(st, getRelayminerTarget())
             }
           ])
         )

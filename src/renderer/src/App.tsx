@@ -40,10 +40,14 @@ export default function App(): React.JSX.Element {
     const offStatus = window.psm.performance.onStatus((perf) => useStore.setState({ perf }))
     const offNav = window.psm.performance.onNavigate((s) => {
       if (s === 'performance') tab('performance')
+      if (s === 'supply') tab('supply')
     })
+    void window.psm.upgrades.status().then((upg) => useStore.setState({ upg }))
+    const offUpg = window.psm.upgrades.onStatus((upg) => useStore.setState({ upg }))
     return () => {
       offStatus()
       offNav()
+      offUpg()
     }
   }, [])
 

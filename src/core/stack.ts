@@ -4,6 +4,7 @@ import { NETWORK_INFO, isNetwork, type Network } from './networks'
 import { renderTemplate, toLf } from './text'
 import type { StakeService } from './contract'
 import { POCKETD_IMAGE, RELAYMINER_IMAGE, REDIS_IMAGE, STACK_LAYOUT } from './versions'
+import { RELAYMINER_TAG_RE, relayminerBehind, relayminerImage } from './upgrades'
 
 export interface StackTokens {
   network: Network
@@ -14,6 +15,8 @@ export interface StackTokens {
   relayerMetricsPort: number
   minerMetricsPort: number
   caddyDir: string
+  /** The RelayMiner release to run (relayminerTarget); the pinned one when absent. */
+  relayminer?: string
 }
 
 /** The template files supplier-ship reads, keyed by file name under resources/server. */
@@ -61,7 +64,10 @@ export function stackTokenMap(t: StackTokens): Record<string, string> {
     '{{RELAYER_METRICS_PORT}}': String(t.relayerMetricsPort),
     '{{MINER_METRICS_PORT}}': String(t.minerMetricsPort),
     '{{CADDY_DIR}}': t.caddyDir,
-    '{{RELAYMINER_IMAGE}}': RELAYMINER_IMAGE,
+    '{{RELAYMINER_IMAGE}}':
+      t.relayminer && RELAYMINER_TAG_RE.test(t.relayminer)
+        ? relayminerImage(t.relayminer)
+        : RELAYMINER_IMAGE,
     '{{REDIS_IMAGE}}': REDIS_IMAGE,
     '{{POCKETD_IMAGE}}': POCKETD_IMAGE,
     '{{STACK_LAYOUT}}': String(STACK_LAYOUT)
@@ -94,10 +100,21 @@ export function renderStack(tpl: StackTemplates, t: StackTokens): RenderedStack 
  * provisioning it again is due: it gets the pinned images and whatever else changed.
  * A stack recorded before layouts were tracked is layout 1.
  */
-export function stackNeedsUpdate(
+export function stackLayoutBehind(
   st: { provisioned_at?: string; layout?: number } | null | undefined
 ): boolean {
   return !!st?.provisioned_at && (st.layout ?? 1) < STACK_LAYOUT
+}
+
+/**
+ * Whether Update stack is due: older files than this app ships, or (given the RelayMiner the
+ * app would install, relayminerTarget) an older RelayMiner than that.
+ */
+export function stackNeedsUpdate(
+  st: { provisioned_at?: string; layout?: number; relayminer?: string } | null | undefined,
+  relayminer?: string
+): boolean {
+  return stackLayoutBehind(st) || (!!relayminer && relayminerBehind(st, relayminer))
 }
 
 /**

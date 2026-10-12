@@ -267,6 +267,7 @@ export function ImportWizard({
       project,
       url: stackUrl(host, port),
       operator,
+      relayminer: r1.relayminer,
       import: {
         stage: 'staged',
         first: ph.first,

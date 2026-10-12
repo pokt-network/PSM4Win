@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { useStore, S, type SupplyRow } from '../store'
 import type { ChainSupplier, OwnedSupplierServices } from '@core/lcd'
 import { account, readAfterTx, ownedSuppliers, withServices } from '@core/lcd'
-import { stackNeedsUpdate } from '@core/stack'
+import { stackLayoutBehind, stackNeedsUpdate } from '@core/stack'
+import { relayminerBehind, stackRelayminer } from '@core/upgrades'
 import { fmtPokt, fmtInt, fmtDuration, POKT } from '@core/format'
 import { unbondingOf, unbondingNote, nextSessionBoundary, supplierServiceIds } from '@core/chain'
 import { RPC_TYPES } from '@core/validate'
@@ -98,6 +99,7 @@ export function supplierStatusCell(
 
 function SuppliersList(): React.JSX.Element {
   const { net, params, settings } = useStore()
+  const rm = useStore((s) => s.upg?.relayminer.target)
   const [rows, setRows] = useState<ListRow[] | null>(null)
   const [reread, setReread] = useState(0)
   const load = useCallback(async () => setRows(await supplierRows()), [])
@@ -156,9 +158,13 @@ function SuppliersList(): React.JSX.Element {
                       </td>
                       <td>
                         {supplierStatusCell(x, params, net)}
-                        {stackNeedsUpdate(st) ? (
+                        {stackLayoutBehind(st) ? (
                           <div>
                             <Badge cls="warn">stack update needed</Badge>
+                          </div>
+                        ) : rm && relayminerBehind(st, rm) ? (
+                          <div>
+                            <Badge cls="warn">RelayMiner {rm} available</Badge>
                           </div>
                         ) : null}
                       </td>
@@ -184,11 +190,15 @@ function SuppliersList(): React.JSX.Element {
                         )}
                       </td>
                       <td className="actions">
-                        {x.state === 'ready' && stackNeedsUpdate(st) ? (
+                        {x.state === 'ready' && stackNeedsUpdate(st, rm) ? (
                           <>
                             <button
                               className="btn small primary"
-                              title="The server runs an older RelayMiner stack than this version of the app ships. Updating keeps the operator key, the services, and the stake."
+                              title={
+                                stackLayoutBehind(st)
+                                  ? 'The server runs an older RelayMiner stack than this version of the app ships. Updating keeps the operator key, the services, and the stake.'
+                                  : `RelayMiner ${rm} is out; this stack runs ${stackRelayminer(st)}. Updating keeps the operator key, the services, and the stake.`
+                              }
                               onClick={() => provisionOn(x.server.name, net)}
                             >
                               Update stack

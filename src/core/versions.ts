@@ -15,9 +15,12 @@ export const POCKETD_VERSION = '0.1.35'
  * and proofs being lost behind load-balanced nodes (Sauron) and replaces a block subscription
  * that goes silent (upstream #45, which stopped a MainNet miner from claiming for 8 days).
  * Both: replace relayer and miner images, no config changes.
+ * Since 0.1.28 this is the floor, not the version: Update stack installs upstream's latest
+ * release when it is newer (src/core/upgrades.ts), so a new RelayMiner needs no app release.
  */
 export const RELAYMINER_VERSION = 'v0.1.2'
-export const RELAYMINER_IMAGE = `ghcr.io/pokt-network/pocket-relay-miner:${RELAYMINER_VERSION}`
+export const RELAYMINER_REPO_IMAGE = 'ghcr.io/pokt-network/pocket-relay-miner'
+export const RELAYMINER_IMAGE = `${RELAYMINER_REPO_IMAGE}:${RELAYMINER_VERSION}`
 export const REDIS_IMAGE = 'redis:8.10.1-alpine'
 /**
  * The stack's layout: raised when what Provision ships changes so that a running stack

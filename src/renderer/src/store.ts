@@ -156,6 +156,8 @@ export interface State {
   update: UpdateStatus | null
   /** The Performance monitor's latest pass (main process). */
   perf: import('../../preload/index').PerformanceStatus | null
+  /** The upgrade check's latest pass (main process): RelayMiner release and network upgrades. */
+  upg: import('../../preload/index').UpgradeStatus | null
   set: (patch: Partial<State> | ((s: State) => Partial<State>)) => void
 }
 
@@ -193,6 +195,7 @@ export const useStore = create<State>((set) => ({
   dep: { id: '', server: '' },
   svs: { id: '', server: '' },
   perf: null,
+  upg: null,
   tst: { id: '', wallet: '' },
   supOpen: null,
   impOpen: null,

@@ -10,6 +10,8 @@ import {
 } from '@core/chain'
 import { clearLcdCache } from '@core/lcd'
 import { hasProvisionedStack } from '@core/stack'
+import { relayminerBehind } from '@core/upgrades'
+import { networkUpgradeText } from '../lib/upgrades'
 import { Badge, NetBadge, Busy, netLabel, RunButton } from '../components/ui'
 import {
   ownedServices,
@@ -43,9 +45,17 @@ export function DashboardScreen(): React.JSX.Element {
     servicesRoot,
     history,
     balance,
-    perf
+    perf,
+    upg
   } = useStore()
   const notClaiming = (perf?.stacks ?? []).filter((x) => x.verdict && !x.verdict.ok)
+  const upgradeNote = networkUpgradeText(upg?.networks[net])
+  const rm = upg?.relayminer.target
+  const rmBehind = rm
+    ? (settings?.servers ?? [])
+        .filter((s) => relayminerBehind(s.suppliers?.[net], rm))
+        .map((s) => s.name)
+    : []
   const [rows, setRows] = useState<SupplierRow[] | null>(null)
   const [stakes, setStakes] = useState<Record<string, AppStakeHolder[]>>({})
   const [supply, setSupply] = useState<Record<string, SupplyState>>({})
@@ -118,6 +128,22 @@ export function DashboardScreen(): React.JSX.Element {
             ? 'The relays it serves are not being paid.'
             : 'The relays they serve are not being paid.'}{' '}
           <a onClick={() => goTo('performance')}>Open Performance</a> to restart the miner.
+        </div>
+      ) : null}
+      {rmBehind.length ? (
+        <div className="warnbox" id="dashRelayminer">
+          <b>RelayMiner {rm} is out.</b>{' '}
+          {rmBehind.length > 1
+            ? `${rmBehind.slice(0, -1).join(', ')} and ${rmBehind[rmBehind.length - 1]}`
+            : rmBehind[0]}{' '}
+          {rmBehind.length === 1 ? 'runs' : 'run'} an older one on {label}. Press Update stack under{' '}
+          <a onClick={() => goTo('supply')}>Suppliers</a> when it suits you; nothing changes until
+          you do.
+        </div>
+      ) : null}
+      {upgradeNote ? (
+        <div className="warnbox" id="dashNetworkUpgrade">
+          {upgradeNote}
         </div>
       ) : null}
       {needServer ? (

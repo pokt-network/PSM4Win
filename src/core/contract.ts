@@ -362,7 +362,14 @@ export interface SignerResults {
     report: import('./survey').SurveyReport
     verdict: import('./survey').SurveyVerdict
   }
-  'supplier-ship': { ok: true; files: string[]; relayer_kept: boolean; out: string }
+  'supplier-ship': {
+    ok: true
+    files: string[]
+    relayer_kept: boolean
+    out: string
+    /** The RelayMiner release written into stack.env (relayminerTarget at the time). */
+    relayminer: string
+  }
   'supplier-run': SupplierRunResult
   'deploy-ship': {
     ok: true
