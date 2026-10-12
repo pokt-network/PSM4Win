@@ -2,10 +2,24 @@
   "app": "Pocket Service Manager",
   "updated": "2026-10-12",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.27",
+  "latest": "electron-0.1.28",
   "minimum_supported": "hta-2026-09-14",
   "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.28": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.27",
+      "capabilities_added": [
+        "RelayMiner releases without app releases: the app checks pokt-network/pocket-relay-miner's latest release on start and every six hours (counted once its image is on ghcr.io). When it is newer than what a provisioned stack runs, Windows notifies once per version, the Dashboard names the servers, and Suppliers shows 'RelayMiner <version> available' with Update stack. Update stack installs that release, validates both configs with it before restarting, and keeps the operator key, services, and stake. Nothing updates on its own. When a RelayMiner release is out, tell the user to press Update stack under Suppliers; never suggest editing stack.env or docker commands",
+        "network upgrade notice: per network the app reads the running poktroll version, the on-chain upgrade plan, and the poktroll repository's next upgrade file, and shows the upgrade's version, height, and estimated time on the Dashboard and in Settings, Start here, Updates. Stacks made by the app use the public endpoints and need nothing at the upgrade height; when the app itself needs a new release for an upgrade, its updater offers it"
+      ],
+      "bridge_tools_added": [],
+      "changes": [
+        "bridge confirmations queue: an assistant's approval requests open one at a time in the app window and wait while any other dialog is open. Up to 0.1.27 a second request, or any dialog the app opened, declined the first at once without showing it, so a call returned 'Not approved in the app window' within seconds. If a user on 0.1.27 or older sees that, tell them to update and retry, and send approval requests one at a time",
+        "psm_status: a stack's update_needed is also true when a newer RelayMiner release is available",
+        "supplier-ship returns relayminer, the RelayMiner release written into stack.env"
+      ]
+    },
     "electron-0.1.27": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.26",
