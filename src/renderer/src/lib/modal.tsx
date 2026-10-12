@@ -32,14 +32,17 @@ export const useModal = create<ModalState>(() => ({
 
 /** Called once when the open dialog goes away without one of its buttons resolving it
  *  (Escape, or another modal replacing it). Promise-backed dialogs use it so a caller that
- *  awaits them is never left hanging (the HTA's native confirm()/alert() always return). */
-let dismiss: (() => void) | null = null
-function fireDismiss(): void {
+ *  awaits them is never left hanging (the HTA's native confirm()/alert() always return).
+ *  `replaced` tells the two apart: the bridge puts a replaced request back in its queue
+ *  instead of declining it. */
+export type DismissReason = 'closed' | 'replaced'
+let dismiss: ((reason: DismissReason) => void) | null = null
+function fireDismiss(reason: DismissReason): void {
   const d = dismiss
   dismiss = null
-  d?.()
+  d?.(reason)
 }
-export function onModalDismiss(fn: () => void): void {
+export function onModalDismiss(fn: (reason: DismissReason) => void): void {
   dismiss = fn
 }
 
@@ -49,7 +52,7 @@ export function openModal(
   buttons: ModalButton[],
   cls: string | boolean = ''
 ): void {
-  fireDismiss()
+  fireDismiss('replaced')
   useModal.setState({
     open: true,
     title,
@@ -70,7 +73,7 @@ export function lockModal(locked: boolean): void {
 }
 export function closeModal(): void {
   useModal.setState({ open: false, body: null, buttons: [], locked: false })
-  fireDismiss()
+  fireDismiss('closed')
 }
 
 /**

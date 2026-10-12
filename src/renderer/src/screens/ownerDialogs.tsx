@@ -239,7 +239,7 @@ function showExported(hex: string): void {
 export function offerHtaImport(det: HtaDetection): Promise<void> {
   return new Promise((resolve) => {
     offerHtaImportDialog(det)
-    onModalDismiss(resolve)
+    onModalDismiss(() => resolve())
   })
 }
 

@@ -4,6 +4,7 @@ One line per user-visible change. Versions are tags `v<version>`; compat strings
 
 ## Unreleased
 
+- Fixed: when an assistant asked for two approvals close together (through the local bridge), or the app opened any other dialog while one was waiting, the first request was declined on its own: the assistant got "Not approved" within seconds and you never saw it. Requests now wait their turn and open one at a time; only Decline, Escape, or the five-minute limit declines one.
 - New RelayMiner releases reach your suppliers without waiting for an app update. The app checks the RelayMiner's releases on start and every six hours; when a newer one is out, Windows tells you once, the Dashboard says which servers run an older one, and Suppliers shows "RelayMiner <version> available" with Update stack. Nothing changes until you press it. Update stack downloads the release, checks your configuration with it before anything restarts, and keeps the operator key, the services, and the stake.
 - The Dashboard and Settings, Start here, Updates say when the network's next upgrade is coming: its version, its height, and about when, once the release team has set it. Suppliers set up by this app use the public endpoints and need nothing for it; if this app needs an update for it, it offers one as usual.
 

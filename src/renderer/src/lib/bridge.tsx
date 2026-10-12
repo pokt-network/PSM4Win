@@ -45,10 +45,67 @@ function TokenField({
   )
 }
 
+// Requests wait their turn: one dialog at a time, in the order they came. A request is
+// declined only by Decline, Escape, or main's five-minute expiry, never because another
+// dialog opened: before 0.1.28 a second request, or any dialog the app opened, replaced the
+// first and silently declined it ("Not approved" seconds after the call, no dialog seen).
+const queue: BridgeConfirmRequest[] = []
+/** The request whose dialog is showing, if any. */
+let showing: BridgeConfirmRequest | null = null
+/** Set while the bridge itself closes an expired request, so that is not a decline. */
+let expiring = false
+
+function enqueue(req: BridgeConfirmRequest): void {
+  queue.push(req)
+  if (showing || queue.length > 1) {
+    notify(
+      `An assistant request (${req.tool}) is waiting; it opens after the current dialog.`,
+      'info'
+    )
+  } else if (useModal.getState().open) {
+    notify(
+      `An assistant request (${req.tool}) is waiting; it opens when this dialog closes.`,
+      'info'
+    )
+  }
+  showNext()
+}
+
+/** Opens the oldest waiting request when no dialog is open. */
+function showNext(): void {
+  if (showing || useModal.getState().open) return
+  const req = queue.shift()
+  if (req) showConfirm(req)
+}
+
+function drop(id: string): void {
+  const i = queue.findIndex((r) => r.id === id)
+  if (i >= 0) queue.splice(i, 1)
+}
+
+/** Main gave up on a request (five minutes): forget it, and close its dialog if it is showing. */
+function expire(id: string): void {
+  drop(id)
+  if (showing?.id !== id) return
+  showing = null
+  expiring = true
+  try {
+    closeModal()
+  } finally {
+    expiring = false
+  }
+  notify('The assistant request expired.', 'info')
+}
+
 function showConfirm(req: BridgeConfirmRequest): void {
+  showing = req
   let typed = ''
+  let answered = false
   const reply = (approved: boolean): void => {
+    if (answered) return
+    answered = true
     void window.psm.bridge.reply(req.id, approved)
+    showing = null
     closeModal()
     notify(approved ? `Approved ${req.tool} for the assistant.` : `Declined ${req.tool}.`, 'info')
   }
@@ -90,19 +147,31 @@ function showConfirm(req: BridgeConfirmRequest): void {
       }
     ]
   )
-  // Escape, or another dialog replacing this one, counts as a decline.
-  onModalDismiss(() => void window.psm.bridge.reply(req.id, false))
+  onModalDismiss((reason) => {
+    if (answered || expiring) return
+    showing = null
+    if (reason === 'replaced') {
+      // Another dialog took the window: this request waits and comes back when it closes.
+      queue.unshift(req)
+      notify(`The assistant request (${req.tool}) opens again when this dialog closes.`, 'info')
+    } else {
+      // Escape.
+      answered = true
+      void window.psm.bridge.reply(req.id, false)
+      notify(`Declined ${req.tool}.`, 'info')
+    }
+  })
 }
 
 /** Mounted once in App: wires the bridge events to dialogs, refreshes, and the store. */
 export function BridgeHost(): null {
   useEffect(() => {
-    const offConfirm = window.psm.bridge.onConfirm(showConfirm)
-    const offExpired = window.psm.bridge.onConfirmExpired(() => {
-      if (useModal.getState().open) {
-        closeModal()
-        notify('The assistant request expired.', 'info')
-      }
+    const offConfirm = window.psm.bridge.onConfirm(enqueue)
+    const offExpired = window.psm.bridge.onConfirmExpired(expire)
+    // A waiting request opens as soon as no dialog is open (after the closing one has
+    // finished its own dismiss handling, hence the deferral).
+    const offModal = useModal.subscribe((m, prev) => {
+      if (prev.open && !m.open) window.setTimeout(showNext, 0)
     })
     const offStatus = window.psm.bridge.onStatus((st) => useStore.setState({ bridge: st }))
     const offActivity = window.psm.bridge.onActivity(({ tool, ok }) => {
@@ -117,6 +186,7 @@ export function BridgeHost(): null {
     return () => {
       offConfirm()
       offExpired()
+      offModal()
       offStatus()
       offActivity()
     }
