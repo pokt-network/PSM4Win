@@ -213,6 +213,12 @@ function TheSteps(): React.JSX.Element {
           is not in a session yet and name the block to wait for: that is the pause in step 6, not a
           fault, and the button turns on by itself once the session starts.
         </li>
+        <li>
+          <b>Keep it earning.</b> <Go screen="performance">Performance</Go> shows what each of your
+          suppliers claimed and earned per service. The app also checks every half hour that they
+          are still claiming, and Windows tells you when one stops, with a Restart miner button
+          waiting in Performance. Leave the app running in the system tray so it can keep checking.
+        </li>
       </ol>
       <p>
         On MainNet every spend asks you to type a confirmation first. The Dashboard shows each
@@ -362,7 +368,7 @@ const CHAPTERS: Chapter[] = [
   {
     id: 'steps',
     title: 'The steps',
-    blurb: 'Seven steps, about twenty minutes.',
+    blurb: 'Seven steps, about twenty minutes, then keeping it earning.',
     body: TheSteps
   },
   {

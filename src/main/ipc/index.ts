@@ -28,6 +28,8 @@ import { detectHta, importFromHta } from '../migration/importer'
 import { dataDir } from '../paths'
 import { log } from '../state/log'
 import { bridge } from '../bridge'
+import { performance } from '../performance'
+import { applyPrefs } from '../tray'
 import { updater } from '../update'
 import { resolveConfirmation } from '../bridge/confirm'
 import { serverStatus, addServer, removeServer } from '../bridge/claudeConfig'
@@ -175,8 +177,16 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     const parsed = settingsPatchSchema.safeParse(patch)
     if (!parsed.success)
       return bad('Invalid settings: ' + parsed.error.issues.map((i) => i.path.join('.')).join(', '))
-    return writeSettings(parsed.data as Parameters<typeof writeSettings>[0])
+    const saved = await writeSettings(parsed.data as Parameters<typeof writeSettings>[0])
+    if ('trayEnabled' in parsed.data || 'startWithWindows' in parsed.data)
+      applyPrefs({
+        trayEnabled: saved.trayEnabled !== false,
+        startWithWindows: !!saved.startWithWindows
+      })
+    return saved
   })
+  ipcMain.handle('performance:status', () => performance.status())
+  ipcMain.handle('performance:check', () => performance.check())
   ipcMain.handle('settings:set-window', async (_e, bounds: unknown) => {
     const parsed = windowBoundsSchema.safeParse(bounds)
     if (parsed.success) await writeSettings({ window: parsed.data })

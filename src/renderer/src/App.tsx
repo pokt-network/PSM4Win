@@ -17,6 +17,7 @@ import { CreateScreen } from './screens/Create'
 import { RegisterScreen } from './screens/Register'
 import { StakeScreen } from './screens/Stake'
 import { SupplyScreen } from './screens/Supply'
+import { PerformanceScreen } from './screens/Performance'
 import { DeployScreen } from './screens/Deploy'
 import { ServiceSettingsScreen } from './screens/ServiceSettings'
 import { TestScreen } from './screens/Test'
@@ -31,6 +32,20 @@ export default function App(): React.JSX.Element {
     document.body.className =
       (net === 'main' ? 'net-main' : 'net-beta') + (theme === 'dark' ? ' theme-dark' : '')
   }, [net, theme])
+
+  // The Performance monitor runs in the main process, also while the window is in the tray.
+  useEffect(() => {
+    if (isDemo()) return
+    void window.psm.performance.status().then((perf) => useStore.setState({ perf }))
+    const offStatus = window.psm.performance.onStatus((perf) => useStore.setState({ perf }))
+    const offNav = window.psm.performance.onNavigate((s) => {
+      if (s === 'performance') tab('performance')
+    })
+    return () => {
+      offStatus()
+      offNav()
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -88,6 +103,7 @@ export default function App(): React.JSX.Element {
             {screen === 'register' && <RegisterScreen />}
             {screen === 'stake' && <StakeScreen />}
             {screen === 'supply' && <SupplyScreen />}
+            {screen === 'performance' && <PerformanceScreen />}
             {screen === 'deploy' && <DeployScreen />}
             {screen === 'svcsettings' && <ServiceSettingsScreen />}
             {screen === 'test' && <TestScreen />}

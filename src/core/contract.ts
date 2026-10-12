@@ -139,6 +139,10 @@ export type SupplierStep =
   | 'theirs'
   /** Import, the way back: stop this stack (and the shared Caddy when it serves nothing else). */
   | 'halt'
+  /** Performance, read-only: the miner's state, last height seen, and sessions it opened. */
+  | 'health'
+  /** Performance: restart this stack's miner only (claims and proofs). */
+  | 'restart-miner'
 
 /** One extra public route for supplier-run add-routes: https://<hostname><path>/* to
  *  <service_id>-backend:<port>, prefix stripped. The host is never a request field. */
@@ -457,7 +461,9 @@ export const SUPPLIER_STEP_TIMEOUTS_MS: Record<SupplierStep, number> = {
   'operator-adopt': 180_000,
   'backend-attach': 60_000,
   theirs: 120_000,
-  halt: 120_000
+  halt: 120_000,
+  health: 120_000,
+  'restart-miner': 180_000
 }
 
 /**

@@ -314,8 +314,9 @@ export function OwnerWalletCard(): React.JSX.Element {
 }
 
 export function Nav(): React.JSX.Element {
-  const { screen, navOpen } = useStore()
+  const { screen, navOpen, perf } = useStore()
   const cur = sectionOf(screen)
+  const warn = perf?.warnings ?? 0
   return (
     <div id="nav">
       {NAV.map((s) => {
@@ -329,6 +330,15 @@ export function Nav(): React.JSX.Element {
               onClick={() => (single ? tab(s.screens[0][0]) : navToggle(s.id))}
             >
               {s.label}
+              {s.id === 'performance' && warn ? (
+                <span
+                  className="badge bad"
+                  style={{ marginLeft: 8 }}
+                  title="Suppliers that have stopped claiming"
+                >
+                  {warn}
+                </span>
+              ) : null}
               {single ? null : <span className="chev">&#9654;</span>}
             </a>
             {single ? null : (

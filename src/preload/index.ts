@@ -11,6 +11,7 @@ import {
   type VerifyReport
 } from '../core/contract'
 import type { Settings } from '../main/state/settings'
+import type { PerformanceStatus, StackCheck } from '../main/performance'
 import type { HtaDetection, ImportResult } from '../main/migration/importer'
 import type { BridgeStatus } from '../main/bridge'
 import type { BridgeConfirmRequest } from '../main/bridge/confirm'
@@ -113,6 +114,21 @@ const api = {
       return () => ipcRenderer.removeListener('psm:update-status', l)
     }
   },
+  performance: {
+    status: (): Promise<PerformanceStatus> => ipcRenderer.invoke('performance:status'),
+    check: (): Promise<PerformanceStatus> => ipcRenderer.invoke('performance:check'),
+    onStatus: (cb: (s: PerformanceStatus) => void): (() => void) => {
+      const l = (_e: Electron.IpcRendererEvent, s: PerformanceStatus): void => cb(s)
+      ipcRenderer.on('psm:performance', l)
+      return () => ipcRenderer.removeListener('psm:performance', l)
+    },
+    /** A notification or the tray asked to open a screen. */
+    onNavigate: (cb: (screen: string) => void): (() => void) => {
+      const l = (_e: Electron.IpcRendererEvent, screen: string): void => cb(screen)
+      ipcRenderer.on('psm:navigate', l)
+      return () => ipcRenderer.removeListener('psm:navigate', l)
+    }
+  },
   claudeCode: {
     remoteStatus: (): Promise<RemoteClaudeStatus> => ipcRenderer.invoke('claude:remote-status'),
     addRemote: (): Promise<RemoteClaudeStatus> => ipcRenderer.invoke('claude:remote-add'),
@@ -159,6 +175,8 @@ const api = {
 
 export type {
   Settings,
+  PerformanceStatus,
+  StackCheck,
   HtaDetection,
   ImportResult,
   BridgeStatus,

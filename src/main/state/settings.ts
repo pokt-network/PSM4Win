@@ -50,6 +50,10 @@ export interface Settings {
   /** The local MCP action bridge (docs/ARCHITECTURE.md section 8). Off until enabled. */
   bridgeEnabled?: boolean
   bridgePort?: number
+  /** Keep running in the system tray when the window closes, so Performance keeps watching. Default on. */
+  trayEnabled?: boolean
+  /** Start in the tray when Windows starts. Default off. */
+  startWithWindows?: boolean
 }
 
 export const DEFAULT_SETTINGS: Settings = {

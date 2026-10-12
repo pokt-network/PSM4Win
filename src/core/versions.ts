@@ -11,8 +11,12 @@ export const POCKETD_VERSION = '0.1.35'
  * The supplier stack Provision ships. Relayer and miner run one exact RelayMiner tag
  * (upstream: mixed versions are unsupported, never a moving tag); v0.1.0 refuses Redis
  * below 8.10 and any eviction policy but noeviction. Verified together on 2026-09-28.
+ * v0.1.2 (2026-10-12): v0.1.1 keeps a WebSocket connection to one service; v0.1.2 stops claims
+ * and proofs being lost behind load-balanced nodes (Sauron) and replaces a block subscription
+ * that goes silent (upstream #45, which stopped a MainNet miner from claiming for 8 days).
+ * Both: replace relayer and miner images, no config changes.
  */
-export const RELAYMINER_VERSION = 'v0.1.0'
+export const RELAYMINER_VERSION = 'v0.1.2'
 export const RELAYMINER_IMAGE = `ghcr.io/pokt-network/pocket-relay-miner:${RELAYMINER_VERSION}`
 export const REDIS_IMAGE = 'redis:8.10.1-alpine'
 /**
@@ -20,9 +24,10 @@ export const REDIS_IMAGE = 'redis:8.10.1-alpine'
  * must be provisioned again to get it. 1: up to 0.1.11 (the moving `rc` tag, Redis 8.4);
  * 2: 0.1.12 (pinned images, noeviction, memory limits sized on the server);
  * 3: 0.1.13 (relays validated before they reach the backend: default_validation_mode eager);
- * 4: 0.1.24 (supplier.sh reads, saves, checks, and applies service settings).
+ * 4: 0.1.24 (supplier.sh reads, saves, checks, and applies service settings);
+ * 5: 0.1.27 (RelayMiner v0.1.2; supplier.sh health and restart-miner for Performance).
  */
-export const STACK_LAYOUT = 4
+export const STACK_LAYOUT = 5
 
 /** The relay client used by the Test screen. */
 export const POCKET_AP_IMAGE = 'ghcr.io/pokt-network/pocket-ap:v0.1.2'

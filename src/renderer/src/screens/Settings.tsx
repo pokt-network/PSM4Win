@@ -85,6 +85,7 @@ export function SettingsScreen(): React.JSX.Element {
       {cur === 'start' ? (
         <>
           <ServicesRootPanel />
+          <BackgroundPanel />
           <UpdatesPanel />
           <div className="panel">
             <h2>Welcome message</h2>
@@ -1410,6 +1411,54 @@ function BridgePanel(): React.JSX.Element {
 }
 
 // ---- Updates (Start here) ----
+
+/** Tray and start-with-Windows, so the Performance monitor keeps watching the suppliers. */
+function BackgroundPanel(): React.JSX.Element {
+  const settings = useStore((s) => s.settings)
+  const tray = settings?.trayEnabled !== false
+  const atLogin = !!settings?.startWithWindows
+  const save = async (patch: {
+    trayEnabled?: boolean
+    startWithWindows?: boolean
+  }): Promise<void> => {
+    await saveSettings(patch)
+  }
+  return (
+    <div className="panel" id="bgPanel">
+      <h2>Watching your suppliers</h2>
+      <div className="hint">
+        Every 30 minutes the app checks that your suppliers are claiming what they serve, and shows
+        a Windows notification when one stops (Performance). It can only check while it runs.
+      </div>
+      <div style={{ marginTop: 8 }}>
+        <input
+          type="checkbox"
+          id="bgTray"
+          checked={tray}
+          onChange={(e) => void save({ trayEnabled: e.target.checked })}
+        />{' '}
+        <label htmlFor="bgTray" className="inline">
+          Keep running in the system tray when I close the window
+        </label>
+      </div>
+      <div style={{ marginTop: 6 }}>
+        <input
+          type="checkbox"
+          id="bgLogin"
+          checked={atLogin}
+          disabled={!tray}
+          onChange={(e) => void save({ startWithWindows: e.target.checked })}
+        />{' '}
+        <label htmlFor="bgLogin" className="inline">
+          Start in the tray when Windows starts
+        </label>
+      </div>
+      <div className="hint" style={{ marginTop: 6 }}>
+        To quit the app completely, right-click its icon in the system tray and choose Quit.
+      </div>
+    </div>
+  )
+}
 
 function UpdatesPanel(): React.JSX.Element {
   const u = useStore((s) => s.update)

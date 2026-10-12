@@ -10,6 +10,7 @@ import {
   changesUrl,
   priorityReason,
   summarizeReleases,
+  loginItemPath,
   RELEASES_API,
   type ReleaseInfo,
   DOWNLOAD_PREFIX,
@@ -231,5 +232,23 @@ describe('updater: Scoop hand-off', () => {
       inner.indexOf('scoop update') + 1
     )
     expect(() => scoopUpdateCommandLine('x" & del *')).toThrow()
+  })
+})
+
+describe('loginItemPath (start with Windows)', () => {
+  it('points a Scoop install at its current junction, which survives updates', () => {
+    expect(
+      loginItemPath(
+        'C:\\Users\\x\\scoop\\apps\\pocket-service-manager\\0.1.27\\Pocket Service Manager.exe'
+      )
+    ).toBe('C:\\Users\\x\\scoop\\apps\\pocket-service-manager\\current\\Pocket Service Manager.exe')
+  })
+  it('leaves current, the installer, and the portable copy as they are', () => {
+    for (const p of [
+      'C:\\Users\\x\\scoop\\apps\\pocket-service-manager\\current\\Pocket Service Manager.exe',
+      'C:\\Users\\x\\AppData\\Local\\Programs\\Pocket Service Manager\\Pocket Service Manager.exe',
+      'D:\\tools\\PSM\\Pocket Service Manager.exe'
+    ])
+      expect(loginItemPath(p)).toBe(p)
   })
 })

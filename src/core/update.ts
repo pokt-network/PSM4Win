@@ -219,3 +219,15 @@ export function plainNotes(body: string | null | undefined, max = 800): string |
   if (!t) return null
   return t.length > max ? t.slice(0, max).trimEnd() + '…' : t
 }
+
+/**
+ * The executable start-with-Windows registers. A Scoop install runs from a version folder
+ * (apps\pocket-service-manager\0.1.27\...) that the next update removes; its `current`
+ * junction stays, so the sign-in entry points there and keeps working across updates.
+ */
+export function loginItemPath(execPath: string): string {
+  return execPath.replace(
+    /([\\/]apps[\\/]pocket-service-manager[\\/])\d[^\\/]*([\\/])/i,
+    (_m, a: string, b: string) => `${a}current${b}`
+  )
+}

@@ -23,6 +23,7 @@ export type Screen =
   | 'svcsettings'
   | 'test'
   | 'supply'
+  | 'performance'
   | 'wallets'
   | 'settings'
 export const SCREENS: Screen[] = [
@@ -35,6 +36,7 @@ export const SCREENS: Screen[] = [
   'svcsettings',
   'test',
   'supply',
+  'performance',
   'wallets',
   'settings'
 ]
@@ -152,6 +154,8 @@ export interface State {
   /** Which Settings tab is showing (docs/SCREENS.md 3.11). */
   settingsTab: SettingsTab
   update: UpdateStatus | null
+  /** The Performance monitor's latest pass (main process). */
+  perf: import('../../preload/index').PerformanceStatus | null
   set: (patch: Partial<State> | ((s: State) => Partial<State>)) => void
 }
 
@@ -188,6 +192,7 @@ export const useStore = create<State>((set) => ({
   stk: { id: '', from: 'service-manager', amount: '', fund: '' },
   dep: { id: '', server: '' },
   svs: { id: '', server: '' },
+  perf: null,
   tst: { id: '', wallet: '' },
   supOpen: null,
   impOpen: null,

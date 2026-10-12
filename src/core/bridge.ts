@@ -372,7 +372,7 @@ export const BRIDGE_TOOLS: readonly BridgeTool[] = [
   {
     name: 'psm_supplier_run',
     description:
-      'Run one supplier.sh step on a server: operator (create the operator key there), keys, publish (signs a 1 uPOKT self-transfer; confirmed in the app), start, status, deploy, add-service, remove-service, add-routes (install the extra public routes a service declares in deploy/routes.json: each path on the stack hostname goes to <service_id>-backend:<port> with the prefix stripped), remove-routes.',
+      'Run one supplier.sh step on a server: operator (create the operator key there), keys, publish (signs a 1 uPOKT self-transfer; confirmed in the app), start, status, deploy, add-service, remove-service, add-routes (install the extra public routes a service declares in deploy/routes.json: each path on the stack hostname goes to <service_id>-backend:<port> with the prefix stripped), remove-routes, health (read-only: the state of the miner, the last block it saw, and the sessions it opened in the last 48 hours; psm_status lists suppliers that have stopped claiming).',
     inputSchema: obj(
       {
         server,
@@ -388,7 +388,8 @@ export const BRIDGE_TOOLS: readonly BridgeTool[] = [
             'add-service',
             'remove-service',
             'add-routes',
-            'remove-routes'
+            'remove-routes',
+            'health'
           ]
         },
         network,
@@ -539,7 +540,9 @@ export const BRIDGE_REFUSED_STEPS: readonly string[] = [
   'operator-adopt',
   'backend-attach',
   'theirs',
-  'halt'
+  'halt',
+  // Performance: restarting a miner is done in the app window (product owner, 2026-10-12).
+  'restart-miner'
 ]
 
 /**

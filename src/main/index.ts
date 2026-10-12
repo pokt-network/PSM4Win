@@ -1,7 +1,7 @@
 // Main process entry. Sets the data folder, starts the log, registers IPC, and
 // opens the window. With `--selftest=beta` it runs the phase 1 exit check
 // headless and exits (src/main/selftest.ts).
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, Notification } from 'electron'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { configureAppPaths, dataFiles } from './paths'
 import { initLog, log } from './state/log'
@@ -11,6 +11,9 @@ import { createMainWindow } from './window'
 import { runSelfTest } from './selftest'
 import { bridge } from './bridge'
 import { updater } from './update'
+import { performance } from './performance'
+import { readSettings } from './state/settings'
+import { applyPrefs, hideOnClose, initTray, setTrayWarnings, HIDDEN_ARG } from './tray'
 
 configureAppPaths()
 
@@ -26,12 +29,35 @@ if (!gotLock) {
 } else {
   let mainWindow: BrowserWindow | null = null
 
-  app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore()
-      mainWindow.focus()
+  // The window may be hidden in the tray: a second start, the tray, or a notification shows it.
+  const showWindow = async (): Promise<BrowserWindow> => {
+    if (!mainWindow) {
+      mainWindow = await createMainWindow()
+      watchWindow(mainWindow)
     }
-  })
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
+    mainWindow.focus()
+    return mainWindow
+  }
+  const openPerformance = async (): Promise<void> => {
+    const w = await showWindow()
+    w.webContents.send('psm:navigate', 'performance')
+  }
+  const watchWindow = (w: BrowserWindow): void => {
+    w.on('closed', () => {
+      mainWindow = null
+    })
+    hideOnClose(w, () => {
+      if (!Notification.isSupported()) return
+      new Notification({
+        title: 'Pocket Service Manager is still running',
+        body: 'It keeps watching your suppliers from the system tray. Quit it from the tray icon.'
+      }).show()
+    })
+  }
+
+  app.on('second-instance', () => void showWindow())
 
   app.whenReady().then(async () => {
     initLog(dataFiles.appLog(), is.dev || !!selftestArg)
@@ -76,10 +102,24 @@ if (!gotLock) {
       }, 6000)
       return
     }
-    mainWindow = await createMainWindow()
-    mainWindow.on('closed', () => {
-      mainWindow = null
-    })
+    // Started by Windows at sign-in (Settings, Start with Windows): stay in the tray.
+    mainWindow = await createMainWindow({ hidden: process.argv.includes(HIDDEN_ARG) })
+    if (!smokeMode) {
+      initTray({ open: () => void showWindow(), check: () => void performance.check() })
+      const s = await readSettings()
+      applyPrefs({ trayEnabled: s.trayEnabled !== false, startWithWindows: !!s.startWithWindows })
+      // Hidden with no tray to open it from would leave the app running out of reach.
+      if (s.trayEnabled === false) mainWindow.show()
+      watchWindow(mainWindow)
+      performance.init(
+        (st) => {
+          setTrayWarnings(st.warnings)
+          if (mainWindow && !mainWindow.isDestroyed())
+            mainWindow.webContents.send('psm:performance', st)
+        },
+        () => void openPerformance()
+      )
+    }
     // The local MCP action bridge starts only when Settings enabled it.
     await bridge.init(() => mainWindow)
     // Release checks: 20 s after start, then every six hours, and on demand from Settings.
@@ -112,6 +152,7 @@ if (!gotLock) {
     // phase 3: macOS keeps the app alive until Cmd+Q
     void bridge.stop()
     updater.stop()
+    performance.stop()
     app.quit()
   })
 }

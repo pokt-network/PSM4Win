@@ -271,7 +271,8 @@ export async function supplierRun(
   const out = tail(r.out, 20_000)
   const lines = nonEmptyLines(out)
   const err = lastErrorLine(lines)
-  if (step !== 'operator' && step !== 'keys')
+  // The Performance monitor reads health every 30 minutes; that is not activity worth listing.
+  if (step !== 'operator' && step !== 'keys' && step !== 'health')
     await addHistory({ op: `supplier-${step}`, extra: `host=${conn.target} ${args.join(' ')}` })
   return {
     ok: r.code === 0 && err === '',

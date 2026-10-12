@@ -46,6 +46,11 @@
 #   supplier.sh backend-restart <id> <deploy-root> <health-path> <port> [<port> ...]
 #                                            recreate the service's backend so new settings apply; wait
 #                                            for <health-path> on each port a relayer calls
+#   supplier.sh health [<hours>]             read-only, for Performance: one "health: <json>" line with
+#                                            the miner's and relayer's state, the last block height the
+#                                            miner saw, and the sessions it opened in the last <hours> (48)
+#   supplier.sh restart-miner                restart this stack's miner only (claims and proofs), wait
+#                                            until it leads again
 #
 # The stack's images are pinned in stack.env by the app release that provisioned it
 # (STACK_LAYOUT 2 and later); `start` sizes memory from this server and validates both
@@ -392,7 +397,69 @@ else:
     die("unknown settings mode " + mode)
 PY
 
+# ---- Performance: what the miner did, from its own log ----
+# Reads the miner's log on standard input; argv: miner state "status|started|restarts",
+# relayer status, network. Prints one "health: <json>" line. The miner logs its height when it
+# refreshes its caches (every few blocks) and in each lifecycle check, and one line per
+# session it opens on that session's first relay.
+IFS= read -r -d '' HEALTH_PY <<'PY' || true
+import json, sys
+st, relayer, net = sys.argv[1], sys.argv[2], sys.argv[3]
+status, started, restarts = (st.split("|") + ["", "", "0"])[:3]
+last_h, last_t, leader_t = 0, "", ""
+sessions = {}
+for line in sys.stdin:
+    if not line.startswith("{"):
+        continue
+    try:
+        j = json.loads(line)
+    except Exception:
+        continue
+    t = j.get("time", "")
+    for k in ("current_height", "height"):
+        h = j.get(k)
+        if isinstance(h, int) and h >= last_h:
+            last_h, last_t = h, t
+    m = j.get("message", "")
+    if j.get("replica") == "leader":
+        leader_t = t
+    if m == "session created on first relay" and j.get("session_id"):
+        sessions[j["session_id"]] = {"id": j["session_id"], "service": str(j.get("service", "")), "end": j.get("end_height", 0)}
+out = {
+    "network": net,
+    "miner": {"status": status, "started": started, "restarts": int(restarts or 0)},
+    "relayer": relayer,
+    "last_height": last_h,
+    "last_height_time": last_t,
+    "last_leader_time": leader_t,
+    "sessions": list(sessions.values())[-500:],
+}
+print("health: " + json.dumps(out, separators=(",", ":")))
+PY
+
 case "$step" in
+  health)
+    HOURS="${1:-48}"
+    [[ "$HOURS" =~ ^[0-9]{1,3}$ ]] && [ "$HOURS" -ge 1 ] || { echo "error: bad hours $HOURS"; exit 2; }
+    MST=$(docker inspect -f '{{.State.Status}}|{{.State.StartedAt}}|{{.RestartCount}}' "$PROJECT-miner" 2>/dev/null || echo "missing||0")
+    RST=$(docker inspect -f '{{.State.Status}}' "$PROJECT-relayer" 2>/dev/null || echo missing)
+    docker logs --since "${HOURS}h" "$PROJECT-miner" 2>&1 | python3 -c "$HEALTH_PY" "$MST" "$RST" "$NET"
+    ;;
+  restart-miner)
+    # The miner alone signs claims and proofs; the relayer keeps serving relays throughout.
+    need_pins
+    [ -f "$D/compose.env" ] || size_stack >/dev/null
+    docker inspect "$PROJECT-miner" >/dev/null 2>&1 || { echo "error: $PROJECT-miner does not exist; start the stack first"; exit 1; }
+    dc restart miner 2>&1 | tail -2
+    for i in $(seq 1 45); do
+      sleep 2
+      if docker logs --since 2m "$PROJECT-miner" 2>&1 | grep -q 'leader controller started'; then
+        echo "miner: leading again"; echo "restarted: $PROJECT-miner"; exit 0
+      fi
+    done
+    echo "warning: the miner restarted but has not taken the lead within 90 s; check again in a minute"
+    echo "restarted: $PROJECT-miner"
+    ;;
   prepare)
     mkdir -p "$D/pocket-home" "$CADDY_DIR/sites/routes"
     sudo chown 1025:1025 "$D/pocket-home"

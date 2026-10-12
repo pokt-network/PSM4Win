@@ -69,6 +69,10 @@ Under **Settings, Claude Integration**:
 
 Both work with Claude Code in the Claude desktop app's Code tab and in a terminal.
 
+## Performance
+
+**Performance** in the menu shows, for each of your suppliers, its claims, proofs, and what its settled claims earned per service over the last day, week, or month. Every 30 minutes the app also checks that each supplier is still claiming what it serves. When one stops (its miner stopped or stopped following the network, or it served relays in four sessions in a row and claimed none), Windows shows a notification and Performance offers **Restart miner**. Closing the window keeps the app running in the system tray so it keeps watching; turn that off, or have it start with Windows, under Settings, Start here. Quit it from the tray icon.
+
 ## What the app never does
 
 - It never shows a private key except when you ask for it with a typed confirmation, and never sends one anywhere.

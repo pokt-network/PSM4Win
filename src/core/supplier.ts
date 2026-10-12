@@ -29,7 +29,9 @@ export const SUPPLIER_STEPS: readonly SupplierStep[] = [
   'operator-adopt',
   'backend-attach',
   'theirs',
-  'halt'
+  'halt',
+  'health',
+  'restart-miner'
 ]
 
 /** The step and its validated arguments, or a thrown SignerFailure. */
@@ -46,6 +48,8 @@ export function supplierStepArgs(req: SignerRequests['supplier-run']): {
     case 'start':
     case 'status':
     case 'halt':
+    case 'health':
+    case 'restart-miner':
       break
     case 'publish':
       args.push(requireNetwork(req.network))

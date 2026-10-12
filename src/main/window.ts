@@ -16,6 +16,8 @@ const LCD_HOSTS = [
 export interface WindowOptions {
   /** Screenshot mode: load the renderer with ?demo=1, fixed size, dark, no bounds persistence. */
   demo?: boolean
+  /** Started by Windows at sign-in: load, but stay in the tray until opened. */
+  hidden?: boolean
 }
 
 export async function createMainWindow(opts: WindowOptions = {}): Promise<BrowserWindow> {
@@ -59,7 +61,9 @@ export async function createMainWindow(opts: WindowOptions = {}): Promise<Browse
   }
   if (saved?.maximized) win.maximize()
 
-  win.on('ready-to-show', () => win.show())
+  win.on('ready-to-show', () => {
+    if (!opts.hidden) win.show()
+  })
 
   // Only a small allow-list of navigation and window opening.
   win.webContents.on('will-navigate', (e, url) => {

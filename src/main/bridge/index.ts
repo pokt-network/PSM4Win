@@ -26,6 +26,7 @@ import { hasProvisionedStack, stackNeedsUpdate } from '@core/stack'
 import { service as lcdService } from '@core/lcd'
 import { requestSchemas } from '../ipc/schemas'
 import { signer } from '../signer'
+import { performance } from '../performance'
 import { readSettings, writeSettings, type ServerEntry } from '../state/settings'
 import { readText, writeText, exists } from '../state/files'
 import { dataDir } from '../paths'
@@ -433,6 +434,19 @@ class BridgeService {
         : hasProvisionedStack(s.servers, s.network)
           ? null
           : serverFirstNote(s.network),
+      // The Performance monitor's latest pass: suppliers that have stopped claiming. Restarting
+      // a miner is done in the window (Performance, Restart miner).
+      supplier_warnings: performance
+        .status()
+        .stacks.filter((x) => x.verdict && !x.verdict.ok)
+        .map((x) => ({
+          server: x.server,
+          network: x.network,
+          operator: x.operator,
+          kind: x.verdict!.kind,
+          text: x.verdict!.text,
+          checked_at: x.checkedAt
+        })),
       tools: BRIDGE_TOOLS.map((t) => t.name),
       note: 'Spends and signatures open a confirmation in the app window and wait for the user. Keys and phrases are never available here.'
     }

@@ -42,8 +42,10 @@ export function DashboardScreen(): React.JSX.Element {
     settings,
     servicesRoot,
     history,
-    balance
+    balance,
+    perf
   } = useStore()
+  const notClaiming = (perf?.stacks ?? []).filter((x) => x.verdict && !x.verdict.ok)
   const [rows, setRows] = useState<SupplierRow[] | null>(null)
   const [stakes, setStakes] = useState<Record<string, AppStakeHolder[]>>({})
   const [supply, setSupply] = useState<Record<string, SupplyState>>({})
@@ -105,6 +107,19 @@ export function DashboardScreen(): React.JSX.Element {
 
   return (
     <>
+      {notClaiming.length ? (
+        <div className="warnbox" id="dashNotClaiming">
+          <b>
+            {notClaiming.length === 1
+              ? `${notClaiming[0].server} is not claiming on ${netLabel(notClaiming[0].network)}.`
+              : `${notClaiming.length} suppliers are not claiming.`}
+          </b>{' '}
+          {notClaiming.length === 1
+            ? 'The relays it serves are not being paid.'
+            : 'The relays they serve are not being paid.'}{' '}
+          <a onClick={() => goTo('performance')}>Open Performance</a> to restart the miner.
+        </div>
+      ) : null}
       {needServer ? (
         <div className="warnbox" id="dashNeedServer">
           <b>Next: set up your server.</b> No server is provisioned for {label} yet. Add it under{' '}

@@ -400,6 +400,7 @@ export const NAV: readonly NavSection[] = [
     ]
   },
   { id: 'suppliers', label: 'Suppliers', screens: [['supply', 'Supply service']] },
+  { id: 'performance', label: 'Performance', screens: [['performance', 'Performance']] },
   { id: 'wallets', label: 'Wallets', screens: [['wallets', 'Wallets']] },
   {
     id: 'settings',
