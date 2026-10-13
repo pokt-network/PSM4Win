@@ -2,6 +2,13 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
+## 0.1.29
+
+**Priority update.** In 0.1.28, pressing Update stack updated the server but then failed to save, and every server disappeared from the app until it was restarted. Nothing was deleted: restarting the app brings your servers back. This version fixes it; install it before pressing Update stack.
+
+- Fixed: after Update stack, the app could not save which RelayMiner the server now runs, and the server list went blank until the app was restarted. The update itself on the server had finished. If you pressed Update stack on 0.1.28, your server keeps offering the update; press it once more after installing this version.
+- If the app ever cannot save its settings, it now says why and keeps showing what it had.
+
 ## 0.1.28
 
 - Fixed: when an assistant asked for two approvals close together (through the local bridge), or the app opened any other dialog while one was waiting, the first request was declined on its own: the assistant got "Not approved" within seconds and you never saw it. Requests now wait their turn and open one at a time; only Decline, Escape, or the five-minute limit declines one.
