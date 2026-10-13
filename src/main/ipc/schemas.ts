@@ -3,6 +3,7 @@
 // never take a command string or an argument array from the renderer.
 import { z } from 'zod'
 import type { SignerOp } from '@core/contract'
+import { RELAYMINER_TAG_RE } from '@core/upgrades'
 
 const network = z.enum(['beta', 'main'])
 const empty = z
@@ -202,10 +203,7 @@ export const settingsPatchSchema = z
                 operator: z.string(),
                 provisioned_at: z.string().optional(),
                 layout: z.coerce.number().int().optional(),
-                relayminer: z
-                  .string()
-                  .regex(/^vd{1,4}.d{1,4}.d{1,4}$/)
-                  .optional(),
+                relayminer: z.string().regex(RELAYMINER_TAG_RE).optional(),
                 import: z
                   .object({
                     stage: z.enum(['staged', 'draining', 'switching']),

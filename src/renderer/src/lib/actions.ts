@@ -94,9 +94,16 @@ export async function loadSettings(): Promise<Settings> {
 }
 
 export async function saveSettings(patch: Partial<Settings>): Promise<Settings> {
-  const s = await psm().settings.set(patch)
-  useStore.setState({ settings: s })
-  return s
+  const s = (await psm().settings.set(patch)) as Settings | { ok: false; error: string }
+  // A refused write answers with an error, not settings: keep what the window shows (0.1.28
+  // put the error in its place, and every server vanished from the screens until a restart).
+  if ('ok' in s && s.ok === false) {
+    const msg = `Could not save the settings: ${s.error}`
+    notify(msg, 'err')
+    throw new Error(msg)
+  }
+  useStore.setState({ settings: s as Settings })
+  return s as Settings
 }
 
 // ---- docker ----
