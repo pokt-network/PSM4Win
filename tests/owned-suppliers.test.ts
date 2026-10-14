@@ -9,33 +9,36 @@ const OP_C = 'pokt1' + 'c'.repeat(38)
 
 afterEach(() => vi.unstubAllGlobals())
 
-// ownedSuppliers first asks the indexer which block it has reached, then reads every page as of it.
-const META = { data: { _metadata: { lastProcessedHeight: 964626 } } }
-const AT = '964626'
+// The first page also says which block the indexer has reached; later pages read as of it.
+const H = 964626
+const AT = String(H)
+const withHeight = (data: Record<string, unknown>): Record<string, unknown> => ({
+  ...data,
+  _metadata: { lastProcessedHeight: H }
+})
 
-function answer(body: unknown, ok = true): ReturnType<typeof vi.fn> {
-  const f = vi.fn(async (_url: string, init: { body: string }) => ({
+function answer(
+  body: { data?: Record<string, unknown>; errors?: unknown },
+  ok = true
+): ReturnType<typeof vi.fn> {
+  const f = vi.fn(async () => ({
     ok,
     status: ok ? 200 : 502,
-    json: async () => (init.body.includes('_metadata') ? META : body)
+    json: async () => (body.data ? { ...body, data: withHeight(body.data) } : body)
   }))
   vi.stubGlobal('fetch', f)
   return f
 }
-const listCalls = (f: ReturnType<typeof vi.fn>): { body: string }[] =>
-  f.mock.calls
-    .map((c) => (c as unknown as [string, { body: string }])[1])
-    .filter((i) => !i.body.includes('_metadata'))
 
 describe('ownedSuppliers (indexer)', () => {
   it('asks the network indexer for the owner, passing the address as a variable', async () => {
     const f = answer({ data: { suppliers: { nodes: [] } } })
     await ownedSuppliers('main', OWNER)
-    const [url, init] = f.mock.calls[1] as unknown as [string, { method: string; body: string }]
+    const [url, init] = f.mock.calls[0] as unknown as [string, { method: string; body: string }]
     expect(url).toBe(NETWORK_INFO.main.indexer)
     expect(init.method).toBe('POST')
     const body = JSON.parse(init.body)
-    expect(body.variables).toEqual({ owner: OWNER, after: '', at: AT })
+    expect(body.variables).toEqual({ owner: OWNER, after: '' })
     expect(body.query).not.toContain(OWNER)
   })
   it('keeps staked and unstaking suppliers, drops unstaked ones', async () => {
@@ -59,9 +62,8 @@ describe('ownedSuppliers (indexer)', () => {
   it('leaves unstaked suppliers out on the server, in a stable order', async () => {
     const f = answer({ data: { suppliers: { totalCount: 0, nodes: [] } } })
     await ownedSuppliers('main', OWNER)
-    const body = JSON.parse(listCalls(f)[0].body)
+    const body = JSON.parse((f.mock.calls[0] as unknown as [string, { body: string }])[1].body)
     expect(body.query).toContain('stakeStatus: { notEqualTo: Unstaked }')
-    expect(body.query).toContain('blockHeight: $at')
     expect(body.query).toContain('orderBy: ID_ASC')
     expect(body.query).toContain('id: { greaterThan: $after }')
   })
@@ -76,7 +78,6 @@ describe('ownedSuppliers (indexer)', () => {
       Array.from({ length: 37 }, (_, i) => node(1000 + i))
     ]
     const f = vi.fn(async (_url: string, init: { body: string }) => {
-      if (init.body.includes('_metadata')) return { ok: true, status: 200, json: async () => META }
       // Keyset: the second page is whatever follows the last address of the first.
       const { after } = JSON.parse(init.body).variables
       const page = after === '' ? pages[0] : pages[1].filter((n) => n.id > after)
@@ -84,16 +85,18 @@ describe('ownedSuppliers (indexer)', () => {
       return {
         ok: true,
         status: 200,
-        json: async () => ({ data: { suppliers: { totalCount: rest, nodes: page } } })
+        json: async () => ({ data: withHeight({ suppliers: { totalCount: rest, nodes: page } }) })
       }
     })
     vi.stubGlobal('fetch', f)
     const got = await ownedSuppliers('main', OWNER)
-    expect(f).toHaveBeenCalledTimes(3)
-    const vars = listCalls(f).map((i) => JSON.parse(i.body).variables)
-    expect(vars.map((v) => v.after)).toEqual(['', pages[0][999].id])
-    // Both pages read the indexer as of the same block.
-    expect(vars.map((v) => v.at)).toEqual([AT, AT])
+    expect(f).toHaveBeenCalledTimes(2)
+    const reads = f.mock.calls.map((c) => JSON.parse(c[1].body))
+    expect(reads.map((r) => r.variables.after)).toEqual(['', pages[0][999].id])
+    // The first page asks which block the indexer reached; the next reads as of that block.
+    expect(reads[0].query).toContain('_metadata { lastProcessedHeight }')
+    expect(reads.map((r) => r.variables.at)).toEqual([undefined, AT])
+    expect(reads[1].query).toContain('blockHeight: $at')
     expect(got).toHaveLength(1037)
     expect(new Set(got.map((g) => g.operator)).size).toBe(1037)
   })
@@ -104,18 +107,19 @@ describe('ownedSuppliers (indexer)', () => {
       stakeAmount: '1'
     }))
     const f = vi.fn(async (_url: string, init: { body: string }) => {
-      if (init.body.includes('_metadata')) return { ok: true, status: 200, json: async () => META }
       const { after } = JSON.parse(init.body).variables
       const rest = after === '' ? page : []
       return {
         ok: true,
         status: 200,
-        json: async () => ({ data: { suppliers: { totalCount: rest.length, nodes: rest } } })
+        json: async () => ({
+          data: withHeight({ suppliers: { totalCount: rest.length, nodes: rest } })
+        })
       }
     })
     vi.stubGlobal('fetch', f)
     const got = await ownedSuppliers('main', OWNER)
-    expect(f).toHaveBeenCalledTimes(2)
+    expect(f).toHaveBeenCalledTimes(1)
     expect(got).toHaveLength(1000)
   })
   it('keeps reading when the indexer answers fewer rows per page than it was asked for', async () => {
@@ -125,20 +129,19 @@ describe('ownedSuppliers (indexer)', () => {
       stakeAmount: '1'
     }))
     const f = vi.fn(async (_url: string, init: { body: string }) => {
-      if (init.body.includes('_metadata')) return { ok: true, status: 200, json: async () => META }
       const { after } = JSON.parse(init.body).variables
       const rest = all.filter((n) => n.id > after)
       return {
         ok: true,
         status: 200,
         json: async () => ({
-          data: { suppliers: { totalCount: rest.length, nodes: rest.slice(0, 500) } }
+          data: withHeight({ suppliers: { totalCount: rest.length, nodes: rest.slice(0, 500) } })
         })
       }
     })
     vi.stubGlobal('fetch', f)
     const got = await ownedSuppliers('main', OWNER)
-    expect(f).toHaveBeenCalledTimes(4)
+    expect(f).toHaveBeenCalledTimes(3)
     expect(got.map((g) => g.operator)).toEqual(all.map((n) => n.id))
   })
   it('stops with an error when the indexer hands back the same page instead of the next', async () => {
@@ -150,23 +153,22 @@ describe('ownedSuppliers (indexer)', () => {
     // An indexer that ignores the cursor: always the first rows, always more remaining.
     const f = answer({ data: { suppliers: { totalCount: 1037, nodes: page } } })
     await expect(ownedSuppliers('main', OWNER)).rejects.toThrow('did not move on')
-    expect(f).toHaveBeenCalledTimes(3)
+    expect(f).toHaveBeenCalledTimes(2)
   })
   it('gives up after a bounded number of pages rather than reading forever', async () => {
     let n = 0
-    const f = vi.fn(async (_url: string, init: { body: string }) => {
-      if (init.body.includes('_metadata')) return { ok: true, status: 200, json: async () => META }
+    const f = vi.fn(async () => {
       const id = 'pokt1' + String(n++).padStart(38, '0')
       return {
         ok: true,
         status: 200,
         json: async () => ({
-          data: {
+          data: withHeight({
             suppliers: {
               totalCount: 1_000_000,
               nodes: [{ id, stakeStatus: 'Staked', stakeAmount: '1' }]
             }
-          }
+          })
         })
       }
     })
@@ -174,24 +176,35 @@ describe('ownedSuppliers (indexer)', () => {
     await expect(ownedSuppliers('main', OWNER)).rejects.toThrow(
       `after ${OWNED_SUPPLIERS_MAX_PAGES} pages`
     )
-    expect(f).toHaveBeenCalledTimes(OWNED_SUPPLIERS_MAX_PAGES + 1)
+    expect(f).toHaveBeenCalledTimes(OWNED_SUPPLIERS_MAX_PAGES)
   })
   it('stops with an error when the rows read do not add up to what the indexer counted', async () => {
     // The first page counts two suppliers and lists one; the next says nothing follows it.
     const f = vi.fn(async (_url: string, init: { body: string }) => {
-      if (init.body.includes('_metadata')) return { ok: true, status: 200, json: async () => META }
       const { after } = JSON.parse(init.body).variables
       const suppliers =
         after === ''
           ? { totalCount: 2, nodes: [{ id: OP_A, stakeStatus: 'Staked', stakeAmount: '1' }] }
           : { totalCount: 0, nodes: [] }
-      return { ok: true, status: 200, json: async () => ({ data: { suppliers } }) }
+      return { ok: true, status: 200, json: async () => ({ data: withHeight({ suppliers }) }) }
     })
     vi.stubGlobal('fetch', f)
     await expect(ownedSuppliers('main', OWNER)).rejects.toThrow('counted 2 suppliers but listed 1')
   })
-  it('reports an indexer that does not say which block it has reached', async () => {
-    const f = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ data: {} }) }))
+  it('needs the block the indexer reached only to read a second page', async () => {
+    const node = { id: OP_A, stakeStatus: 'Staked', stakeAmount: '1' }
+    let f = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: { suppliers: { totalCount: 1, nodes: [node] } } })
+    }))
+    vi.stubGlobal('fetch', f)
+    expect(await ownedSuppliers('main', OWNER)).toHaveLength(1)
+    f = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: { suppliers: { totalCount: 2, nodes: [node] } } })
+    }))
     vi.stubGlobal('fetch', f)
     await expect(ownedSuppliers('main', OWNER)).rejects.toThrow('which block')
     expect(f).toHaveBeenCalledTimes(1)

@@ -5,7 +5,7 @@ import {
   claimWindowClose,
   claimsFromEnd,
   claimedSessions,
-  claimsCreated,
+  claimsBySupplier,
   supplierActivity,
   type MinerHealth,
   type ClaimParams
@@ -187,49 +187,53 @@ describe('indexer reads', () => {
       .filter((c) => c.query.includes('rowLimit: $n'))
       .map((c) => c.variables)
 
-  it('counts the claims of every supplier in reads of 20, each with its own answer', async () => {
-    const ops = Array.from({ length: 23 }, (_, i) => 'pokt1' + String(i).padStart(38, '0'))
-    const f = answer((_q, v) => ({
-      data: {
-        c: (v.op as string[]).map((o, i) => ({
-          supplierId: o,
-          claims: String(i),
-          firstHeight: null
-        }))
-      }
-    }))
-    const m = await claimsCreated('main', [...ops, ops[0]], '2026-10-05T00:00:00Z')
-    expect(calls(f).map((c) => (c.variables.op as string[]).length)).toEqual([20, 3])
-    expect(calls(f)[0].variables.t).toBe('2026-10-05T00:00:00Z')
-    expect(calls(f)[0].query).toContain('getCreatedClaimsCountList')
-    expect(m.get(ops[0])).toEqual({ claims: 0, error: '' })
-    expect(m.get(ops[21])).toEqual({ claims: 1, error: '' })
+  /** A claims read: the count for the batch, and each supplier's newest claim as l<k>. */
+  const claimsAnswer = (op: string[], count = (i: number) => String(i)): unknown => ({
+    data: {
+      c: op.map((o, i) => ({ supplierId: o, claims: count(i) })),
+      ...Object.fromEntries(op.map((_, k) => [`l${k}`, claims(961390 - k, 1)]))
+    }
   })
-  it('keeps the other suppliers counted when one is bad, left out, or in a read that failed', async () => {
+  it('reads the claims count and newest claim of every supplier in one read per 20', async () => {
+    const ops = Array.from({ length: 23 }, (_, i) => 'pokt1' + String(i).padStart(38, '0'))
+    const f = answer((_q, v) => claimsAnswer(v.op as string[]))
+    const m = await claimsBySupplier('main', [...ops, ops[0]], '2026-10-05T00:00:00Z')
+    expect(calls(f).map((c) => (c.variables.op as string[]).length)).toEqual([20, 3])
+    const first = calls(f)[0]
+    expect(first.variables.t).toBe('2026-10-05T00:00:00Z')
+    expect(first.variables.o19).toEqual([ops[19]])
+    expect(first.query).toContain('getCreatedClaimsCountList(suppliers: $op, rangeStart: $t)')
+    expect(first.query).toContain('l19: getCreatedClaimsList(suppliers: $o19, rowLimit: 1)')
+    const last = { time: 'T961390', sessionEnd: 961378, service: 'svc961390' }
+    expect(m.get(ops[0])).toEqual({ claims: 0, lastClaim: last, error: '' })
+    expect(m.get(ops[21])).toEqual({
+      claims: 1,
+      lastClaim: { ...last, time: 'T961389', sessionEnd: 961377, service: 'svc961389' },
+      error: ''
+    })
+  })
+  it('keeps the other suppliers when one is bad, left out, or in a read that failed', async () => {
     const ops = Array.from({ length: 21 }, (_, i) => 'pokt1' + String(i).padStart(38, '0'))
     const f = answer((_q, v) => {
       const op = v.op as string[]
-      // The second read (one supplier) fails; the first leaves ops[1] out.
+      // The second read (one supplier) fails; the first leaves ops[1] out of the count.
       if (op.length === 1) return { errors: [{ message: 'boom' }] }
-      return {
-        data: { c: op.filter((o) => o !== ops[1]).map((o) => ({ supplierId: o, claims: '7' })) }
-      }
+      const a = claimsAnswer(op, () => '7') as { data: { c: { supplierId: string }[] } }
+      a.data.c = a.data.c.filter((r) => r.supplierId !== ops[1])
+      return a
     })
-    const m = await claimsCreated('main', ['x', ...ops], 't')
+    const m = await claimsBySupplier('main', ['x', ...ops], 't')
     // The bad address is never sent.
     expect(calls(f).flatMap((c) => c.variables.op as string[])).not.toContain('x')
-    expect(m.get('x')).toEqual({ claims: null, error: 'not an operator address' })
-    expect(m.get(ops[0])).toEqual({ claims: 7, error: '' })
-    expect(m.get(ops[1])).toEqual({ claims: null, error: 'the indexer did not count its claims' })
-    expect(m.get(ops[20])).toEqual({ claims: null, error: 'the indexer answered: boom' })
+    const fail = (error: string): unknown => ({ claims: null, lastClaim: null, error })
+    expect(m.get('x')).toEqual(fail('not an operator address'))
+    expect(m.get(ops[0])?.claims).toBe(7)
+    expect(m.get(ops[1])).toEqual(fail('the indexer did not count its claims'))
+    expect(m.get(ops[20])).toEqual(fail('the indexer answered: boom'))
   })
-  it('reads settlements and earnings per service in one read, with the newest claim ever', async () => {
-    const f = answer((q) =>
-      q.includes('getSupplierProofsJson') ? settlements() : { data: { last: claims(961390, 1) } }
-    )
+  it('reads settlements and earnings per service in one read', async () => {
+    const f = answer(() => settlements())
     expect(await supplierActivity('main', OP, '2026-10-05T00:00:00Z')).toEqual({
-      lastClaim: { time: 'T961390', sessionEnd: 961378, service: 'svc961390' },
-      lastClaimError: '',
       proofs: 1,
       settled: 67,
       expired: 3,
@@ -241,44 +245,15 @@ describe('indexer reads', () => {
       covered: true,
       settlementsError: ''
     })
-    expect(f).toHaveBeenCalledTimes(2)
-    expect(calls(f).find((c) => c.query.includes('getSupplierProofsJson'))?.query).toContain(
+    expect(f).toHaveBeenCalledTimes(1)
+    expect(calls(f)[0].query).toContain(
       'getSupplierEarningsJson(suppliers: $op, rangeStart: $t, byService: true)'
     )
-    expect(calls(f).find((c) => c.query.includes('getSupplierProofsJson'))?.variables).toEqual({
-      op: [OP],
-      t: '2026-10-05T00:00:00Z'
-    })
-    expect(calls(f).find((c) => c.query.includes('rowLimit: 1'))?.variables).toEqual({ op: [OP] })
-  })
-  it('keeps the settlements when the last claim cannot be read, and the reverse', async () => {
-    answer((q) =>
-      q.includes('getSupplierProofsJson')
-        ? { errors: [{ message: 'boom' }] }
-        : { data: { last: claims(961390, 1) } }
-    )
-    let a = await supplierActivity('main', OP, '2026-10-05T00:00:00Z')
-    expect([a.lastClaim?.sessionEnd, a.lastClaimError, a.settlementsError]).toEqual([
-      961378,
-      '',
-      'the indexer answered: boom'
-    ])
-    answer((q) =>
-      q.includes('getSupplierProofsJson') ? settlements() : { errors: [{ message: 'boom' }] }
-    )
-    a = await supplierActivity('main', OP, '2026-10-05T00:00:00Z')
-    expect([a.settled, a.settlementsError, a.lastClaim, a.lastClaimError]).toEqual([
-      67,
-      '',
-      null,
-      'the indexer answered: boom'
-    ])
+    expect(calls(f)[0].variables).toEqual({ op: [OP], t: '2026-10-05T00:00:00Z' })
   })
   it('takes a window covered up to the block before the newest as covered', async () => {
     const oneBehind = { ...range, covered_to: '2026-10-14T16:46:14.500001+00:00' }
-    answer((q) =>
-      q.includes('getSupplierProofsJson') ? settlements(oneBehind) : { data: { last: [] } }
-    )
+    answer(() => settlements(oneBehind))
     expect((await supplierActivity('main', OP, '2026-10-05T00:00:00Z')).covered).toBe(true)
   })
   it('says a window the indexer does not cover whole is not known yet, not zero', async () => {
@@ -288,48 +263,38 @@ describe('indexer reads', () => {
     const gap = { ...range, gaps: [{ from: 'a', to: 'b' }] }
     const none = { ...range, covered_from: null, covered_to: null }
     for (const r of [lagging, late, gap, none]) {
-      answer((q) => (q.includes('getSupplierProofsJson') ? settlements(r) : { data: { last: [] } }))
+      answer(() => settlements(r))
       expect((await supplierActivity('main', OP, '2026-10-05T00:00:00Z')).covered).toBe(false)
     }
   })
-  it('reads the monitor claims from the time of the first session end, in small pages', async () => {
-    const f = answer((q) =>
-      q.includes('block(id')
-        ? { data: { b: { timestamp: '2026-10-14T10:00:00' } } }
-        : { data: { c: claims(2000, 200) } }
-    )
+  it('reads the monitor claims in one request when its first page reaches the first session end', async () => {
+    const f = answer(() => ({ data: { c: claims(2000, 200) } }))
     const c = await claimedSessions('main', OP, 1850)
-    expect(calls(f)[0].variables).toEqual({ h: '1850' })
     // One page: its oldest claim (height 1801) already predates session end 1850.
-    expect(pages(f)).toEqual([
-      { op: [OP], t: '2026-10-14T09:59:00.000Z', n: 200, h: null, id: null }
-    ])
+    expect(f).toHaveBeenCalledTimes(1)
+    expect(pages(f)).toEqual([{ op: [OP], n: 200, h: null, id: null }])
     expect(c.complete).toBe(true)
     expect(c.sessions.size).toBe(139)
     expect(c.sessions.has(sid(1862))).toBe(true)
     expect(c.sessions.has(sid(1861))).toBe(false)
   })
   it('reads monitor claims until an empty page, each page after the last row of the one before', async () => {
-    const f = answer((q, v) =>
-      q.includes('block(id')
-        ? { data: { b: null } }
-        : { data: { c: !v.h ? claims(5000, 150) : v.h === '4851' ? claims(4850, 5) : [] } }
-    )
+    const f = answer((_q, v) => ({
+      data: { c: !v.h ? claims(5000, 150) : v.h === '4851' ? claims(4850, 5) : [] }
+    }))
     const c = await claimedSessions('main', OP, 1)
-    // A page shorter than asked (150 of 200) is not the end; with no block time, no range.
-    expect(pages(f).map((v) => [v.t, v.h, v.id])).toEqual([
-      [null, null, null],
-      [null, '4851', 'tx4851-1'],
-      [null, '4846', 'tx4846-1']
+    // A page shorter than asked (150 of 200) is not the end.
+    expect(pages(f).map((v) => [v.h, v.id])).toEqual([
+      [null, null],
+      ['4851', 'tx4851-1'],
+      ['4846', 'tx4846-1']
     ])
     expect(c).toEqual(expect.objectContaining({ complete: true }))
     expect(c.sessions.size).toBe(155)
   })
   it('says when the monitor could not read every claim, keeping the newest', async () => {
     let top = 10_000_000
-    answer((q) =>
-      q.includes('block(id') ? { data: { b: null } } : { data: { c: claims((top -= 200), 200) } }
-    )
+    answer(() => ({ data: { c: claims((top -= 200), 200) } }))
     const c = await claimedSessions('main', OP, 1)
     expect(c.complete).toBe(false)
     expect(c.sessions.size).toBe(10_000)
@@ -338,14 +303,13 @@ describe('indexer reads', () => {
     await expect(supplierActivity('main', 'x', 't')).rejects.toThrow(/not an operator/)
     answer(() => ({ errors: [{ message: 'boom' }] }))
     await expect(claimedSessions('main', OP, 1)).rejects.toThrow('boom')
-    expect((await claimsCreated('main', [OP], 't')).get(OP)).toEqual({
+    expect((await claimsBySupplier('main', [OP], 't')).get(OP)).toEqual({
       claims: null,
+      lastClaim: null,
       error: 'the indexer answered: boom'
     })
-    const a = await supplierActivity('main', OP, 't')
-    expect([a.lastClaimError, a.settlementsError]).toEqual([
-      'the indexer answered: boom',
+    expect((await supplierActivity('main', OP, 't')).settlementsError).toBe(
       'the indexer answered: boom'
-    ])
+    )
   })
 })

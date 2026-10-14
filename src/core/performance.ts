@@ -2,23 +2,8 @@
 // network's indexer, and whether a supplier's miner has stopped claiming, judged from what the
 // stack's own miner logged (supplier.sh health) against the claims that reached the chain.
 // No Electron, no DOM: the screen and the main-process monitor both use it.
-import { NETWORK_INFO, type Network } from './networks'
-import { params } from './lcd'
-
-/** One indexer read; throws on HTTP and GraphQL errors so a gap is never shown as zero. */
-async function gql<T>(net: Network, query: string, variables: Record<string, unknown>): Promise<T> {
-  const res = await fetch(NETWORK_INFO[net].indexer, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ query, variables }),
-    signal: AbortSignal.timeout(30_000)
-  })
-  if (!res.ok) throw new Error(`HTTP ${res.status} from the indexer`)
-  const j = (await res.json()) as { data?: T; errors?: { message: string }[] }
-  if (j.errors?.length) throw new Error(`the indexer answered: ${j.errors[0].message}`)
-  if (!j.data) throw new Error('the indexer answered nothing')
-  return j.data
-}
+import { type Network } from './networks'
+import { params, gql } from './lcd'
 
 const OP_RE = /^pokt1[0-9a-z]{38}$/
 
@@ -38,7 +23,7 @@ interface CreatedClaim {
 const CLAIM_FIELDS = 'height id sessionId sessionEndHeight serviceId blockTime'
 
 /**
- * The claims a supplier made on chain (MsgCreateClaim), newest first, since a time or ever,
+ * The claims a supplier made on chain (MsgCreateClaim), newest first,
  * read `pageRows` at a time, each page after the last row of the one before, until a page comes
  * back empty (a short page is not taken as the end: the indexer may serve fewer rows than
  * asked) or `enough` says the oldest row read is far enough back. `complete` is false when it
@@ -47,7 +32,6 @@ const CLAIM_FIELDS = 'height id sessionId sessionEndHeight serviceId blockTime'
 async function createdClaims(
   net: Network,
   operator: string,
-  sinceIso: string | null,
   pageRows: number,
   enough: (oldest: CreatedClaim) => boolean = () => false
 ): Promise<{ rows: CreatedClaim[]; complete: boolean }> {
@@ -56,12 +40,11 @@ async function createdClaims(
   for (let page = 0; page < CLAIMS_MAX_PAGES; page++) {
     const d: { c: CreatedClaim[] } = await gql(
       net,
-      `query($op: [String]!, $t: Datetime, $n: Int!, $h: BigInt, $id: String) {
-        c: getCreatedClaimsList(suppliers: $op, rangeStart: $t, rowLimit: $n, beforeHeight: $h, beforeId: $id) { ${CLAIM_FIELDS} }
+      `query($op: [String]!, $n: Int!, $h: BigInt, $id: String) {
+        c: getCreatedClaimsList(suppliers: $op, rowLimit: $n, beforeHeight: $h, beforeId: $id) { ${CLAIM_FIELDS} }
       }`,
       {
         op: [operator],
-        t: sinceIso,
         n: pageRows,
         h: before?.height ?? null,
         id: before?.id ?? null
@@ -84,65 +67,61 @@ const lastOf = (c: CreatedClaim): LastClaim => ({
 /** Suppliers the indexer counts claims for per call at most. */
 const COUNT_BATCH = 20
 
-/** A supplier's claims count, or why it could not be read. */
-export type ClaimsCount = { claims: number; error: '' } | { claims: null; error: string }
+/** A supplier's claims in a window and its newest claim ever, or why they could not be read. */
+export type SupplierClaims =
+  | { claims: number; lastClaim: LastClaim | null; error: '' }
+  | { claims: null; lastClaim: null; error: string }
 
 /**
- * The claims each supplier made on chain since a time, 20 suppliers a read. Each supplier gets
- * its own answer: a bad address, a read that failed, or a supplier the indexer left out is an
- * error for that supplier alone, never 0.
+ * The claims each supplier made on chain since a time, and its newest claim ever: one read per
+ * 20 suppliers (the count for all of them and each one's newest claim in one document). Each
+ * supplier gets its own answer: a bad address, a read that failed, or a supplier the indexer
+ * left out is an error for that supplier alone, never 0.
  */
-export async function claimsCreated(
+export async function claimsBySupplier(
   net: Network,
   operators: string[],
   sinceIso: string
-): Promise<Map<string, ClaimsCount>> {
-  const out = new Map<string, ClaimsCount>()
+): Promise<Map<string, SupplierClaims>> {
+  const out = new Map<string, SupplierClaims>()
+  const fail = (error: string): SupplierClaims => ({ claims: null, lastClaim: null, error })
   const ops: string[] = []
   for (const o of new Set(operators))
     if (OP_RE.test(o)) ops.push(o)
-    else out.set(o, { claims: null, error: 'not an operator address' })
+    else out.set(o, fail('not an operator address'))
   const batches = Array.from({ length: Math.ceil(ops.length / COUNT_BATCH) }, (_, i) =>
     ops.slice(i * COUNT_BATCH, (i + 1) * COUNT_BATCH)
   )
   const answers = await Promise.allSettled(
     batches.map((b) =>
-      gql<{ c: { supplierId: string; claims: string }[] }>(
+      gql<{ c: { supplierId: string; claims: string }[] } & Record<string, CreatedClaim[]>>(
         net,
-        `query($op: [String]!, $t: Datetime!) {
+        `query($op: [String]!, $t: Datetime!, ${b.map((_, k) => `$o${k}: [String]!`).join(', ')}) {
           c: getCreatedClaimsCountList(suppliers: $op, rangeStart: $t) { supplierId claims }
+          ${b.map((_, k) => `l${k}: getCreatedClaimsList(suppliers: $o${k}, rowLimit: 1) { ${CLAIM_FIELDS} }`).join('\n')}
         }`,
-        { op: b, t: sinceIso }
+        { op: b, t: sinceIso, ...Object.fromEntries(b.map((o, k) => [`o${k}`, [o]])) }
       )
     )
   )
   answers.forEach((a, i) => {
-    const got = new Map(
-      a.status === 'fulfilled' ? a.value.c.map((r) => [r.supplierId, Number(r.claims) || 0]) : []
-    )
-    for (const o of batches[i]) {
+    if (a.status === 'rejected') {
+      for (const o of batches[i]) out.set(o, fail(why(a.reason)))
+      return
+    }
+    const got = new Map(a.value.c.map((r) => [r.supplierId, Number(r.claims) || 0]))
+    batches[i].forEach((o, k) => {
       const n = got.get(o)
+      const l = a.value[`l${k}`]?.[0]
       out.set(
         o,
-        a.status === 'rejected'
-          ? { claims: null, error: why(a.reason) }
-          : n === undefined
-            ? { claims: null, error: 'the indexer did not count its claims' }
-            : { claims: n, error: '' }
+        n === undefined
+          ? fail('the indexer did not count its claims')
+          : { claims: n, lastClaim: l ? lastOf(l) : null, error: '' }
       )
-    }
+    })
   })
   return out
-}
-
-/** The newest claim a supplier made, at any time. */
-async function newestClaim(net: Network, operator: string): Promise<LastClaim | null> {
-  const d = await gql<{ last: CreatedClaim[] }>(
-    net,
-    `query($op: [String]!) { last: getCreatedClaimsList(suppliers: $op, rowLimit: 1) { ${CLAIM_FIELDS} } }`,
-    { op: [operator] }
-  )
-  return d.last[0] ? lastOf(d.last[0]) : null
 }
 
 /** One row of an indexer `...Json` function: snake_case columns, every number a string. */
@@ -237,10 +216,6 @@ async function settlementsSince(
 }
 
 export interface SupplierActivity {
-  /** The newest claim this supplier made, at any time. */
-  lastClaim: LastClaim | null
-  /** Why the last claim could not be read; empty when it was. */
-  lastClaimError: string
   proofs: number
   settled: number
   /** Claims the network expired (their rewards are lost), by reason. */
@@ -260,9 +235,9 @@ export interface SupplierActivity {
 const why = (e: unknown): string => (e instanceof Error ? e.message : String(e))
 
 /**
- * Proofs, settlements, and expirations since a time, plus the newest claim ever (the claims
- * made are counted for every supplier at once by claimsCreated). The two are read apart, so
- * one failing leaves the other, with its error said.
+ * Proofs, settlements, expirations, and earnings per service since a time, in one read (the
+ * claims are read for every supplier at once by claimsBySupplier). A failed read is said in
+ * `settlementsError`, not shown as zeros.
  */
 export async function supplierActivity(
   net: Network,
@@ -270,24 +245,18 @@ export async function supplierActivity(
   sinceIso: string
 ): Promise<SupplierActivity> {
   if (!OP_RE.test(operator)) throw new Error('not an operator address')
-  const [c, s] = await Promise.allSettled([
-    newestClaim(net, operator),
-    settlementsSince(net, operator, sinceIso)
-  ])
-  return {
-    lastClaim: c.status === 'fulfilled' ? c.value : null,
-    lastClaimError: c.status === 'rejected' ? why(c.reason) : '',
-    ...(s.status === 'fulfilled'
-      ? { ...s.value, settlementsError: '' }
-      : {
-          proofs: 0,
-          settled: 0,
-          expired: 0,
-          expiredReasons: {},
-          earnings: [],
-          covered: false,
-          settlementsError: why(s.reason)
-        })
+  try {
+    return { ...(await settlementsSince(net, operator, sinceIso)), settlementsError: '' }
+  } catch (e) {
+    return {
+      proofs: 0,
+      settled: 0,
+      expired: 0,
+      expiredReasons: {},
+      earnings: [],
+      covered: false,
+      settlementsError: why(e)
+    }
   }
 }
 
@@ -313,22 +282,11 @@ export async function claimedSessions(
   fromEnd: number
 ): Promise<{ sessions: Set<string>; complete: boolean }> {
   if (!OP_RE.test(operator)) throw new Error('not an operator address')
-  // A claim lands after its session ends: the read starts at that block's time (a minute
-  // early, so a clock that stepped back loses nothing), and once a claim's own height is at
-  // or below fromEnd every older one is for a session that ended before it.
-  const b = await gql<{ b: { timestamp: string } | null }>(
-    net,
-    'query($h: BigFloat!) { b: block(id: $h) { timestamp } }',
-    { h: String(fromEnd) }
-  )
-  const since = b.b ? new Date(utc(b.b.timestamp) - 60_000).toISOString() : null
-  const c = await createdClaims(
-    net,
-    operator,
-    since,
-    MONITOR_PAGE,
-    (o) => Number(o.height) <= fromEnd
-  )
+  // A claim lands after its session ends, so once a claim's own height is at or below fromEnd
+  // every older one is for a session that ended before it: the read stops there, usually on
+  // its first page, in one request as before. (Starting it at fromEnd's time would cost a
+  // request to look that time up and still need a page to see past it.)
+  const c = await createdClaims(net, operator, MONITOR_PAGE, (o) => Number(o.height) <= fromEnd)
   return {
     sessions: new Set(
       c.rows.filter((x) => Number(x.sessionEndHeight) >= fromEnd).map((x) => x.sessionId)

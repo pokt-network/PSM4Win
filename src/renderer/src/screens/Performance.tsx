@@ -6,7 +6,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import type { Network } from '@core/networks'
 import { fmtPokt, fmtInt, fmtDuration } from '@core/format'
-import { supplierActivity, claimsCreated, type SupplierActivity } from '@core/performance'
+import {
+  supplierActivity,
+  claimsBySupplier,
+  type SupplierActivity,
+  type SupplierClaims
+} from '@core/performance'
 import type { StackCheck } from '../../../preload/index'
 import {
   Badge,
@@ -34,9 +39,8 @@ type WindowId = (typeof WINDOWS)[number]['id']
 interface Row {
   server: ServerEntry
   operator: string
-  /** Claims made in the window, counted for every supplier in one read; null when it failed. */
-  claims: number | null
-  claimsError: string
+  /** Claims made in the window and the newest claim, read for every supplier at once. */
+  claims: SupplierClaims
   activity: SupplierActivity | null
   error: string
 }
@@ -79,7 +83,7 @@ export function PerformanceScreen(): React.JSX.Element {
     const since = new Date(Date.now() - WINDOWS.find((w) => w.id === win)!.ms).toISOString()
     setRows(null)
     const why = (x: unknown): string => (x instanceof Error ? x.message : String(x))
-    const counted = claimsCreated(
+    const counted = claimsBySupplier(
       net,
       mine.map((x) => x.st!.operator),
       since
@@ -94,8 +98,7 @@ export function PerformanceScreen(): React.JSX.Element {
         out.push({
           server,
           operator: st!.operator,
-          claims: null,
-          claimsError: '',
+          claims: { claims: null, lastClaim: null, error: 'not read' },
           activity: a.status === 'fulfilled' ? a.value : null,
           error: a.status === 'rejected' ? why(a.reason) : ''
         })
@@ -103,11 +106,10 @@ export function PerformanceScreen(): React.JSX.Element {
       if (id !== loadId.current) return
     }
     const c = await counted
-    for (const r of out) {
-      const n = typeof c === 'string' ? { claims: null, error: c } : c.get(r.operator)
-      r.claims = n?.claims ?? null
-      r.claimsError = n?.error ?? 'not counted'
-    }
+    for (const r of out)
+      r.claims =
+        (typeof c === 'string' ? undefined : c.get(r.operator)) ??
+        ({ claims: null, lastClaim: null, error: typeof c === 'string' ? c : 'not read' } as const)
     if (id !== loadId.current) return
     setRows(out)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -308,10 +310,10 @@ export function PerformanceScreen(): React.JSX.Element {
                       ) : (
                         <>
                           <td>
-                            {r.claims === null ? (
-                              <ErrText>Could not read: {r.claimsError}</ErrText>
+                            {r.claims.claims === null ? (
+                              <ErrText>Could not read: {r.claims.error}</ErrText>
                             ) : (
-                              fmtInt(r.claims)
+                              fmtInt(r.claims.claims)
                             )}
                           </td>
                           {a.settlementsError ? (
@@ -336,14 +338,14 @@ export function PerformanceScreen(): React.JSX.Element {
                             </td>
                           )}
                           <td>
-                            {a.lastClaimError ? (
-                              <span className="hint">could not be read: {a.lastClaimError}</span>
-                            ) : a.lastClaim ? (
+                            {r.claims.error ? (
+                              <span className="hint">could not be read</span>
+                            ) : r.claims.lastClaim ? (
                               <>
-                                {ago(a.lastClaim.time)}
+                                {ago(r.claims.lastClaim.time)}
                                 <div className="hint">
-                                  {a.lastClaim.service}, session ending at{' '}
-                                  {fmtInt(a.lastClaim.sessionEnd)}
+                                  {r.claims.lastClaim.service}, session ending at{' '}
+                                  {fmtInt(r.claims.lastClaim.sessionEnd)}
                                 </div>
                               </>
                             ) : (

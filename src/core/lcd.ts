@@ -489,25 +489,31 @@ export interface OwnedSupplier {
   stakeUpokt: number
 }
 
-/** The newest block the indexer has processed, as the string its lists take for `blockHeight`. */
-async function indexedHeight(net: Network): Promise<string> {
+/**
+ * One indexer (GraphQL) read: the one client and timeout every indexer query of the app goes
+ * through. Throws on HTTP and GraphQL errors so a gap is never shown as zero.
+ */
+export async function gql<T>(
+  net: Network,
+  query: string,
+  variables: Record<string, unknown> = {}
+): Promise<T> {
   const res = await fetch(NETWORK_INFO[net].indexer, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ query: '{ _metadata { lastProcessedHeight } }' }),
-    signal: AbortSignal.timeout(20_000)
+    body: JSON.stringify({ query, variables }),
+    signal: AbortSignal.timeout(30_000)
   })
   if (!res.ok) throw new LcdError(`HTTP ${res.status} from the indexer`, res.status)
-  const j = (await res.json()) as {
-    data?: { _metadata?: { lastProcessedHeight?: number | null } }
-    errors?: { message: string }[]
-  }
+  const j = (await res.json()) as { data?: T; errors?: { message: string }[] }
   if (j.errors?.length) throw new Error(`the indexer answered: ${j.errors[0].message}`)
-  const h = j.data?._metadata?.lastProcessedHeight
-  if (!Number.isInteger(h) || !h)
-    throw new Error('the indexer did not say which block it has reached')
-  return String(h)
+  if (!j.data) throw new Error('the indexer answered nothing')
+  return j.data
 }
+
+const OWNED_FILTER =
+  'filter: { ownerId: { equalTo: $owner }, stakeStatus: { notEqualTo: Unstaked }, id: { greaterThan: $after } }, orderBy: ID_ASC, first: 1000'
+const OWNED_FIELDS = '{ totalCount nodes { id stakeStatus stakeAmount } }'
 
 /** Pages ownedSuppliers reads at most: 100,000 suppliers at the indexer's 1000 a page. */
 export const OWNED_SUPPLIERS_MAX_PAGES = 100
@@ -520,39 +526,34 @@ export const OWNED_SUPPLIERS_MAX_PAGES = 100
  * the owner wallet at all; it is found from its operator instead. The indexer answers
  * at most 1000 rows per request whatever `first` asks for, so the list is read in pages
  * keyed on the last operator address seen, until a page holds every row that remains (its
- * `totalCount`). Every page reads the indexer as of one block (the newest it had processed
- * when the read began), so a supplier changing status or a new one appearing mid-walk
- * cannot shift a page, and the rows read must add up to what the first page counted.
+ * `totalCount`). The first page also asks which block the indexer has reached, and every
+ * later page reads the indexer as of that block, so a supplier changing status or a new one
+ * appearing mid-walk cannot shift a page; the rows read must add up to what the first page
+ * counted. An owner with one page of suppliers (nearly all) costs one request.
  */
 export async function ownedSuppliers(net: Network, owner: string): Promise<OwnedSupplier[]> {
   if (!/^pokt1[0-9a-z]{38}$/.test(owner)) return []
   type Node = { id: string; stakeStatus: string; stakeAmount: string }
-  const at = await indexedHeight(net)
   const nodes: Node[] = []
   let counted = -1
+  let at = ''
   for (let pageNo = 0; ; pageNo++) {
     if (pageNo >= OWNED_SUPPLIERS_MAX_PAGES)
       throw new Error(
         `the indexer was still answering after ${OWNED_SUPPLIERS_MAX_PAGES} pages, so the list was not read to the end`
       )
     const after = nodes.at(-1)?.id ?? ''
-    const res = await fetch(NETWORK_INFO[net].indexer, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        query:
-          'query($owner: String!, $after: String!, $at: String!) { suppliers(filter: { ownerId: { equalTo: $owner }, stakeStatus: { notEqualTo: Unstaked }, id: { greaterThan: $after } }, orderBy: ID_ASC, first: 1000, blockHeight: $at) { totalCount nodes { id stakeStatus stakeAmount } } }',
-        variables: { owner, after, at }
-      }),
-      signal: AbortSignal.timeout(20_000)
-    })
-    if (!res.ok) throw new LcdError(`HTTP ${res.status} from the indexer`, res.status)
-    const j = (await res.json()) as {
-      data?: { suppliers?: { totalCount?: number; nodes?: Node[] } }
-      errors?: { message: string }[]
-    }
-    if (j.errors?.length) throw new Error(`the indexer answered: ${j.errors[0].message}`)
-    const page = j.data?.suppliers?.nodes ?? []
+    const d = await gql<{
+      suppliers?: { totalCount?: number; nodes?: Node[] }
+      _metadata?: { lastProcessedHeight?: number | null }
+    }>(
+      net,
+      at
+        ? `query($owner: String!, $after: String!, $at: String!) { suppliers(${OWNED_FILTER}, blockHeight: $at) ${OWNED_FIELDS} }`
+        : `query($owner: String!, $after: String!) { _metadata { lastProcessedHeight } suppliers(${OWNED_FILTER}) ${OWNED_FIELDS} }`,
+      at ? { owner, after, at } : { owner, after }
+    )
+    const page = d.suppliers?.nodes ?? []
     // Each page must move past the cursor. An indexer that ignored the filter would hand
     // back the same rows forever; stop with an error rather than loop or show a short list.
     if (page.length && !(page[page.length - 1].id > after))
@@ -560,9 +561,15 @@ export async function ownedSuppliers(net: Network, owner: string): Promise<Owned
         'the indexer did not move on to the next page, so the list was not read to the end'
       )
     nodes.push(...page)
-    if (counted < 0) counted = j.data?.suppliers?.totalCount ?? 0
+    if (counted < 0) counted = d.suppliers?.totalCount ?? 0
     // totalCount counts the rows after the cursor, so this page held all that remained.
-    if (!page.length || page.length >= (j.data?.suppliers?.totalCount ?? 0)) break
+    if (!page.length || page.length >= (d.suppliers?.totalCount ?? 0)) break
+    if (!at) {
+      const h = d._metadata?.lastProcessedHeight
+      if (!Number.isInteger(h) || !h)
+        throw new Error('the indexer did not say which block it has reached')
+      at = String(h)
+    }
   }
   if (nodes.length !== counted)
     throw new Error(
