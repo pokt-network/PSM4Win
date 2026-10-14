@@ -149,7 +149,11 @@ interface Range {
   gaps: unknown[] | null
 }
 type JsonRows = { range?: Range; data: JsonRow[] }
-/** The newest two blocks the indexer has read, asked for before the `...Json` reads in a document. */
+/**
+ * The newest two blocks the indexer has read, asked for before the `...Json` reads in a document.
+ * Each field of a request is its own statement, not one snapshot: a block written between them
+ * can at worst make one load read "not covered".
+ */
 const HEAD = 'head: blocks(first: 2, orderBy: ID_DESC) { nodes { timestamp } }'
 type Head = { nodes: { timestamp: string }[] }
 

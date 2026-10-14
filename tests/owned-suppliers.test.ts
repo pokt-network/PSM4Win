@@ -103,6 +103,16 @@ describe('ownedSuppliers (indexer)', () => {
     expect(f).toHaveBeenCalledTimes(3)
     expect(reads(f)[2].variables).toEqual({ owner: OWNER, after: pinned[999].id, at: AT })
   })
+  it('reads a page that lists an address twice again, as of the block the indexer reported', async () => {
+    // While a block is being written, a restaked supplier shows its old and new version.
+    const pinned = [node(1), node(2, 'Unstaking'), node(3)]
+    const live = [node(1), node(2), node(2, 'Unstaking'), node(3)]
+    const f = indexer(pinned, { liveList: live })
+    const got = await ownedSuppliers('main', OWNER)
+    expect(f).toHaveBeenCalledTimes(2)
+    expect(reads(f)[1].variables.at).toBe(AT)
+    expect(got.map((g) => [g.operator, g.status])).toEqual(pinned.map((n) => [n.id, n.stakeStatus]))
+  })
   it('stops after one request when the owner has exactly as many suppliers as a page holds', async () => {
     const f = indexer(Array.from({ length: 1000 }, (_, i) => node(i)))
     expect(await ownedSuppliers('main', OWNER)).toHaveLength(1000)

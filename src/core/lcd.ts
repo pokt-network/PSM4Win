@@ -510,7 +510,10 @@ export const OWNED_SUPPLIERS_MAX_PAGES = 100
  * request, so a supplier changing status or a new one appearing mid-walk cannot shift a page:
  * the second request reads page 1 again and page 2 together, both as of that block, and page 2
  * is kept only when page 1 still ends where it did (otherwise the walk goes on from the pinned
- * page 1). The rows read must add up to what the pinned page 1 counted.
+ * page 1). The rows read must add up to what the pinned page 1 counted. One request is not
+ * one snapshot (each list is its own statement), and while the indexer writes a block a
+ * restaked supplier can show twice (old and new version); a page 1 that lists an address twice
+ * is read again as of the block, like a list of several pages.
  */
 export async function ownedSuppliers(net: Network, owner: string): Promise<OwnedSupplier[]> {
   if (!/^pokt1[0-9a-z]{38}$/.test(owner)) return []
@@ -538,7 +541,8 @@ export async function ownedSuppliers(net: Network, owner: string): Promise<Owned
   moved(first.s, '')
   let nodes = rows(first.s)
   let counted = first.s?.totalCount ?? 0
-  if (!last(first.s)) {
+  const twice = new Set(nodes.map((n) => n.id)).size < nodes.length
+  if (!last(first.s) || twice) {
     const h = first._metadata?.lastProcessedHeight
     if (!Number.isInteger(h) || !h)
       throw new Error('the indexer did not say which block it has reached')
@@ -554,7 +558,7 @@ export async function ownedSuppliers(net: Network, owner: string): Promise<Owned
     nodes = rows(two.a)
     counted = two.a?.totalCount ?? 0
     let done = last(two.a)
-    if (!done && nodes[nodes.length - 1].id === cursor) {
+    if (!done && !twice && nodes[nodes.length - 1].id === cursor) {
       // Page 1 ends where it did, so page 2, read as of the same block, follows it.
       moved(two.b, cursor)
       nodes.push(...rows(two.b))
