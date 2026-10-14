@@ -489,6 +489,26 @@ export interface OwnedSupplier {
   stakeUpokt: number
 }
 
+/** The newest block the indexer has processed, as the string its lists take for `blockHeight`. */
+async function indexedHeight(net: Network): Promise<string> {
+  const res = await fetch(NETWORK_INFO[net].indexer, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ query: '{ _metadata { lastProcessedHeight } }' }),
+    signal: AbortSignal.timeout(20_000)
+  })
+  if (!res.ok) throw new LcdError(`HTTP ${res.status} from the indexer`, res.status)
+  const j = (await res.json()) as {
+    data?: { _metadata?: { lastProcessedHeight?: number | null } }
+    errors?: { message: string }[]
+  }
+  if (j.errors?.length) throw new Error(`the indexer answered: ${j.errors[0].message}`)
+  const h = j.data?._metadata?.lastProcessedHeight
+  if (!Number.isInteger(h) || !h)
+    throw new Error('the indexer did not say which block it has reached')
+  return String(h)
+}
+
 /** Pages ownedSuppliers reads at most: 100,000 suppliers at the indexer's 1000 a page. */
 export const OWNED_SUPPLIERS_MAX_PAGES = 100
 
@@ -499,14 +519,17 @@ export const OWNED_SUPPLIERS_MAX_PAGES = 100
  * left out. A custodial supplier, staked by its operator as its own owner, is not under
  * the owner wallet at all; it is found from its operator instead. The indexer answers
  * at most 1000 rows per request whatever `first` asks for, so the list is read in pages
- * keyed on the last operator address seen, which a supplier changing status or a new one
- * appearing mid-walk cannot shift, until a page holds every row that remains (its
- * `totalCount`).
+ * keyed on the last operator address seen, until a page holds every row that remains (its
+ * `totalCount`). Every page reads the indexer as of one block (the newest it had processed
+ * when the read began), so a supplier changing status or a new one appearing mid-walk
+ * cannot shift a page, and the rows read must add up to what the first page counted.
  */
 export async function ownedSuppliers(net: Network, owner: string): Promise<OwnedSupplier[]> {
   if (!/^pokt1[0-9a-z]{38}$/.test(owner)) return []
   type Node = { id: string; stakeStatus: string; stakeAmount: string }
+  const at = await indexedHeight(net)
   const nodes: Node[] = []
+  let counted = -1
   for (let pageNo = 0; ; pageNo++) {
     if (pageNo >= OWNED_SUPPLIERS_MAX_PAGES)
       throw new Error(
@@ -518,8 +541,8 @@ export async function ownedSuppliers(net: Network, owner: string): Promise<Owned
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({
         query:
-          'query($owner: String!, $after: String!) { suppliers(filter: { ownerId: { equalTo: $owner }, stakeStatus: { notEqualTo: Unstaked }, id: { greaterThan: $after } }, orderBy: ID_ASC, first: 1000) { totalCount nodes { id stakeStatus stakeAmount } } }',
-        variables: { owner, after }
+          'query($owner: String!, $after: String!, $at: String!) { suppliers(filter: { ownerId: { equalTo: $owner }, stakeStatus: { notEqualTo: Unstaked }, id: { greaterThan: $after } }, orderBy: ID_ASC, first: 1000, blockHeight: $at) { totalCount nodes { id stakeStatus stakeAmount } } }',
+        variables: { owner, after, at }
       }),
       signal: AbortSignal.timeout(20_000)
     })
@@ -537,9 +560,14 @@ export async function ownedSuppliers(net: Network, owner: string): Promise<Owned
         'the indexer did not move on to the next page, so the list was not read to the end'
       )
     nodes.push(...page)
+    if (counted < 0) counted = j.data?.suppliers?.totalCount ?? 0
     // totalCount counts the rows after the cursor, so this page held all that remained.
     if (!page.length || page.length >= (j.data?.suppliers?.totalCount ?? 0)) break
   }
+  if (nodes.length !== counted)
+    throw new Error(
+      `the indexer counted ${counted} suppliers but listed ${nodes.length}, so the list was not read whole`
+    )
   // The query already leaves Unstaked out; filtered again in case an indexer ignores that.
   return nodes
     .filter((n) => n.stakeStatus !== 'Unstaked')
