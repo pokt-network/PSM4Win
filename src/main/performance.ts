@@ -12,7 +12,6 @@ import {
   judgeStack,
   claimParams,
   claimedSessions,
-  claimsFromEnd,
   type StackVerdict,
   type ClaimParams
 } from '@core/performance'
@@ -145,22 +144,25 @@ class PerformanceMonitor {
         return { ...base, error: r.ok ? h : r.err || (r as { error?: string }).error || h }
       if (!heads.has(net)) heads.set(net, await latestHeight(net))
       if (!params.has(net)) params.set(net, await claimParams(net))
-      // Claims only for the sessions judgeStack judges; none when it has too few to judge.
-      const fromEnd = claimsFromEnd(h, heads.get(net)!, params.get(net)!)
-      const claimed =
-        fromEnd === null
-          ? { sessions: new Set<string>(), complete: true }
-          : await claimedSessions(net, operator, fromEnd)
-      const verdict = judgeStack(h, claimed.sessions, heads.get(net)!, params.get(net)!)
-      // A read cut short can only miss claims, so it can wrongly say none were made; say that
-      // the check could not be made instead.
-      if (verdict.kind === 'unclaimed' && !claimed.complete)
-        return {
-          ...base,
-          error: `${sv.name} made too many claims for the check to read them all, so whether it is claiming is not known.`,
-          lastHeight: h.last_height,
-          sessions: h.sessions.length
-        }
+      const head = heads.get(net)!
+      const p = params.get(net)!
+      // Judged first without claims: the miner being down or behind, or too few sessions to
+      // judge, does not depend on them. Only an "unclaimed" verdict needs the claims of the
+      // periods it judged.
+      let verdict = judgeStack(h, new Set(), head, p)
+      if (verdict.kind === 'unclaimed') {
+        const claimed = await claimedSessions(net, operator, Math.min(...verdict.periods))
+        verdict = judgeStack(h, claimed.sessions, head, p)
+        // A read that missed claims can wrongly say none were made; say that the check could
+        // not be made instead.
+        if (verdict.kind === 'unclaimed' && !claimed.complete)
+          return {
+            ...base,
+            error: `${sv.name}'s claims could not all be read, so whether it is claiming is not known.`,
+            lastHeight: h.last_height,
+            sessions: h.sessions.length
+          }
+      }
       return {
         ...base,
         verdict,

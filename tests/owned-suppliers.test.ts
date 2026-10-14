@@ -110,8 +110,27 @@ describe('ownedSuppliers (indexer)', () => {
     const f = indexer(pinned, { liveList: live })
     const got = await ownedSuppliers('main', OWNER)
     expect(f).toHaveBeenCalledTimes(2)
-    expect(reads(f)[1].variables.at).toBe(AT)
+    // Page 1 again, pinned, and no guessed page 2.
+    expect(reads(f)[1].variables).toEqual({ owner: OWNER, after: '', at: AT })
+    expect(reads(f)[1].query.match(/suppliers\(/g)).toHaveLength(1)
     expect(got.map((g) => [g.operator, g.status])).toEqual(pinned.map((n) => [n.id, n.stakeStatus]))
+  })
+  it('reads a one-page answer that does not hold what it counted again, pinned, instead of failing', async () => {
+    const three = [node(1), node(2), node(3)]
+    const f = vi.fn(async (_url: string, init: { body: string }) => {
+      const { query } = JSON.parse(init.body) as Read
+      const data = query.includes('_metadata')
+        ? // Counted while a supplier was being added: 2 counted, 3 listed.
+          { _metadata: { lastProcessedHeight: H }, s: { totalCount: 2, nodes: three } }
+        : { a: { totalCount: 3, nodes: three } }
+      return { ok: true, status: 200, json: async () => ({ data }) }
+    })
+    vi.stubGlobal('fetch', f)
+    expect((await ownedSuppliers('main', OWNER)).map((g) => g.operator)).toEqual(
+      three.map((n) => n.id)
+    )
+    expect(f).toHaveBeenCalledTimes(2)
+    expect(reads(f)[1].query.match(/suppliers\(/g)).toHaveLength(1)
   })
   it('stops after one request when the owner has exactly as many suppliers as a page holds', async () => {
     const f = indexer(Array.from({ length: 1000 }, (_, i) => node(i)))

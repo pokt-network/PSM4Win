@@ -3,9 +3,9 @@ import {
   parseHealth,
   judgeStack,
   claimWindowClose,
-  claimsFromEnd,
   claimedSessions,
   claimsBySupplier,
+  READS_AT_ONCE,
   supplierActivity,
   type MinerHealth,
   type ClaimParams
@@ -92,13 +92,6 @@ describe('judgeStack', () => {
     // No height in the log window: unknown, not a warning by itself.
     expect(judgeStack(health([], { last_height: 0 }), new Set(), 5000, P).ok).toBe(true)
   })
-  it('reads claims from the oldest session it judges, and none when it has too few to judge', () => {
-    expect(claimsFromEnd(health(four), 1000, P)).toBe(900)
-    // An older session in the log is not judged, so no claim is read for it.
-    expect(claimsFromEnd(health([[9, 880], ...four]), 1000, P)).toBe(900)
-    // At 970 the window of 960 is still open (it closes at 982): three periods, nothing judged.
-    expect(claimsFromEnd(health(four), 970, P)).toBeNull()
-  })
 })
 
 describe('parseHealth', () => {
@@ -179,7 +172,8 @@ describe('indexer reads', () => {
         data: [
           { kind: 'expired', reason: 'PROOF_MISSING', events: '2' },
           { kind: 'expired', reason: 'PROOF_INVALID', events: '1' },
-          { kind: 'slashed', reason: 'unknown', events: '5' }
+          { kind: 'slashed', reason: 'unknown', events: '5' },
+          { kind: 'discarded', reason: 'claim settled twice', events: '4' }
         ]
       }
     }
@@ -254,6 +248,23 @@ describe('indexer reads', () => {
       false
     )
   })
+  it('reads at most READS_AT_ONCE batches of claims at the same time', async () => {
+    const ops = Array.from({ length: 20 * 7 }, (_, i) => 'pokt1' + String(i).padStart(38, '0'))
+    let now = 0
+    let most = 0
+    const f = vi.fn(async (_url: string, init: { body: string }) => {
+      const { variables } = JSON.parse(init.body) as { variables: Vars }
+      most = Math.max(most, ++now)
+      await new Promise((r) => setTimeout(r, 5))
+      now--
+      return { ok: true, status: 200, json: async () => claimsAnswer(variables.op as string[]) }
+    })
+    vi.stubGlobal('fetch', f)
+    const m = await claimsBySupplier('main', ops, 't')
+    expect(f).toHaveBeenCalledTimes(7)
+    expect(most).toBe(READS_AT_ONCE)
+    expect(m.size).toBe(140)
+  })
   it('keeps the other suppliers when one is bad, left out, or in a read that failed', async () => {
     const ops = Array.from({ length: 21 }, (_, i) => 'pokt1' + String(i).padStart(38, '0'))
     const f = answer((_q, v) => {
@@ -285,12 +296,14 @@ describe('indexer reads', () => {
       settled: 67,
       expired: 3,
       expiredReasons: { PROOF_MISSING: 2, PROOF_INVALID: 1 },
+      discarded: 4,
+      discardedReasons: { 'claim settled twice': 4 },
       earnings: [
         { service: 'a', relays: 4119, earnedUpokt: 46123973, sessions: 66 },
         { service: 'b', relays: 1, earnedUpokt: 10, sessions: 1 }
       ],
       covered: true,
-      settlementsError: ''
+      error: ''
     })
     expect(f).toHaveBeenCalledTimes(1)
     expect(calls(f)[0].query).toContain(
@@ -339,34 +352,40 @@ describe('indexer reads', () => {
       complete: true
     })
   })
-  it('reads on, each page after the last row of the one before, until the rows reach the count', async () => {
-    const f = monitor('155', (v) =>
-      !v.h ? claims(5000, 150) : v.h === '4851' ? claims(4850, 5) : []
+  it('reads on after a full page, each page after the last row of the one before, until a short one', async () => {
+    const f = monitor('1500', (v) =>
+      !v.h ? claims(5000, 1000) : v.h === '4001' ? claims(4000, 500) : []
     )
     const c = await claimedSessions('main', OP, 1)
-    // A page shorter than asked (150 of 1000) is not the end; the count is.
     expect(pages(f).map((v) => [v.h, v.id])).toEqual([
       [null, null],
-      ['4851', 'tx4851-1']
+      ['4001', 'tx4001-1']
     ])
     expect(calls(f)[1].query).not.toContain('getCreatedClaimsCountList')
-    expect(c.sessions.size).toBe(155)
+    expect(c).toEqual(expect.objectContaining({ complete: true }))
+    expect(c.sessions.size).toBe(1500)
   })
-  it('ends on an empty page when the count is larger than the rows, or missing', async () => {
-    // A claim landed between the count and the list.
-    let f = monitor('10', (v) => (!v.h ? claims(5000, 9) : []))
-    expect((await claimedSessions('main', OP, 1)).sessions.size).toBe(9)
-    expect(f).toHaveBeenCalledTimes(2)
-    f = monitor(null, (v) => (!v.h ? claims(5000, 9) : []))
+  it('never ends on the count: fewer rows than counted is a check that could not be made', async () => {
+    // The count saw a claim the list did not (a block still being written).
+    let f = monitor('10', () => claims(5000, 9))
+    let c = await claimedSessions('main', OP, 1)
+    expect([c.sessions.size, c.complete]).toEqual([9, false])
+    expect(f).toHaveBeenCalledTimes(1)
+    // A count smaller than the rows (a claim landed between the two) does not cut the read.
+    f = monitor('5', () => claims(5000, 9))
+    c = await claimedSessions('main', OP, 1)
+    expect([c.sessions.size, c.complete]).toEqual([9, true])
+    // No count: the rows alone decide.
+    f = monitor(null, () => claims(5000, 9))
     expect((await claimedSessions('main', OP, 1)).complete).toBe(true)
-    expect(f).toHaveBeenCalledTimes(2)
+    expect(f).toHaveBeenCalledTimes(1)
   })
   it('says when the monitor could not read every claim, keeping the newest', async () => {
-    let top = 10_000_000
-    monitor('1000000', () => claims((top -= 200), 200))
+    let top = 100_000_000
+    monitor('1000000', () => claims((top -= 1000), 1000))
     const c = await claimedSessions('main', OP, 1)
     expect(c.complete).toBe(false)
-    expect(c.sessions.size).toBe(10_000)
+    expect(c.sessions.size).toBe(50_000)
   })
   it('refuses a non-address, and reports indexer errors instead of zeros', async () => {
     await expect(supplierActivity('main', 'x', 't')).rejects.toThrow(/not an operator/)
@@ -378,8 +397,7 @@ describe('indexer reads', () => {
       covered: false,
       error: 'the indexer answered: boom'
     })
-    expect((await supplierActivity('main', OP, 't')).settlementsError).toBe(
-      'the indexer answered: boom'
-    )
+    expect((await supplierActivity('main', OP, 't')).proofs).toBeNull()
+    expect((await supplierActivity('main', OP, 't')).error).toBe('the indexer answered: boom')
   })
 })

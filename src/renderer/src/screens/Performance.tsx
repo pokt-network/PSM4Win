@@ -10,6 +10,8 @@ import {
   supplierActivity,
   claimsBySupplier,
   why,
+  utc,
+  READS_AT_ONCE,
   type SupplierActivity,
   type SupplierClaims
 } from '@core/performance'
@@ -46,11 +48,8 @@ interface Row {
   error: string
 }
 
-/** Suppliers whose activity is read at the same time. */
-const READS_AT_ONCE = 6
-
 function ago(iso: string): string {
-  const t = Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + 'Z')
+  const t = utc(iso)
   if (!Number.isFinite(t)) return ''
   const s = Math.max(0, (Date.now() - t) / 1000)
   if (s < 90) return 'just now'
@@ -325,20 +324,28 @@ export function PerformanceScreen(): React.JSX.Element {
                               <span className="hint">not covered by the indexer yet</span>
                             )}
                           </td>
-                          {a.settlementsError ? (
+                          {a.proofs === null ? (
                             <td colSpan={3}>
-                              <ErrText>Could not read: {a.settlementsError}</ErrText>
+                              <ErrText>Could not read: {a.error}</ErrText>
                             </td>
                           ) : a.covered ? (
                             <>
                               <td>{fmtInt(a.proofs)}</td>
                               <td>{fmtInt(a.settled)}</td>
+                              {/* Expired and discarded claims alike went unpaid. */}
                               <td
-                                title={Object.entries(a.expiredReasons)
-                                  .map(([k, n]) => `${k}: ${n}`)
-                                  .join(', ')}
+                                title={[
+                                  ...Object.entries(a.expiredReasons).map(([k, n]) => `${k}: ${n}`),
+                                  ...Object.entries(a.discardedReasons).map(
+                                    ([k, n]) => `discarded (${k}): ${n}`
+                                  )
+                                ].join(', ')}
                               >
-                                {a.expired ? <Badge cls="bad">{fmtInt(a.expired)}</Badge> : '0'}
+                                {a.expired + a.discarded ? (
+                                  <Badge cls="bad">{fmtInt(a.expired + a.discarded)}</Badge>
+                                ) : (
+                                  '0'
+                                )}
                               </td>
                             </>
                           ) : (
@@ -383,7 +390,8 @@ export function PerformanceScreen(): React.JSX.Element {
             </table>
             <p className="hint">
               Expired claims are rewards the network did not pay, usually because a required proof
-              was not sent in time.
+              was not sent in time; the count includes claims it discarded at settlement (in the
+              tooltip).
             </p>
 
             <h3 style={{ marginTop: 18 }}>Earned per service</h3>
@@ -401,7 +409,7 @@ export function PerformanceScreen(): React.JSX.Element {
                 {rows.flatMap((r) => {
                   const a = r.activity
                   // The same read, and so the same coverage, as Settled above.
-                  const e = a && !a.settlementsError && a.covered ? a.earnings : []
+                  const e = a && a.earnings !== null && a.covered ? a.earnings : []
                   const total = e.reduce((t, x) => t + x.earnedUpokt, 0)
                   if (!e.length)
                     return [
@@ -410,8 +418,8 @@ export function PerformanceScreen(): React.JSX.Element {
                         <td colSpan={4} className="hint">
                           {r.error || !a
                             ? `could not be read: ${r.error}`
-                            : a.settlementsError
-                              ? `could not be read: ${a.settlementsError}`
+                            : a.error
+                              ? `could not be read: ${a.error}`
                               : !a.covered
                                 ? 'not covered by the indexer yet'
                                 : 'nothing settled in this period'}

@@ -23,11 +23,11 @@ const CLAIM_FIELDS = 'height id sessionId'
 /**
  * The claims a supplier made on chain (MsgCreateClaim) for sessions that ended at or after a
  * height, newest first, `pageRows` at a time, each page after the last row of the one before.
- * The first request also counts them, so the read ends once the rows reach that count (one
- * request for nearly every check) or a page comes back empty; a short page alone is not taken
- * as the end. The count is its own statement, not a snapshot with the list: if a claim lands
- * between the two, the count is larger and the read ends on an empty page. `complete` is false when
- * it stopped after CLAIMS_MAX_PAGES pages with more to read; callers must not take that as all.
+ * The read ends on a page shorter than asked (one request for nearly every check) or an empty
+ * one. The first request also counts the claims, as a check only: the count is its own
+ * statement, not a snapshot with the list, so it never ends the read, but fewer rows than it
+ * counted make `complete` false. `complete` is false too when the read stopped after
+ * CLAIMS_MAX_PAGES pages with more to read; callers must not take an incomplete read as all.
  */
 async function createdClaims(
   net: Network,
@@ -56,7 +56,7 @@ async function createdClaims(
     if (!page) counted = Number(d.n?.[0]?.claims ?? Number.NaN)
     rows.push(...d.c)
     before = d.c[d.c.length - 1] ?? null
-    if (!before || rows.length >= counted) return { rows, complete: true }
+    if (d.c.length < pageRows) return { rows, complete: !(rows.length < counted) }
   }
   return { rows, complete: false }
 }
@@ -65,6 +65,8 @@ type LastClaim = { time: string; sessionEnd: number; service: string }
 
 /** Suppliers the indexer counts claims for per call at most. */
 const COUNT_BATCH = 20
+/** Indexer reads the Performance screen makes at the same time, of either kind. */
+export const READS_AT_ONCE = 6
 
 /** A supplier's claims in a window and its newest claim in it, or why they could not be read. */
 export type SupplierClaims =
@@ -97,19 +99,23 @@ export async function claimsBySupplier(
   const batches = Array.from({ length: Math.ceil(ops.length / COUNT_BATCH) }, (_, i) =>
     ops.slice(i * COUNT_BATCH, (i + 1) * COUNT_BATCH)
   )
-  const answers = await Promise.allSettled(
-    batches.map((b) =>
-      gql<{ c: { supplierId: string; claims: string }[]; head: Head } & Record<string, JsonRows>>(
-        net,
-        `query($op: [String]!, $t: Datetime!, ${b.map((_, k) => `$o${k}: [String]!`).join(', ')}) {
+  const read = (
+    b: string[]
+  ): Promise<
+    { c: { supplierId: string; claims: string }[]; head: Head } & Record<string, JsonRows>
+  > =>
+    gql(
+      net,
+      `query($op: [String]!, $t: Datetime!, ${b.map((_, k) => `$o${k}: [String]!`).join(', ')}) {
           ${HEAD}
           c: getCreatedClaimsCountList(suppliers: $op, rangeStart: $t) { supplierId claims }
           ${b.map((_, k) => `l${k}: getCreatedClaimsJson(suppliers: $o${k}, rangeStart: $t, rowLimit: 1)`).join('\n')}
         }`,
-        { op: b, t: sinceIso, ...Object.fromEntries(b.map((o, k) => [`o${k}`, [o]])) }
-      )
+      { op: b, t: sinceIso, ...Object.fromEntries(b.map((o, k) => [`o${k}`, [o]])) }
     )
-  )
+  const answers: PromiseSettledResult<Awaited<ReturnType<typeof read>>>[] = []
+  for (let i = 0; i < batches.length; i += READS_AT_ONCE)
+    answers.push(...(await Promise.allSettled(batches.slice(i, i + READS_AT_ONCE).map(read))))
   answers.forEach((a, i) => {
     if (a.status === 'rejected') {
       for (const o of batches[i]) out.set(o, fail(why(a.reason)))
@@ -161,7 +167,7 @@ const HEAD = 'head: blocks(first: 2, orderBy: ID_DESC) { nodes { timestamp } }'
 type Head = { nodes: { timestamp: string }[] }
 
 /** Block times come without a zone; they are UTC. */
-const utc = (t: string): number => Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(t) ? t : t + 'Z')
+export const utc = (t: string): number => Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(t) ? t : t + 'Z')
 
 /**
  * Whether an answer covers its whole window: from its start, with no gap, up to the newest
@@ -194,12 +200,7 @@ async function settlementsSince(
   net: Network,
   operator: string,
   sinceIso: string
-): Promise<
-  Pick<
-    SupplierActivity,
-    'proofs' | 'settled' | 'expired' | 'expiredReasons' | 'earnings' | 'covered'
-  >
-> {
+): Promise<Settlements> {
   const d = await gql<{ settled: JsonRows; proofs: JsonRows; penalties: JsonRows; head: Head }>(
     net,
     `query($op: [String]!, $t: Datetime!) {
@@ -210,17 +211,24 @@ async function settlementsSince(
     }`,
     { op: [operator], t: sinceIso }
   )
-  const expired = (d.penalties?.data ?? []).filter((r) => r.kind === 'expired')
-  const reasons: Record<string, number> = {}
-  for (const r of expired) {
-    const k = r.reason ?? 'unknown'
-    reasons[k] = (reasons[k] ?? 0) + (Number(r.events) || 0)
+  const byReason = (kind: string): [number, Record<string, number>] => {
+    const rows = (d.penalties?.data ?? []).filter((r) => r.kind === kind)
+    const reasons: Record<string, number> = {}
+    for (const r of rows) {
+      const k = r.reason ?? 'unknown'
+      reasons[k] = (reasons[k] ?? 0) + (Number(r.events) || 0)
+    }
+    return [sum(rows, 'events'), reasons]
   }
+  const [expired, expiredReasons] = byReason('expired')
+  const [discarded, discardedReasons] = byReason('discarded')
   return {
     proofs: sum(d.proofs?.data ?? [], 'proofs_submitted'),
     settled: sum(d.settled?.data ?? [], 'settled_claims'),
-    expired: sum(expired, 'events'),
-    expiredReasons: reasons,
+    expired,
+    expiredReasons,
+    discarded,
+    discardedReasons,
     earnings: (d.settled?.data ?? [])
       .map((r) => ({
         service: r.service_id ?? '',
@@ -233,16 +241,20 @@ async function settlementsSince(
     covered:
       covers(d.settled?.range, d.head) &&
       covers(d.proofs?.range, d.head) &&
-      covers(d.penalties?.range, d.head)
+      covers(d.penalties?.range, d.head),
+    error: ''
   }
 }
 
-export interface SupplierActivity {
+interface Settlements {
   proofs: number
   settled: number
   /** Claims the network expired (their rewards are lost), by reason. */
   expired: number
   expiredReasons: Record<string, number>
+  /** Claims the network discarded at settlement (also not paid), by reason. */
+  discarded: number
+  discardedReasons: Record<string, number>
   /** What the settled claims paid since the time, per service, largest first. */
   earnings: ServiceEarnings[]
   /**
@@ -250,16 +262,30 @@ export interface SupplierActivity {
    * not known yet.
    */
   covered: boolean
-  /** Why proofs, settled, expired, and earnings could not be read; empty when they were. */
-  settlementsError: string
+  error: ''
 }
+
+/** A supplier's settlements in a window, or why they could not be read. */
+export type SupplierActivity =
+  | Settlements
+  | {
+      proofs: null
+      settled: null
+      expired: null
+      expiredReasons: null
+      discarded: null
+      discardedReasons: null
+      earnings: null
+      covered: false
+      error: string
+    }
 
 export const why = (e: unknown): string => (e instanceof Error ? e.message : String(e))
 
 /**
  * Proofs, settlements, expirations, and earnings per service since a time, in one read (the
  * claims are read for every supplier at once by claimsBySupplier). A failed read is said in
- * `settlementsError`, not shown as zeros.
+ * `error`, with no numbers.
  */
 export async function supplierActivity(
   net: Network,
@@ -268,16 +294,18 @@ export async function supplierActivity(
 ): Promise<SupplierActivity> {
   if (!OP_RE.test(operator)) throw new Error('not an operator address')
   try {
-    return { ...(await settlementsSince(net, operator, sinceIso)), settlementsError: '' }
+    return await settlementsSince(net, operator, sinceIso)
   } catch (e) {
     return {
-      proofs: 0,
-      settled: 0,
-      expired: 0,
-      expiredReasons: {},
-      earnings: [],
+      proofs: null,
+      settled: null,
+      expired: null,
+      expiredReasons: null,
+      discarded: null,
+      discardedReasons: null,
+      earnings: null,
       covered: false,
-      settlementsError: why(e)
+      error: why(e)
     }
   }
 }
@@ -462,19 +490,4 @@ function judgedPeriods(
   return [...new Set(h.sessions.filter((s) => claimWindowClose(s.end, p) < head).map((s) => s.end))]
     .sort((a, b) => b - a)
     .slice(0, sessionsInARow)
-}
-
-/**
- * The lowest session end height a verdict needs claims from: the oldest of the periods
- * judgeStack judges, or null when there are fewer than it needs, in which case it judges no
- * claims and none need reading.
- */
-export function claimsFromEnd(
-  h: MinerHealth,
-  head: number,
-  p: ClaimParams,
-  sessionsInARow = UNCLAIMED_SESSIONS_WARN
-): number | null {
-  const periods = judgedPeriods(h, head, p, sessionsInARow)
-  return periods.length < sessionsInARow ? null : Math.min(...periods)
 }
