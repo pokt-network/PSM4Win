@@ -7,6 +7,8 @@ import {
   claimsBySupplier,
   READS_AT_ONCE,
   supplierActivity,
+  verdictWithClaims,
+  type ClaimsRead,
   type MinerHealth,
   type ClaimParams
 } from '@core/performance'
@@ -91,6 +93,44 @@ describe('judgeStack', () => {
     })
     // No height in the log window: unknown, not a warning by itself.
     expect(judgeStack(health([], { last_height: 0 }), new Set(), 5000, P).ok).toBe(true)
+  })
+  describe('verdictWithClaims', () => {
+    // The four periods 900-960 close by 982; the newest judged window closes at 982.
+    const read = (r: Partial<ClaimsRead>) => (): Promise<ClaimsRead> =>
+      Promise.resolve({ sessions: new Set(), complete: true, indexedHeight: 1000, ...r })
+    it('reads no claims when the verdict does not depend on them', async () => {
+      const f = vi.fn(read({}))
+      const down = health(four, { miner: { status: 'exited', started: '', restarts: 0 } })
+      expect(await verdictWithClaims(down, 1000, P, f)).toMatchObject({ kind: 'miner-down' })
+      expect(await verdictWithClaims(health(four.slice(1)), 1000, P, f)).toMatchObject({ ok: true })
+      expect(f).not.toHaveBeenCalled()
+    })
+    it('reads the claims of the judged periods from the oldest, and is fine when one was claimed', async () => {
+      const f = vi.fn(read({ sessions: new Set([sid(3)]) }))
+      expect(await verdictWithClaims(health(four), 1000, P, f)).toMatchObject({ ok: true })
+      expect(f).toHaveBeenCalledWith(900)
+    })
+    it('warns only when the indexer reached the newest claim window and read every claim', async () => {
+      expect(await verdictWithClaims(health(four), 1000, P, read({}))).toMatchObject({
+        kind: 'unclaimed'
+      })
+      expect(
+        await verdictWithClaims(health(four), 1000, P, read({ indexedHeight: 982 }))
+      ).toMatchObject({
+        kind: 'unclaimed'
+      })
+    })
+    it('says the check could not be made when the indexer is behind, never "not claiming"', async () => {
+      expect(await verdictWithClaims(health(four), 1000, P, read({ indexedHeight: 981 }))).toMatch(
+        /has not reached block 982 yet \(it is at 981\)/
+      )
+      expect(
+        await verdictWithClaims(health(four), 1000, P, read({ indexedHeight: Number.NaN }))
+      ).toMatch(/did not say where it is/)
+      expect(await verdictWithClaims(health(four), 1000, P, read({ complete: false }))).toMatch(
+        /could not all be read/
+      )
+    })
   })
 })
 
@@ -332,7 +372,7 @@ describe('indexer reads', () => {
     answer((q, v) => ({
       data: {
         ...(q.includes('getCreatedClaimsCountList') && count !== null
-          ? { n: [{ claims: count }] }
+          ? { n: [{ claims: count }], _metadata: { lastProcessedHeight: 3000 } }
           : {}),
         c: page(v)
       }
@@ -349,8 +389,10 @@ describe('indexer reads', () => {
     expect(r.variables).toEqual({ op: [OP], e: '1850', n: 1000, h: null, id: null })
     expect(c).toEqual({
       sessions: new Set(claims(2000, 139).map((x) => (x as { sessionId: string }).sessionId)),
-      complete: true
+      complete: true,
+      indexedHeight: 3000
     })
+    expect(r.query).toContain('_metadata { lastProcessedHeight }')
   })
   it('reads on after a full page, each page after the last row of the one before, until a short one', async () => {
     const f = monitor('1500', (v) =>

@@ -417,7 +417,7 @@ export function PerformanceScreen(): React.JSX.Element {
                         <td className="svcid">{r.server.name}</td>
                         <td colSpan={4} className="hint">
                           {r.error || !a
-                            ? `could not be read: ${r.error}`
+                            ? `could not be read${r.error ? `: ${r.error}` : ''}`
                             : a.error
                               ? `could not be read: ${a.error}`
                               : !a.covered

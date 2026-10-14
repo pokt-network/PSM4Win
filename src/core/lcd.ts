@@ -564,13 +564,15 @@ export async function ownedSuppliers(net: Network, owner: string): Promise<Owned
     nodes = rows(two.a)
     counted = two.a?.totalCount ?? 0
     let done = last(two.a)
+    let pinnedPages = 1
     if (!done && !odd && nodes[nodes.length - 1].id === cursor) {
       // Page 1 ends where it did, so page 2, read as of the same block, follows it.
       moved(two.b, cursor)
       nodes.push(...rows(two.b))
       done = last(two.b)
+      pinnedPages = 2
     }
-    for (let pageNo = 2; !done; pageNo++) {
+    for (let pageNo = pinnedPages; !done; pageNo++) {
       if (pageNo >= OWNED_SUPPLIERS_MAX_PAGES)
         throw new Error(
           `the indexer was still answering after ${OWNED_SUPPLIERS_MAX_PAGES} pages, so the list was not read to the end`

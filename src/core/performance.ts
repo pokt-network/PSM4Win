@@ -26,23 +26,31 @@ const CLAIM_FIELDS = 'height id sessionId'
  * The read ends on a page shorter than asked (one request for nearly every check) or an empty
  * one. The first request also counts the claims, as a check only: the count is its own
  * statement, not a snapshot with the list, so it never ends the read, but fewer rows than it
- * counted make `complete` false. `complete` is false too when the read stopped after
- * CLAIMS_MAX_PAGES pages with more to read; callers must not take an incomplete read as all.
+ * counted make `complete` false (the count can also include a claim of a block still being
+ * written, which the list leaves out until the block is complete: a few seconds). `complete` is
+ * false too when the read stopped after CLAIMS_MAX_PAGES pages with more to read; callers must
+ * not take an incomplete read as all. `indexedHeight` is the block the indexer had reached, read
+ * in the first request (NaN when it did not say).
  */
 async function createdClaims(
   net: Network,
   operator: string,
   fromEnd: number,
   pageRows: number
-): Promise<{ rows: CreatedClaim[]; complete: boolean }> {
+): Promise<{ rows: CreatedClaim[]; complete: boolean; indexedHeight: number }> {
   const rows: CreatedClaim[] = []
   let counted = Number.NaN
+  let indexedHeight = Number.NaN
   let before: CreatedClaim | null = null
   for (let page = 0; page < CLAIMS_MAX_PAGES; page++) {
-    const d: { c: CreatedClaim[]; n?: { claims: string }[] } = await gql(
+    const d: {
+      c: CreatedClaim[]
+      n?: { claims: string }[]
+      _metadata?: { lastProcessedHeight?: number | null }
+    } = await gql(
       net,
       `query($op: [String]!, $e: BigInt!, $n: Int!, $h: BigInt, $id: String) {
-        ${page ? '' : 'n: getCreatedClaimsCountList(suppliers: $op, fromSessionEndHeight: $e) { claims }'}
+        ${page ? '' : '_metadata { lastProcessedHeight } n: getCreatedClaimsCountList(suppliers: $op, fromSessionEndHeight: $e) { claims }'}
         c: getCreatedClaimsList(suppliers: $op, fromSessionEndHeight: $e, rowLimit: $n, beforeHeight: $h, beforeId: $id) { ${CLAIM_FIELDS} }
       }`,
       {
@@ -53,19 +61,25 @@ async function createdClaims(
         id: before?.id ?? null
       }
     )
-    if (!page) counted = Number(d.n?.[0]?.claims ?? Number.NaN)
+    if (!page) {
+      counted = Number(d.n?.[0]?.claims ?? Number.NaN)
+      indexedHeight = Number(d._metadata?.lastProcessedHeight ?? Number.NaN)
+    }
     rows.push(...d.c)
     before = d.c[d.c.length - 1] ?? null
-    if (d.c.length < pageRows) return { rows, complete: !(rows.length < counted) }
+    if (d.c.length < pageRows) return { rows, complete: !(rows.length < counted), indexedHeight }
   }
-  return { rows, complete: false }
+  return { rows, complete: false, indexedHeight }
 }
 
 type LastClaim = { time: string; sessionEnd: number; service: string }
 
 /** Suppliers the indexer counts claims for per call at most. */
 const COUNT_BATCH = 20
-/** Indexer reads the Performance screen makes at the same time, of either kind. */
+/**
+ * Indexer reads of one kind the Performance screen makes at the same time: the claims batches
+ * and the per-supplier activity reads are each capped at this, and run side by side.
+ */
 export const READS_AT_ONCE = 6
 
 /** A supplier's claims in a window and its newest claim in it, or why they could not be read. */
@@ -324,21 +338,32 @@ const MONITOR_PAGE = 1000
 /**
  * The sessions (by id) the supplier claimed on chain whose session ended at or after a height.
  * It reads at most CLAIMS_MAX_PAGES pages of MONITOR_PAGE claims (50,000); when there were
- * more, it returns what it read, the newest, with `complete` false.
+ * more, it returns what it read, the newest, with `complete` false. `indexedHeight` is the block
+ * the indexer had reached.
  */
 export async function claimedSessions(
   net: Network,
   operator: string,
   fromEnd: number
-): Promise<{ sessions: Set<string>; complete: boolean }> {
+): Promise<ClaimsRead> {
   if (!OP_RE.test(operator)) throw new Error('not an operator address')
   // The indexer keeps only the claims of sessions that ended at or after fromEnd, and reads
   // only those.
   const c = await createdClaims(net, operator, fromEnd, MONITOR_PAGE)
   return {
     sessions: new Set(c.rows.map((x) => x.sessionId)),
-    complete: c.complete
+    complete: c.complete,
+    indexedHeight: c.indexedHeight
   }
+}
+
+/** The claims the monitor read for the periods it judges. */
+export interface ClaimsRead {
+  sessions: Set<string>
+  /** False when the read may have missed claims (see createdClaims). */
+  complete: boolean
+  /** The block the indexer had reached when it answered; NaN when it did not say. */
+  indexedHeight: number
 }
 
 // ---- what the stack's miner logged (supplier.sh health) ----
@@ -475,6 +500,32 @@ export function judgeStack(
     unclaimed: inPeriods.length,
     periods
   }
+}
+
+/**
+ * The verdict on a stack, reading claims only when it depends on them. It is judged first
+ * without claims: the miner down or behind, or too few sessions to judge, do not depend on them.
+ * Only an "unclaimed" verdict reads the claims of the periods it judged, from the oldest. A
+ * string says why the check could not be made instead of a verdict: the indexer has not reached
+ * the close of the newest judged claim window (so a missing claim may just not be indexed yet),
+ * or the claims could not all be read. Neither is ever a "not claiming".
+ */
+export async function verdictWithClaims(
+  h: MinerHealth,
+  head: number,
+  p: ClaimParams,
+  read: (fromEnd: number) => Promise<ClaimsRead>
+): Promise<StackVerdict | string> {
+  const first = judgeStack(h, new Set(), head, p)
+  if (first.kind !== 'unclaimed') return first
+  const c = await read(Math.min(...first.periods))
+  const v = judgeStack(h, c.sessions, head, p)
+  if (v.kind !== 'unclaimed') return v
+  const needed = claimWindowClose(Math.max(...first.periods), p)
+  if (!(c.indexedHeight >= needed))
+    return `the indexer has not reached block ${needed} yet (${Number.isFinite(c.indexedHeight) ? `it is at ${c.indexedHeight}` : 'it did not say where it is'}), so its claims cannot be checked`
+  if (!c.complete) return 'its claims could not all be read, so whether it is claiming is not known'
+  return v
 }
 
 /**
