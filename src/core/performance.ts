@@ -3,7 +3,7 @@
 // stack's own miner logged (supplier.sh health) against the claims that reached the chain.
 // No Electron, no DOM: the screen and the main-process monitor both use it.
 import { type Network } from './networks'
-import { params, blockAt } from './lcd'
+import { params } from './lcd'
 import { gql } from './indexer'
 
 const OP_RE = /^pokt1[0-9a-z]{38}$/
@@ -17,43 +17,46 @@ interface CreatedClaim {
   height: string
   id: string
   sessionId: string
-  sessionEndHeight: string
 }
-const CLAIM_FIELDS = 'height id sessionId sessionEndHeight'
+const CLAIM_FIELDS = 'height id sessionId'
 
 /**
- * The claims a supplier made on chain (MsgCreateClaim), newest first, since a time or ever,
- * read `pageRows` at a time, each page after the last row of the one before, until a page comes
- * back empty (a short page is not taken as the end: the indexer may serve fewer rows than
- * asked) or `enough` says the oldest row read is far enough back. `complete` is false when it
- * stopped after CLAIMS_MAX_PAGES pages with more to read; callers must not take that as all.
+ * The claims a supplier made on chain (MsgCreateClaim) for sessions that ended at or after a
+ * height, newest first, `pageRows` at a time, each page after the last row of the one before.
+ * The first request also counts them, so the read ends once the rows reach that count (one
+ * request for nearly every check) or a page comes back empty; a short page alone is not taken
+ * as the end. The count is its own statement, not a snapshot with the list: if a claim lands
+ * between the two, the count is larger and the read ends on an empty page. `complete` is false when
+ * it stopped after CLAIMS_MAX_PAGES pages with more to read; callers must not take that as all.
  */
 async function createdClaims(
   net: Network,
   operator: string,
-  sinceIso: string | null,
-  pageRows: number,
-  enough: (oldest: CreatedClaim) => boolean = () => false
+  fromEnd: number,
+  pageRows: number
 ): Promise<{ rows: CreatedClaim[]; complete: boolean }> {
   const rows: CreatedClaim[] = []
+  let counted = Number.NaN
   let before: CreatedClaim | null = null
   for (let page = 0; page < CLAIMS_MAX_PAGES; page++) {
-    const d: { c: CreatedClaim[] } = await gql(
+    const d: { c: CreatedClaim[]; n?: { claims: string }[] } = await gql(
       net,
-      `query($op: [String]!, $t: Datetime, $n: Int!, $h: BigInt, $id: String) {
-        c: getCreatedClaimsList(suppliers: $op, rangeStart: $t, rowLimit: $n, beforeHeight: $h, beforeId: $id) { ${CLAIM_FIELDS} }
+      `query($op: [String]!, $e: BigInt!, $n: Int!, $h: BigInt, $id: String) {
+        ${page ? '' : 'n: getCreatedClaimsCountList(suppliers: $op, fromSessionEndHeight: $e) { claims }'}
+        c: getCreatedClaimsList(suppliers: $op, fromSessionEndHeight: $e, rowLimit: $n, beforeHeight: $h, beforeId: $id) { ${CLAIM_FIELDS} }
       }`,
       {
         op: [operator],
-        t: sinceIso,
+        e: String(fromEnd),
         n: pageRows,
         h: before?.height ?? null,
         id: before?.id ?? null
       }
     )
+    if (!page) counted = Number(d.n?.[0]?.claims ?? Number.NaN)
     rows.push(...d.c)
     before = d.c[d.c.length - 1] ?? null
-    if (!before || enough(before)) return { rows, complete: true }
+    if (!before || rows.length >= counted) return { rows, complete: true }
   }
   return { rows, complete: false }
 }
@@ -289,8 +292,6 @@ export interface ServiceEarnings {
 
 /** Claims the monitor reads per call: the function's most, so a check is one request. */
 const MONITOR_PAGE = 1000
-/** How far before the first session end the monitor's read starts. */
-const CLAIMS_LOOKBACK_MS = 3_600_000
 
 /**
  * The sessions (by id) the supplier claimed on chain whose session ended at or after a height.
@@ -303,25 +304,11 @@ export async function claimedSessions(
   fromEnd: number
 ): Promise<{ sessions: Set<string>; complete: boolean }> {
   if (!OP_RE.test(operator)) throw new Error('not an operator address')
-  // A claim lands after its session ends, so once a claim's own height is at or below fromEnd
-  // every older one is for a session that ended before it, and the read stops there. It starts
-  // an hour before the time of block fromEnd (from the node): the indexer reads only this
-  // window instead of sorting the supplier's whole history, and the hour usually holds an
-  // older claim, so the first page ends the read in one request. If the node cannot say the
-  // time (a pruned block), the whole history is read, stopping the same way.
-  const at = await blockAt(net, fromEnd).catch(() => null)
-  const since = at ? new Date(utc(at.time) - CLAIMS_LOOKBACK_MS).toISOString() : null
-  const c = await createdClaims(
-    net,
-    operator,
-    since,
-    MONITOR_PAGE,
-    (o) => Number(o.height) <= fromEnd
-  )
+  // The indexer keeps only the claims of sessions that ended at or after fromEnd, and reads
+  // only those.
+  const c = await createdClaims(net, operator, fromEnd, MONITOR_PAGE)
   return {
-    sessions: new Set(
-      c.rows.filter((x) => Number(x.sessionEndHeight) >= fromEnd).map((x) => x.sessionId)
-    ),
+    sessions: new Set(c.rows.map((x) => x.sessionId)),
     complete: c.complete
   }
 }

@@ -133,22 +133,9 @@ describe('parseHealth', () => {
 describe('indexer reads', () => {
   afterEach(() => vi.unstubAllGlobals())
   type Vars = Record<string, unknown>
-  /** The node's block at a height (the LCD, a GET); null = the node cannot say (404). */
-  let nodeBlockTime: string | null = null
   /** Answers each indexer call with what `reply` gives for its query and variables. */
   const answer = (reply: (query: string, v: Vars) => unknown): ReturnType<typeof vi.fn> => {
-    nodeBlockTime = null
-    const f = vi.fn(async (url: string, init?: { body: string }) => {
-      if (!init?.body)
-        return nodeBlockTime
-          ? {
-              ok: true,
-              status: 200,
-              json: async () => ({
-                block: { header: { height: url.split('/').at(-1), time: nodeBlockTime } }
-              })
-            }
-          : { ok: false, status: 404, text: async () => 'not found' }
+    const f = vi.fn(async (_url: string, init: { body: string }) => {
       const { query, variables } = JSON.parse(init.body) as { query: string; variables: Vars }
       return { ok: true, status: 200, json: async () => reply(query, variables) }
     })
@@ -327,39 +314,56 @@ describe('indexer reads', () => {
       expect((await supplierActivity('main', OP, '2026-10-05T00:00:00Z')).covered).toBe(false)
     }
   })
-  it('reads the monitor claims from the time the node gives for the first session end, in one indexer request', async () => {
-    const f = answer(() => ({ data: { c: claims(2000, 200) } }))
-    nodeBlockTime = '2026-10-14T10:00:00Z'
-    const c = await claimedSessions('main', OP, 1850)
-    expect(String(f.mock.calls[0][0])).toMatch(/\/blocks\/1850$/)
-    // One page: its oldest claim (height 1801) already predates session end 1850.
-    expect(calls(f)).toHaveLength(1)
-    expect(pages(f)).toEqual([
-      { op: [OP], t: '2026-10-14T09:00:00.000Z', n: 1000, h: null, id: null }
-    ])
-    expect(c.complete).toBe(true)
-    expect(c.sessions.size).toBe(139)
-    expect(c.sessions.has(sid(1862))).toBe(true)
-    expect(c.sessions.has(sid(1861))).toBe(false)
-  })
-  it('reads monitor claims until an empty page, each page after the last row of the one before', async () => {
-    const f = answer((_q, v) => ({
-      data: { c: !v.h ? claims(5000, 150) : v.h === '4851' ? claims(4850, 5) : [] }
+  /** A monitor read: the count (first request only) and the page the variables ask for. */
+  const monitor = (count: string | null, page: (v: Vars) => unknown[]): ReturnType<typeof vi.fn> =>
+    answer((q, v) => ({
+      data: {
+        ...(q.includes('getCreatedClaimsCountList') && count !== null
+          ? { n: [{ claims: count }] }
+          : {}),
+        c: page(v)
+      }
     }))
+  it('reads the claims of the sessions ending at or after fromEnd, with their count, in one request', async () => {
+    const f = monitor('139', () => claims(2000, 139))
+    const c = await claimedSessions('main', OP, 1850)
+    expect(f).toHaveBeenCalledTimes(1)
+    const [r] = calls(f)
+    expect(r.query).toContain('getCreatedClaimsCountList(suppliers: $op, fromSessionEndHeight: $e)')
+    expect(r.query).toContain(
+      'getCreatedClaimsList(suppliers: $op, fromSessionEndHeight: $e, rowLimit: $n'
+    )
+    expect(r.variables).toEqual({ op: [OP], e: '1850', n: 1000, h: null, id: null })
+    expect(c).toEqual({
+      sessions: new Set(claims(2000, 139).map((x) => (x as { sessionId: string }).sessionId)),
+      complete: true
+    })
+  })
+  it('reads on, each page after the last row of the one before, until the rows reach the count', async () => {
+    const f = monitor('155', (v) =>
+      !v.h ? claims(5000, 150) : v.h === '4851' ? claims(4850, 5) : []
+    )
     const c = await claimedSessions('main', OP, 1)
-    // A page shorter than asked (150 of 1000) is not the end; the node could not say the
-    // block's time, so the whole history is read.
-    expect(pages(f).map((v) => [v.t, v.h, v.id])).toEqual([
-      [null, null, null],
-      [null, '4851', 'tx4851-1'],
-      [null, '4846', 'tx4846-1']
+    // A page shorter than asked (150 of 1000) is not the end; the count is.
+    expect(pages(f).map((v) => [v.h, v.id])).toEqual([
+      [null, null],
+      ['4851', 'tx4851-1']
     ])
-    expect(c).toEqual(expect.objectContaining({ complete: true }))
+    expect(calls(f)[1].query).not.toContain('getCreatedClaimsCountList')
     expect(c.sessions.size).toBe(155)
+  })
+  it('ends on an empty page when the count is larger than the rows, or missing', async () => {
+    // A claim landed between the count and the list.
+    let f = monitor('10', (v) => (!v.h ? claims(5000, 9) : []))
+    expect((await claimedSessions('main', OP, 1)).sessions.size).toBe(9)
+    expect(f).toHaveBeenCalledTimes(2)
+    f = monitor(null, (v) => (!v.h ? claims(5000, 9) : []))
+    expect((await claimedSessions('main', OP, 1)).complete).toBe(true)
+    expect(f).toHaveBeenCalledTimes(2)
   })
   it('says when the monitor could not read every claim, keeping the newest', async () => {
     let top = 10_000_000
-    answer(() => ({ data: { c: claims((top -= 200), 200) } }))
+    monitor('1000000', () => claims((top -= 200), 200))
     const c = await claimedSessions('main', OP, 1)
     expect(c.complete).toBe(false)
     expect(c.sessions.size).toBe(10_000)
