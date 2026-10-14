@@ -9,6 +9,7 @@ import { fmtPokt, fmtInt, fmtDuration } from '@core/format'
 import {
   supplierActivity,
   claimsBySupplier,
+  why,
   type SupplierActivity,
   type SupplierClaims
 } from '@core/performance'
@@ -82,36 +83,42 @@ export function PerformanceScreen(): React.JSX.Element {
     const id = ++loadId.current
     const since = new Date(Date.now() - WINDOWS.find((w) => w.id === win)!.ms).toISOString()
     setRows(null)
-    const why = (x: unknown): string => (x instanceof Error ? x.message : String(x))
     const counted = claimsBySupplier(
       net,
       mine.map((x) => x.st!.operator),
       since
     ).catch((e) => why(e))
-    const out: Row[] = []
+    const acts: PromiseSettledResult<SupplierActivity>[] = []
     for (let i = 0; i < mine.length; i += READS_AT_ONCE) {
-      const batch = await Promise.allSettled(
-        mine.slice(i, i + READS_AT_ONCE).map(({ st }) => supplierActivity(net, st!.operator, since))
+      acts.push(
+        ...(await Promise.allSettled(
+          mine
+            .slice(i, i + READS_AT_ONCE)
+            .map(({ st }) => supplierActivity(net, st!.operator, since))
+        ))
       )
-      batch.forEach((a, j) => {
-        const { server, st } = mine[i + j]
-        out.push({
-          server,
-          operator: st!.operator,
-          claims: { claims: null, lastClaim: null, error: 'not read' },
-          activity: a.status === 'fulfilled' ? a.value : null,
-          error: a.status === 'rejected' ? why(a.reason) : ''
-        })
-      })
       if (id !== loadId.current) return
     }
     const c = await counted
-    for (const r of out)
-      r.claims =
-        (typeof c === 'string' ? undefined : c.get(r.operator)) ??
-        ({ claims: null, lastClaim: null, error: typeof c === 'string' ? c : 'not read' } as const)
     if (id !== loadId.current) return
-    setRows(out)
+    setRows(
+      mine.map(({ server, st }, i): Row => {
+        const a = acts[i]
+        const operator = st!.operator
+        return {
+          server,
+          operator,
+          claims: (typeof c === 'string' ? undefined : c.get(operator)) ?? {
+            claims: null,
+            lastClaim: null,
+            covered: false,
+            error: typeof c === 'string' ? c : 'not read'
+          },
+          activity: a.status === 'fulfilled' ? a.value : null,
+          error: a.status === 'rejected' ? why(a.reason) : ''
+        }
+      })
+    )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [net, win, key])
 
@@ -312,8 +319,10 @@ export function PerformanceScreen(): React.JSX.Element {
                           <td>
                             {r.claims.claims === null ? (
                               <ErrText>Could not read: {r.claims.error}</ErrText>
-                            ) : (
+                            ) : r.claims.covered ? (
                               fmtInt(r.claims.claims)
+                            ) : (
+                              <span className="hint">not covered by the indexer yet</span>
                             )}
                           </td>
                           {a.settlementsError ? (
@@ -340,6 +349,8 @@ export function PerformanceScreen(): React.JSX.Element {
                           <td>
                             {r.claims.error ? (
                               <span className="hint">could not be read</span>
+                            ) : !r.claims.covered ? (
+                              <span className="hint">not covered by the indexer yet</span>
                             ) : r.claims.lastClaim ? (
                               <>
                                 {ago(r.claims.lastClaim.time)}
@@ -349,7 +360,7 @@ export function PerformanceScreen(): React.JSX.Element {
                                 </div>
                               </>
                             ) : (
-                              <span className="hint">never</span>
+                              <span className="hint">none in this period</span>
                             )}
                           </td>
                         </>

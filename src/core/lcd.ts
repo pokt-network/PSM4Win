@@ -2,6 +2,7 @@
 // Nothing here signs or broadcasts. Used by the renderer (screens) and by main
 // (the signer's own preflight reads).
 import { NETWORK_INFO, type Network } from './networks'
+import { gql } from './indexer'
 
 export class LcdError extends Error {
   constructor(
@@ -489,28 +490,6 @@ export interface OwnedSupplier {
   stakeUpokt: number
 }
 
-/**
- * One indexer (GraphQL) read: the one client and timeout every indexer query of the app goes
- * through. Throws on HTTP and GraphQL errors so a gap is never shown as zero.
- */
-export async function gql<T>(
-  net: Network,
-  query: string,
-  variables: Record<string, unknown> = {}
-): Promise<T> {
-  const res = await fetch(NETWORK_INFO[net].indexer, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ query, variables }),
-    signal: AbortSignal.timeout(30_000)
-  })
-  if (!res.ok) throw new LcdError(`HTTP ${res.status} from the indexer`, res.status)
-  const j = (await res.json()) as { data?: T; errors?: { message: string }[] }
-  if (j.errors?.length) throw new Error(`the indexer answered: ${j.errors[0].message}`)
-  if (!j.data) throw new Error('the indexer answered nothing')
-  return j.data
-}
-
 const OWNED_FILTER =
   'filter: { ownerId: { equalTo: $owner }, stakeStatus: { notEqualTo: Unstaked }, id: { greaterThan: $after } }, orderBy: ID_ASC, first: 1000'
 const OWNED_FIELDS = '{ totalCount nodes { id stakeStatus stakeAmount } }'
@@ -526,10 +505,11 @@ export const OWNED_SUPPLIERS_MAX_PAGES = 100
  * the owner wallet at all; it is found from its operator instead. The indexer answers
  * at most 1000 rows per request whatever `first` asks for, so the list is read in pages
  * keyed on the last operator address seen, until a page holds every row that remains (its
- * `totalCount`). The first page also asks which block the indexer has reached, and every
- * later page reads the indexer as of that block, so a supplier changing status or a new one
- * appearing mid-walk cannot shift a page; the rows read must add up to what the first page
- * counted. An owner with one page of suppliers (nearly all) costs one request.
+ * `totalCount`). An owner with one page of suppliers (nearly all) costs one request. With
+ * more, the list is read again from the start, every page as of the block the indexer said it
+ * had reached in that first request, so a supplier changing status or a new one appearing
+ * mid-walk cannot shift a page; the rows read must then add up to what the first pinned page
+ * counted.
  */
 export async function ownedSuppliers(net: Network, owner: string): Promise<OwnedSupplier[]> {
   if (!/^pokt1[0-9a-z]{38}$/.test(owner)) return []
@@ -551,7 +531,8 @@ export async function ownedSuppliers(net: Network, owner: string): Promise<Owned
       at
         ? `query($owner: String!, $after: String!, $at: String!) { suppliers(${OWNED_FILTER}, blockHeight: $at) ${OWNED_FIELDS} }`
         : `query($owner: String!, $after: String!) { _metadata { lastProcessedHeight } suppliers(${OWNED_FILTER}) ${OWNED_FIELDS} }`,
-      at ? { owner, after, at } : { owner, after }
+      at ? { owner, after, at } : { owner, after },
+      20_000
     )
     const page = d.suppliers?.nodes ?? []
     // Each page must move past the cursor. An indexer that ignored the filter would hand
@@ -565,10 +546,13 @@ export async function ownedSuppliers(net: Network, owner: string): Promise<Owned
     // totalCount counts the rows after the cursor, so this page held all that remained.
     if (!page.length || page.length >= (d.suppliers?.totalCount ?? 0)) break
     if (!at) {
+      // More than one page: read them all again as of the block the first request reported.
       const h = d._metadata?.lastProcessedHeight
       if (!Number.isInteger(h) || !h)
         throw new Error('the indexer did not say which block it has reached')
       at = String(h)
+      nodes.length = 0
+      counted = -1
     }
   }
   if (nodes.length !== counted)

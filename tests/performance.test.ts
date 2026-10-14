@@ -129,9 +129,22 @@ describe('parseHealth', () => {
 describe('indexer reads', () => {
   afterEach(() => vi.unstubAllGlobals())
   type Vars = Record<string, unknown>
+  /** The node's block at a height (the LCD, a GET); null = the node cannot say (404). */
+  let nodeBlockTime: string | null = null
   /** Answers each indexer call with what `reply` gives for its query and variables. */
   const answer = (reply: (query: string, v: Vars) => unknown): ReturnType<typeof vi.fn> => {
-    const f = vi.fn(async (_url: string, init: { body: string }) => {
+    nodeBlockTime = null
+    const f = vi.fn(async (url: string, init?: { body: string }) => {
+      if (!init?.body)
+        return nodeBlockTime
+          ? {
+              ok: true,
+              status: 200,
+              json: async () => ({
+                block: { header: { height: url.split('/').at(-1), time: nodeBlockTime } }
+              })
+            }
+          : { ok: false, status: 404, text: async () => 'not found' }
       const { query, variables } = JSON.parse(init.body) as { query: string; variables: Vars }
       return { ok: true, status: 200, json: async () => reply(query, variables) }
     })
@@ -181,17 +194,42 @@ describe('indexer reads', () => {
     }
   })
   const calls = (f: ReturnType<typeof vi.fn>): { query: string; variables: Vars }[] =>
-    f.mock.calls.map((c) => JSON.parse((c as unknown as [string, { body: string }])[1].body))
+    f.mock.calls
+      .map((c) => (c as unknown as [string, { body?: string } | undefined])[1]?.body)
+      .filter((b): b is string => !!b)
+      .map((b) => JSON.parse(b))
   const pages = (f: ReturnType<typeof vi.fn>): Vars[] =>
     calls(f)
       .filter((c) => c.query.includes('rowLimit: $n'))
       .map((c) => c.variables)
 
   /** A claims read: the count for the batch, and each supplier's newest claim as l<k>. */
-  const claimsAnswer = (op: string[], count = (i: number) => String(i)): unknown => ({
+  const claimsAnswer = (
+    op: string[],
+    count = (i: number) => String(i),
+    r: unknown = range
+  ): unknown => ({
     data: {
+      head,
       c: op.map((o, i) => ({ supplierId: o, claims: count(i) })),
-      ...Object.fromEntries(op.map((_, k) => [`l${k}`, claims(961390 - k, 1)]))
+      ...Object.fromEntries(
+        op.map((_, k) => [
+          `l${k}`,
+          {
+            range: r,
+            data:
+              k === 2
+                ? []
+                : [
+                    {
+                      block_time: `T${961390 - k}`,
+                      session_end_height: String(961378 - k),
+                      service_id: `svc${961390 - k}`
+                    }
+                  ]
+          }
+        ])
+      )
     }
   })
   it('reads the claims count and newest claim of every supplier in one read per 20', async () => {
@@ -203,14 +241,27 @@ describe('indexer reads', () => {
     expect(first.variables.t).toBe('2026-10-05T00:00:00Z')
     expect(first.variables.o19).toEqual([ops[19]])
     expect(first.query).toContain('getCreatedClaimsCountList(suppliers: $op, rangeStart: $t)')
-    expect(first.query).toContain('l19: getCreatedClaimsList(suppliers: $o19, rowLimit: 1)')
+    // The newest claim is read within the window only.
+    expect(first.query).toContain(
+      'l19: getCreatedClaimsJson(suppliers: $o19, rangeStart: $t, rowLimit: 1)'
+    )
     const last = { time: 'T961390', sessionEnd: 961378, service: 'svc961390' }
-    expect(m.get(ops[0])).toEqual({ claims: 0, lastClaim: last, error: '' })
+    expect(m.get(ops[0])).toEqual({ claims: 0, lastClaim: last, covered: true, error: '' })
     expect(m.get(ops[21])).toEqual({
       claims: 1,
       lastClaim: { ...last, time: 'T961389', sessionEnd: 961377, service: 'svc961389' },
+      covered: true,
       error: ''
     })
+    // None in the window: no last claim, not "never".
+    expect(m.get(ops[2])).toEqual({ claims: 2, lastClaim: null, covered: true, error: '' })
+  })
+  it('says the claims are not covered when the indexed blocks do not span the window', async () => {
+    const late = { ...range, covered_from: '2026-10-06T00:00:00+00:00' }
+    answer((_q, v) => claimsAnswer(v.op as string[], (i) => String(i), late))
+    expect((await claimsBySupplier('main', [OP], '2026-10-05T00:00:00Z')).get(OP)?.covered).toBe(
+      false
+    )
   })
   it('keeps the other suppliers when one is bad, left out, or in a read that failed', async () => {
     const ops = Array.from({ length: 21 }, (_, i) => 'pokt1' + String(i).padStart(38, '0'))
@@ -225,7 +276,12 @@ describe('indexer reads', () => {
     const m = await claimsBySupplier('main', ['x', ...ops], 't')
     // The bad address is never sent.
     expect(calls(f).flatMap((c) => c.variables.op as string[])).not.toContain('x')
-    const fail = (error: string): unknown => ({ claims: null, lastClaim: null, error })
+    const fail = (error: string): unknown => ({
+      claims: null,
+      lastClaim: null,
+      covered: false,
+      error
+    })
     expect(m.get('x')).toEqual(fail('not an operator address'))
     expect(m.get(ops[0])?.claims).toBe(7)
     expect(m.get(ops[1])).toEqual(fail('the indexer did not count its claims'))
@@ -267,12 +323,16 @@ describe('indexer reads', () => {
       expect((await supplierActivity('main', OP, '2026-10-05T00:00:00Z')).covered).toBe(false)
     }
   })
-  it('reads the monitor claims in one request when its first page reaches the first session end', async () => {
+  it('reads the monitor claims from the time the node gives for the first session end, in one indexer request', async () => {
     const f = answer(() => ({ data: { c: claims(2000, 200) } }))
+    nodeBlockTime = '2026-10-14T10:00:00Z'
     const c = await claimedSessions('main', OP, 1850)
+    expect(String(f.mock.calls[0][0])).toMatch(/\/blocks\/1850$/)
     // One page: its oldest claim (height 1801) already predates session end 1850.
-    expect(f).toHaveBeenCalledTimes(1)
-    expect(pages(f)).toEqual([{ op: [OP], n: 200, h: null, id: null }])
+    expect(calls(f)).toHaveLength(1)
+    expect(pages(f)).toEqual([
+      { op: [OP], t: '2026-10-14T09:00:00.000Z', n: 200, h: null, id: null }
+    ])
     expect(c.complete).toBe(true)
     expect(c.sessions.size).toBe(139)
     expect(c.sessions.has(sid(1862))).toBe(true)
@@ -283,11 +343,12 @@ describe('indexer reads', () => {
       data: { c: !v.h ? claims(5000, 150) : v.h === '4851' ? claims(4850, 5) : [] }
     }))
     const c = await claimedSessions('main', OP, 1)
-    // A page shorter than asked (150 of 200) is not the end.
-    expect(pages(f).map((v) => [v.h, v.id])).toEqual([
-      [null, null],
-      ['4851', 'tx4851-1'],
-      ['4846', 'tx4846-1']
+    // A page shorter than asked (150 of 200) is not the end; the node could not say the
+    // block's time, so the whole history is read.
+    expect(pages(f).map((v) => [v.t, v.h, v.id])).toEqual([
+      [null, null, null],
+      [null, '4851', 'tx4851-1'],
+      [null, '4846', 'tx4846-1']
     ])
     expect(c).toEqual(expect.objectContaining({ complete: true }))
     expect(c.sessions.size).toBe(155)
@@ -306,6 +367,7 @@ describe('indexer reads', () => {
     expect((await claimsBySupplier('main', [OP], 't')).get(OP)).toEqual({
       claims: null,
       lastClaim: null,
+      covered: false,
       error: 'the indexer answered: boom'
     })
     expect((await supplierActivity('main', OP, 't')).settlementsError).toBe(

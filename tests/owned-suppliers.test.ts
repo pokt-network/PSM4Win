@@ -90,13 +90,15 @@ describe('ownedSuppliers (indexer)', () => {
     })
     vi.stubGlobal('fetch', f)
     const got = await ownedSuppliers('main', OWNER)
-    expect(f).toHaveBeenCalledTimes(2)
+    expect(f).toHaveBeenCalledTimes(3)
     const reads = f.mock.calls.map((c) => JSON.parse(c[1].body))
-    expect(reads.map((r) => r.variables.after)).toEqual(['', pages[0][999].id])
-    // The first page asks which block the indexer reached; the next reads as of that block.
+    // The first request says which block the indexer reached; with more than one page the
+    // list is read again from the start, every page as of that block.
+    expect(reads.map((r) => r.variables.after)).toEqual(['', '', pages[0][999].id])
     expect(reads[0].query).toContain('_metadata { lastProcessedHeight }')
-    expect(reads.map((r) => r.variables.at)).toEqual([undefined, AT])
+    expect(reads.map((r) => r.variables.at)).toEqual([undefined, AT, AT])
     expect(reads[1].query).toContain('blockHeight: $at')
+    expect(reads[2].query).toContain('blockHeight: $at')
     expect(got).toHaveLength(1037)
     expect(new Set(got.map((g) => g.operator)).size).toBe(1037)
   })
@@ -141,7 +143,7 @@ describe('ownedSuppliers (indexer)', () => {
     })
     vi.stubGlobal('fetch', f)
     const got = await ownedSuppliers('main', OWNER)
-    expect(f).toHaveBeenCalledTimes(3)
+    expect(f).toHaveBeenCalledTimes(4)
     expect(got.map((g) => g.operator)).toEqual(all.map((n) => n.id))
   })
   it('stops with an error when the indexer hands back the same page instead of the next', async () => {
@@ -153,7 +155,7 @@ describe('ownedSuppliers (indexer)', () => {
     // An indexer that ignores the cursor: always the first rows, always more remaining.
     const f = answer({ data: { suppliers: { totalCount: 1037, nodes: page } } })
     await expect(ownedSuppliers('main', OWNER)).rejects.toThrow('did not move on')
-    expect(f).toHaveBeenCalledTimes(2)
+    expect(f).toHaveBeenCalledTimes(3)
   })
   it('gives up after a bounded number of pages rather than reading forever', async () => {
     let n = 0
