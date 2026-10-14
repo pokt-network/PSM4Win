@@ -42,6 +42,8 @@ interface Row {
   activity: SupplierActivity | null
   earnings: ServiceEarnings[] | null
   error: string
+  /** Read apart from the activity, so one failing leaves the other on screen. */
+  earningsError: string
 }
 
 function ago(iso: string): string {
@@ -78,20 +80,18 @@ export function PerformanceScreen(): React.JSX.Element {
     const out = await Promise.all(
       mine.map(async ({ server, st }): Promise<Row> => {
         const operator = st!.operator
-        try {
-          const [activity, earnings] = await Promise.all([
-            supplierActivity(net, operator, since),
-            earningsByService(net, operator, since)
-          ])
-          return { server, operator, activity, earnings, error: '' }
-        } catch (e) {
-          return {
-            server,
-            operator,
-            activity: null,
-            earnings: null,
-            error: e instanceof Error ? e.message : String(e)
-          }
+        const [a, e] = await Promise.allSettled([
+          supplierActivity(net, operator, since),
+          earningsByService(net, operator, since)
+        ])
+        const why = (x: unknown): string => (x instanceof Error ? x.message : String(x))
+        return {
+          server,
+          operator,
+          activity: a.status === 'fulfilled' ? a.value : null,
+          earnings: e.status === 'fulfilled' ? e.value : null,
+          error: a.status === 'rejected' ? why(a.reason) : '',
+          earningsError: e.status === 'rejected' ? why(e.reason) : ''
         }
       })
     )
@@ -293,8 +293,18 @@ export function PerformanceScreen(): React.JSX.Element {
                         </td>
                       ) : (
                         <>
-                          <td>{fmtInt(a.claims)}</td>
-                          {a.covered ? (
+                          <td>
+                            {a.claimsError ? (
+                              <ErrText>Could not read: {a.claimsError}</ErrText>
+                            ) : (
+                              fmtInt(a.claims)
+                            )}
+                          </td>
+                          {a.settlementsError ? (
+                            <td colSpan={3}>
+                              <ErrText>Could not read: {a.settlementsError}</ErrText>
+                            </td>
+                          ) : a.covered ? (
                             <>
                               <td>{fmtInt(a.proofs)}</td>
                               <td>{fmtInt(a.settled)}</td>
@@ -312,7 +322,9 @@ export function PerformanceScreen(): React.JSX.Element {
                             </td>
                           )}
                           <td>
-                            {a.lastClaim ? (
+                            {a.claimsError ? (
+                              <span className="hint">could not be read</span>
+                            ) : a.lastClaim ? (
                               <>
                                 {ago(a.lastClaim.time)}
                                 <div className="hint">
@@ -367,8 +379,8 @@ export function PerformanceScreen(): React.JSX.Element {
                       <tr key={r.server.name}>
                         <td className="svcid">{r.server.name}</td>
                         <td colSpan={4} className="hint">
-                          {r.error
-                            ? 'could not be read'
+                          {r.earningsError
+                            ? `could not be read: ${r.earningsError}`
                             : r.earnings === null
                               ? 'not covered by the indexer yet'
                               : 'nothing settled in this period'}

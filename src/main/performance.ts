@@ -147,10 +147,20 @@ class PerformanceMonitor {
       if (!params.has(net)) params.set(net, await claimParams(net))
       const claimed = h.sessions.length
         ? await claimedSessions(net, operator, claimsFromEnd(h))
-        : new Set<string>()
+        : { sessions: new Set<string>(), complete: true }
+      const verdict = judgeStack(h, claimed.sessions, heads.get(net)!, params.get(net)!)
+      // A read cut short can only miss claims, so it can wrongly say none were made; say that
+      // the check could not be made instead.
+      if (verdict.kind === 'unclaimed' && !claimed.complete)
+        return {
+          ...base,
+          error: `${sv.name} made too many claims for the check to read them all, so whether it is claiming is not known.`,
+          lastHeight: h.last_height,
+          sessions: h.sessions.length
+        }
       return {
         ...base,
-        verdict: judgeStack(h, claimed, heads.get(net)!, params.get(net)!),
+        verdict,
         lastHeight: h.last_height,
         sessions: h.sessions.length
       }
@@ -178,7 +188,11 @@ class PerformanceMonitor {
       n.on('close', () => this.shown.delete(n))
       this.shown.add(n)
       n.show()
-      log.info('performance notification', { server: x.server, network: x.network, kind: x.verdict.kind })
+      log.info('performance notification', {
+        server: x.server,
+        network: x.network,
+        kind: x.verdict.kind
+      })
     }
   }
 }

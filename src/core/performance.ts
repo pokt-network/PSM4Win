@@ -26,7 +26,7 @@ const OP_RE = /^pokt1[0-9a-z]{38}$/
 
 /** Claims the indexer lists per call at most. */
 const CLAIMS_PAGE = 1000
-/** Pages createdClaims reads at most: 50,000 claims. */
+/** Pages createdClaims reads at most. */
 const CLAIMS_MAX_PAGES = 50
 
 interface CreatedClaim {
@@ -34,38 +34,76 @@ interface CreatedClaim {
   id: string
   sessionId: string
   sessionEndHeight: string
+  serviceId: string
+  blockTime: string | null
 }
+const CLAIM_FIELDS = 'height id sessionId sessionEndHeight serviceId blockTime'
 
 /**
  * The claims a supplier made on chain (MsgCreateClaim), newest first, since a time or ever,
- * read page by page, each after the last row of the one before, until a page comes back empty
- * (a short page is not taken as the end: the indexer may serve fewer rows than asked) or
- * `enough` says the oldest row read is far enough back. Throws rather than return a list cut
- * short.
+ * read `pageRows` at a time, each page after the last row of the one before, until a page comes
+ * back empty (a short page is not taken as the end: the indexer may serve fewer rows than
+ * asked) or `enough` says the oldest row read is far enough back. `complete` is false when it
+ * stopped after CLAIMS_MAX_PAGES pages with more to read; callers must not take that as all.
  */
 async function createdClaims(
   net: Network,
   operator: string,
   sinceIso: string | null,
+  pageRows = CLAIMS_PAGE,
   enough: (oldest: CreatedClaim) => boolean = () => false
-): Promise<CreatedClaim[]> {
-  const out: CreatedClaim[] = []
+): Promise<{ rows: CreatedClaim[]; complete: boolean }> {
+  const rows: CreatedClaim[] = []
   let before: CreatedClaim | null = null
   for (let page = 0; page < CLAIMS_MAX_PAGES; page++) {
     const d: { c: CreatedClaim[] } = await gql(
       net,
-      `query($op: [String]!, $t: Datetime, $h: BigInt, $id: String) {
-        c: getCreatedClaimsList(suppliers: $op, rangeStart: $t, rowLimit: ${CLAIMS_PAGE}, beforeHeight: $h, beforeId: $id) { height id sessionId sessionEndHeight }
+      `query($op: [String]!, $t: Datetime, $n: Int!, $h: BigInt, $id: String) {
+        c: getCreatedClaimsList(suppliers: $op, rangeStart: $t, rowLimit: $n, beforeHeight: $h, beforeId: $id) { ${CLAIM_FIELDS} }
       }`,
-      { op: [operator], t: sinceIso, h: before?.height ?? null, id: before?.id ?? null }
+      {
+        op: [operator],
+        t: sinceIso,
+        n: pageRows,
+        h: before?.height ?? null,
+        id: before?.id ?? null
+      }
     )
-    out.push(...d.c)
+    rows.push(...d.c)
     before = d.c[d.c.length - 1] ?? null
-    if (!before || enough(before)) return out
+    if (!before || enough(before)) return { rows, complete: true }
   }
-  throw new Error(
-    `the indexer was still answering after ${CLAIMS_MAX_PAGES} pages of claims, so they were not read to the end`
+  return { rows, complete: false }
+}
+
+type LastClaim = { time: string; sessionEnd: number; service: string }
+const lastOf = (c: CreatedClaim): LastClaim => ({
+  time: c.blockTime ?? '',
+  sessionEnd: Number(c.sessionEndHeight) || 0,
+  service: c.serviceId
+})
+
+/**
+ * Claims made since a time, counted by reading them (the indexer has no count of them), and
+ * the newest claim ever: the newest read, or when none was, the newest before the window.
+ */
+async function claimsSince(
+  net: Network,
+  operator: string,
+  sinceIso: string
+): Promise<{ count: number; last: LastClaim | null }> {
+  const c = await createdClaims(net, operator, sinceIso)
+  if (!c.complete)
+    throw new Error(
+      `more than ${CLAIMS_PAGE * CLAIMS_MAX_PAGES} claims in this period, too many to count`
+    )
+  if (c.rows.length) return { count: c.rows.length, last: lastOf(c.rows[0]) }
+  const d = await gql<{ last: CreatedClaim[] }>(
+    net,
+    `query($op: [String]!) { last: getCreatedClaimsList(suppliers: $op, rowLimit: 1) { ${CLAIM_FIELDS} } }`,
+    { op: [operator] }
   )
+  return { count: 0, last: d.last[0] ? lastOf(d.last[0]) : null }
 }
 
 /** One row of an indexer `...Json` function: snake_case columns, every number a string. */
@@ -107,70 +145,89 @@ function covers(r: Range | undefined, head: Head | undefined): boolean {
 const sum = (rows: JsonRow[], col: string): number =>
   rows.reduce((t, r) => t + (Number(r[col]) || 0), 0)
 
-export interface SupplierActivity {
-  claims: number
-  proofs: number
-  settled: number
-  /** Claims the network expired (their rewards are lost), by reason. */
-  expired: number
-  expiredReasons: Record<string, number>
-  /** The newest claim this supplier made, at any time. */
-  lastClaim: { time: string; sessionEnd: number; service: string } | null
-  /** Whether proofs, settled, and expired cover the whole window; when not, they are not known yet. */
-  covered: boolean
-}
-
-/** Claims, proofs, settlements, and expirations since a time, plus the newest claim ever. */
-export async function supplierActivity(
+/** Proofs, settled claims, and expirations since a time, from the indexer's money tables. */
+async function settlementsSince(
   net: Network,
   operator: string,
   sinceIso: string
-): Promise<SupplierActivity> {
-  if (!OP_RE.test(operator)) throw new Error('not an operator address')
-  const [d, claims] = await Promise.all([
-    gql<{
-      settled: JsonRows
-      proofs: JsonRows
-      penalties: JsonRows
-      last: { serviceId: string; sessionEndHeight: string; blockTime: string | null }[]
-      head: Head
-    }>(
-      net,
-      `query($op: [String]!, $t: Datetime!) {
-        ${HEAD}
-        settled: getSupplierEarningsJson(suppliers: $op, rangeStart: $t)
-        proofs: getSupplierProofsJson(suppliers: $op, rangeStart: $t)
-        penalties: getSupplierPenaltiesJson(suppliers: $op, rangeStart: $t)
-        last: getCreatedClaimsList(suppliers: $op, rowLimit: 1) { serviceId sessionEndHeight blockTime }
-      }`,
-      { op: [operator], t: sinceIso }
-    ),
-    createdClaims(net, operator, sinceIso)
-  ])
+): Promise<
+  Pick<SupplierActivity, 'proofs' | 'settled' | 'expired' | 'expiredReasons' | 'covered'>
+> {
+  const d = await gql<{ settled: JsonRows; proofs: JsonRows; penalties: JsonRows; head: Head }>(
+    net,
+    `query($op: [String]!, $t: Datetime!) {
+      ${HEAD}
+      settled: getSupplierEarningsJson(suppliers: $op, rangeStart: $t)
+      proofs: getSupplierProofsJson(suppliers: $op, rangeStart: $t)
+      penalties: getSupplierPenaltiesJson(suppliers: $op, rangeStart: $t)
+    }`,
+    { op: [operator], t: sinceIso }
+  )
   const expired = (d.penalties?.data ?? []).filter((r) => r.kind === 'expired')
   const reasons: Record<string, number> = {}
   for (const r of expired) {
     const k = r.reason ?? 'unknown'
     reasons[k] = (reasons[k] ?? 0) + (Number(r.events) || 0)
   }
-  const l = d.last[0]
   return {
-    claims: claims.length,
     proofs: sum(d.proofs?.data ?? [], 'proofs_submitted'),
     settled: sum(d.settled?.data ?? [], 'settled_claims'),
     expired: sum(expired, 'events'),
     expiredReasons: reasons,
-    lastClaim: l
-      ? {
-          time: l.blockTime ?? '',
-          sessionEnd: Number(l.sessionEndHeight) || 0,
-          service: l.serviceId
-        }
-      : null,
     covered:
       covers(d.settled?.range, d.head) &&
       covers(d.proofs?.range, d.head) &&
       covers(d.penalties?.range, d.head)
+  }
+}
+
+export interface SupplierActivity {
+  claims: number
+  /** The newest claim this supplier made, at any time. */
+  lastClaim: LastClaim | null
+  /** Why claims and the last claim could not be read; empty when they were. */
+  claimsError: string
+  proofs: number
+  settled: number
+  /** Claims the network expired (their rewards are lost), by reason. */
+  expired: number
+  expiredReasons: Record<string, number>
+  /** Whether proofs, settled, and expired cover the whole window; when not, they are not known yet. */
+  covered: boolean
+  /** Why proofs, settled, and expired could not be read; empty when they were. */
+  settlementsError: string
+}
+
+const why = (e: unknown): string => (e instanceof Error ? e.message : String(e))
+
+/**
+ * Claims, proofs, settlements, and expirations since a time, plus the newest claim ever. The
+ * claims and the rest are read apart, so one failing leaves the other, with its error said.
+ */
+export async function supplierActivity(
+  net: Network,
+  operator: string,
+  sinceIso: string
+): Promise<SupplierActivity> {
+  if (!OP_RE.test(operator)) throw new Error('not an operator address')
+  const [c, s] = await Promise.allSettled([
+    claimsSince(net, operator, sinceIso),
+    settlementsSince(net, operator, sinceIso)
+  ])
+  return {
+    claims: c.status === 'fulfilled' ? c.value.count : 0,
+    lastClaim: c.status === 'fulfilled' ? c.value.last : null,
+    claimsError: c.status === 'rejected' ? why(c.reason) : '',
+    ...(s.status === 'fulfilled'
+      ? { ...s.value, settlementsError: '' }
+      : {
+          proofs: 0,
+          settled: 0,
+          expired: 0,
+          expiredReasons: {},
+          covered: false,
+          settlementsError: why(s.reason)
+        })
   }
 }
 
@@ -212,17 +269,42 @@ export async function earningsByService(
     .sort((a, b) => b.earnedUpokt - a.earnedUpokt)
 }
 
-/** The sessions (by id) the supplier claimed on chain whose session ended at or after a height. */
+/** Claims the monitor reads per call: a check usually needs a few dozen. */
+const MONITOR_PAGE = 200
+
+/**
+ * The sessions (by id) the supplier claimed on chain whose session ended at or after a height.
+ * `complete` is false when there were too many claims to read them all; the set then holds
+ * the newest.
+ */
 export async function claimedSessions(
   net: Network,
   operator: string,
   fromEnd: number
-): Promise<Set<string>> {
+): Promise<{ sessions: Set<string>; complete: boolean }> {
   if (!OP_RE.test(operator)) throw new Error('not an operator address')
-  // A claim lands after its session ends, so once a claim's own height is at or below fromEnd
-  // every older one is for a session that ended before it.
-  const c = await createdClaims(net, operator, null, (o) => Number(o.height) <= fromEnd)
-  return new Set(c.filter((x) => Number(x.sessionEndHeight) >= fromEnd).map((x) => x.sessionId))
+  // A claim lands after its session ends: the read starts at that block's time (a minute
+  // early, so a clock that stepped back loses nothing), and once a claim's own height is at
+  // or below fromEnd every older one is for a session that ended before it.
+  const b = await gql<{ b: { timestamp: string } | null }>(
+    net,
+    'query($h: BigFloat!) { b: block(id: $h) { timestamp } }',
+    { h: String(fromEnd) }
+  )
+  const since = b.b ? new Date(utc(b.b.timestamp) - 60_000).toISOString() : null
+  const c = await createdClaims(
+    net,
+    operator,
+    since,
+    MONITOR_PAGE,
+    (o) => Number(o.height) <= fromEnd
+  )
+  return {
+    sessions: new Set(
+      c.rows.filter((x) => Number(x.sessionEndHeight) >= fromEnd).map((x) => x.sessionId)
+    ),
+    complete: c.complete
+  }
 }
 
 // ---- what the stack's miner logged (supplier.sh health) ----
