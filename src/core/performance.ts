@@ -70,7 +70,38 @@ async function createdClaims(
 
 /** One row of an indexer `...Json` function: snake_case columns, every number a string. */
 type JsonRow = Record<string, string | null>
-type JsonRows = { data: JsonRow[] }
+/** The part of the window asked for that a `...Json` answer covers. */
+interface Range {
+  requested_from: string | null
+  covered_from: string | null
+  covered_to: string | null
+  gaps: unknown[] | null
+}
+type JsonRows = { range?: Range; data: JsonRow[] }
+/** The newest block the indexer has read, asked for before the `...Json` reads in a document. */
+const HEAD = 'head: blocks(first: 1, orderBy: ID_DESC) { nodes { timestamp } }'
+type Head = { nodes: { timestamp: string }[] }
+
+/** Block times come without a zone; they are UTC. */
+const utc = (t: string): number => Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(t) ? t : t + 'Z')
+
+/**
+ * Whether an answer covers its whole window: from its start, with no gap, up to the newest
+ * block the indexer has read (the tables these functions read can trail it). Where it does
+ * not, a 0 or a missing row means not known yet, not that nothing happened.
+ */
+function covers(r: Range | undefined, head: Head | undefined): boolean {
+  const h = head?.nodes[0]?.timestamp
+  return (
+    !!r?.requested_from &&
+    !!r.covered_from &&
+    !!r.covered_to &&
+    !!h &&
+    !r.gaps?.length &&
+    utc(r.covered_from) <= utc(r.requested_from) &&
+    utc(r.covered_to) >= utc(h)
+  )
+}
 
 /** A column summed over rows, read as a number. */
 const sum = (rows: JsonRow[], col: string): number =>
@@ -85,6 +116,8 @@ export interface SupplierActivity {
   expiredReasons: Record<string, number>
   /** The newest claim this supplier made, at any time. */
   lastClaim: { time: string; sessionEnd: number; service: string } | null
+  /** Whether proofs, settled, and expired cover the whole window; when not, they are not known yet. */
+  covered: boolean
 }
 
 /** Claims, proofs, settlements, and expirations since a time, plus the newest claim ever. */
@@ -100,9 +133,11 @@ export async function supplierActivity(
       proofs: JsonRows
       penalties: JsonRows
       last: { serviceId: string; sessionEndHeight: string; blockTime: string | null }[]
+      head: Head
     }>(
       net,
       `query($op: [String]!, $t: Datetime!) {
+        ${HEAD}
         settled: getSupplierEarningsJson(suppliers: $op, rangeStart: $t)
         proofs: getSupplierProofsJson(suppliers: $op, rangeStart: $t)
         penalties: getSupplierPenaltiesJson(suppliers: $op, rangeStart: $t)
@@ -131,7 +166,11 @@ export async function supplierActivity(
           sessionEnd: Number(l.sessionEndHeight) || 0,
           service: l.serviceId
         }
-      : null
+      : null,
+    covered:
+      covers(d.settled?.range, d.head) &&
+      covers(d.proofs?.range, d.head) &&
+      covers(d.penalties?.range, d.head)
   }
 }
 
@@ -143,20 +182,25 @@ export interface ServiceEarnings {
   sessions: number
 }
 
-/** POKT the supplier's settled claims paid since a time, per service, largest first. */
+/**
+ * POKT the supplier's settled claims paid since a time, per service, largest first; null when
+ * the indexer does not cover the whole window yet.
+ */
 export async function earningsByService(
   net: Network,
   operator: string,
   sinceIso: string
-): Promise<ServiceEarnings[]> {
+): Promise<ServiceEarnings[] | null> {
   if (!OP_RE.test(operator)) throw new Error('not an operator address')
-  const d = await gql<{ s: JsonRows }>(
+  const d = await gql<{ s: JsonRows; head: Head }>(
     net,
     `query($op: [String]!, $t: Datetime!) {
+      ${HEAD}
       s: getSupplierEarningsJson(suppliers: $op, rangeStart: $t, byService: true)
     }`,
     { op: [operator], t: sinceIso }
   )
+  if (!covers(d.s?.range, d.head)) return null
   return (d.s?.data ?? [])
     .map((r) => ({
       service: r.service_id ?? '',

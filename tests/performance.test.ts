@@ -138,7 +138,15 @@ describe('indexer reads', () => {
     vi.stubGlobal('fetch', f)
     return f
   }
-  const range = { covered_from: 'T', covered_to: 'U', gaps: [], end_inclusive: false }
+  // A window the indexer covers whole: from its start to just past its newest block.
+  const range = {
+    requested_from: '2026-10-05T00:00:00+00:00',
+    covered_from: '2026-10-05T00:00:00+00:00',
+    covered_to: '2026-10-14T16:47:15.076001+00:00',
+    gaps: [],
+    end_inclusive: false
+  }
+  const head = { nodes: [{ timestamp: '2026-10-14T16:47:15.076' }] }
   const claims = (top: number, n: number): unknown[] =>
     Array.from({ length: n }, (_, i) => ({
       height: String(top - i),
@@ -152,6 +160,7 @@ describe('indexer reads', () => {
   it('sums settled claims per service, largest first', async () => {
     answer(() => ({
       data: {
+        head,
         s: {
           range,
           data: [
@@ -171,6 +180,7 @@ describe('indexer reads', () => {
       q.includes('getSupplierEarningsJson')
         ? {
             data: {
+              head,
               settled: { range, data: [{ settled_claims: '67' }] },
               proofs: { range, data: [{ proofs_submitted: '1' }] },
               penalties: {
@@ -192,7 +202,8 @@ describe('indexer reads', () => {
       settled: 67,
       expired: 3,
       expiredReasons: { PROOF_MISSING: 2, PROOF_INVALID: 1 },
-      lastClaim: { time: 'T', sessionEnd: 961380, service: 'meme-watch' }
+      lastClaim: { time: 'T', sessionEnd: 961380, service: 'meme-watch' },
+      covered: true
     })
     // The Json read, the claims, and the empty page that ends them.
     expect(f).toHaveBeenCalledTimes(3)
@@ -222,6 +233,30 @@ describe('indexer reads', () => {
     expect(s.size).toBe(489)
     expect(s.has(sid(1512))).toBe(true)
     expect(s.has(sid(1511))).toBe(false)
+  })
+  it('says a window the indexer does not cover whole is not known yet, not zero', async () => {
+    const lagging = { ...range, covered_to: '2026-10-14T16:30:00.000001+00:00' }
+    const late = { ...range, covered_from: '2026-10-06T00:00:00+00:00' }
+    const gap = { ...range, gaps: [{ from: 'a', to: 'b' }] }
+    const none = { ...range, covered_from: null, covered_to: null }
+    for (const r of [lagging, late, gap, none]) {
+      answer((q) =>
+        q.includes('getSupplierEarningsJson')
+          ? {
+              data: {
+                head,
+                s: { range: r, data: [] },
+                settled: { range, data: [] },
+                proofs: { range: r, data: [] },
+                penalties: { range, data: [] },
+                last: []
+              }
+            }
+          : { data: { c: [] } }
+      )
+      expect(await earningsByService('main', OP, '2026-10-05T00:00:00Z')).toBeNull()
+      expect((await supplierActivity('main', OP, '2026-10-05T00:00:00Z')).covered).toBe(false)
+    }
   })
   it('refuses a non-address, and reports indexer errors instead of zeros', async () => {
     await expect(earningsByService('main', 'x', 't')).rejects.toThrow(/not an operator/)

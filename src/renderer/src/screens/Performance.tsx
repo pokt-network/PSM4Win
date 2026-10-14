@@ -294,15 +294,23 @@ export function PerformanceScreen(): React.JSX.Element {
                       ) : (
                         <>
                           <td>{fmtInt(a.claims)}</td>
-                          <td>{fmtInt(a.proofs)}</td>
-                          <td>{fmtInt(a.settled)}</td>
-                          <td
-                            title={Object.entries(a.expiredReasons)
-                              .map(([k, n]) => `${k}: ${n}`)
-                              .join(', ')}
-                          >
-                            {a.expired ? <Badge cls="bad">{fmtInt(a.expired)}</Badge> : '0'}
-                          </td>
+                          {a.covered ? (
+                            <>
+                              <td>{fmtInt(a.proofs)}</td>
+                              <td>{fmtInt(a.settled)}</td>
+                              <td
+                                title={Object.entries(a.expiredReasons)
+                                  .map(([k, n]) => `${k}: ${n}`)
+                                  .join(', ')}
+                              >
+                                {a.expired ? <Badge cls="bad">{fmtInt(a.expired)}</Badge> : '0'}
+                              </td>
+                            </>
+                          ) : (
+                            <td colSpan={3} className="hint">
+                              not covered by the indexer yet
+                            </td>
+                          )}
                           <td>
                             {a.lastClaim ? (
                               <>
@@ -359,7 +367,11 @@ export function PerformanceScreen(): React.JSX.Element {
                       <tr key={r.server.name}>
                         <td className="svcid">{r.server.name}</td>
                         <td colSpan={4} className="hint">
-                          {r.error ? 'could not be read' : 'nothing settled in this period'}
+                          {r.error
+                            ? 'could not be read'
+                            : r.earnings === null
+                              ? 'not covered by the indexer yet'
+                              : 'nothing settled in this period'}
                         </td>
                       </tr>
                     ]
