@@ -4,6 +4,7 @@ import {
   judgeStack,
   claimWindowClose,
   claimsFromEnd,
+  claimedSessions,
   earningsByService,
   supplierActivity,
   type MinerHealth,
@@ -127,66 +128,105 @@ describe('parseHealth', () => {
 
 describe('indexer reads', () => {
   afterEach(() => vi.unstubAllGlobals())
-  const answer = (data: unknown): ReturnType<typeof vi.fn> => {
-    const f = vi.fn(async () => ({ ok: true, status: 200, json: async () => data }))
+  type Vars = Record<string, unknown>
+  /** Answers each indexer call with what `reply` gives for its query and variables. */
+  const answer = (reply: (query: string, v: Vars) => unknown): ReturnType<typeof vi.fn> => {
+    const f = vi.fn(async (_url: string, init: { body: string }) => {
+      const { query, variables } = JSON.parse(init.body) as { query: string; variables: Vars }
+      return { ok: true, status: 200, json: async () => reply(query, variables) }
+    })
     vi.stubGlobal('fetch', f)
     return f
   }
+  const range = { covered_from: 'T', covered_to: 'U', gaps: [], end_inclusive: false }
+  const claims = (top: number, n: number): unknown[] =>
+    Array.from({ length: n }, (_, i) => ({
+      height: String(top - i),
+      id: `tx${top - i}-1`,
+      sessionId: sid(top - i),
+      sessionEndHeight: String(top - i - 12)
+    }))
+  const vars = (f: ReturnType<typeof vi.fn>, i: number): Vars =>
+    JSON.parse((f.mock.calls[i] as unknown as [string, { body: string }])[1].body).variables
+
   it('sums settled claims per service, largest first', async () => {
-    answer({
+    answer(() => ({
       data: {
         s: {
-          groupedAggregates: [
-            {
-              keys: ['b'],
-              sum: { settledAmount: '10', numRelays: '1' },
-              distinctCount: { sessionId: '1' }
-            },
-            {
-              keys: ['a'],
-              sum: { settledAmount: '46123973', numRelays: '4119' },
-              distinctCount: { sessionId: '332' }
-            }
+          range,
+          data: [
+            { service_id: 'b', settled_upokt: '10', relays: '1', settled_claims: '1' },
+            { service_id: 'a', settled_upokt: '46123973', relays: '4119', settled_claims: '332' }
           ]
         }
       }
-    })
+    }))
     expect(await earningsByService('main', OP, '2026-09-12T00:00:00Z')).toEqual([
       { service: 'a', relays: 4119, earnedUpokt: 46123973, sessions: 332 },
       { service: 'b', relays: 1, earnedUpokt: 10, sessions: 1 }
     ])
   })
   it('counts activity and reports expirations by reason', async () => {
-    const f = answer({
-      data: {
-        claims: { totalCount: 69 },
-        proofs: { totalCount: 1 },
-        settled: { totalCount: 67 },
-        expired: {
-          totalCount: 2,
-          groupedAggregates: [{ keys: ['PROOF_MISSING'], distinctCount: { id: '2' } }]
-        },
-        last: {
-          nodes: [
-            { serviceId: 'meme-watch', sessionEndHeight: '961380', block: { timestamp: 'T' } }
-          ]
-        }
-      }
-    })
+    const f = answer((q, v) =>
+      q.includes('getSupplierEarningsJson')
+        ? {
+            data: {
+              settled: { range, data: [{ settled_claims: '67' }] },
+              proofs: { range, data: [{ proofs_submitted: '1' }] },
+              penalties: {
+                range,
+                data: [
+                  { kind: 'expired', reason: 'PROOF_MISSING', events: '2' },
+                  { kind: 'expired', reason: 'PROOF_INVALID', events: '1' },
+                  { kind: 'slashed', reason: 'unknown', events: '5' }
+                ]
+              },
+              last: [{ serviceId: 'meme-watch', sessionEndHeight: '961380', blockTime: 'T' }]
+            }
+          }
+        : { data: { c: v.h ? [] : claims(961390, 69) } }
+    )
     expect(await supplierActivity('main', OP, '2026-10-05T00:00:00Z')).toEqual({
       claims: 69,
       proofs: 1,
       settled: 67,
-      expired: 2,
-      expiredReasons: { PROOF_MISSING: 2 },
+      expired: 3,
+      expiredReasons: { PROOF_MISSING: 2, PROOF_INVALID: 1 },
       lastClaim: { time: 'T', sessionEnd: 961380, service: 'meme-watch' }
     })
-    const body = JSON.parse((f.mock.calls[0] as unknown as [string, { body: string }])[1].body)
-    expect(body.variables).toEqual({ op: OP, t: '2026-10-05T00:00:00Z' })
+    // The Json read, the claims, and the empty page that ends them.
+    expect(f).toHaveBeenCalledTimes(3)
+    expect(vars(f, 0)).toEqual({ op: [OP], t: '2026-10-05T00:00:00Z' })
+  })
+  it('reads claims until an empty page, each page after the last row of the one before', async () => {
+    const f = answer((q, v) =>
+      q.includes('getSupplierEarningsJson')
+        ? {
+            data: { settled: { data: [] }, proofs: { data: [] }, penalties: { data: [] }, last: [] }
+          }
+        : { data: { c: !v.h ? claims(5000, 600) : v.h === '4401' ? claims(4400, 5) : [] } }
+    )
+    const a = await supplierActivity('main', OP, '2026-10-05T00:00:00Z')
+    // A page shorter than asked is not the end.
+    expect(a.claims).toBe(605)
+    expect(a.lastClaim).toBeNull()
+    expect(vars(f, 2)).toEqual({ op: [OP], t: '2026-10-05T00:00:00Z', h: '4401', id: 'tx4401-1' })
+    expect(f).toHaveBeenCalledTimes(4)
+  })
+  it('stops reading claims once they are older than the sessions asked about', async () => {
+    const f = answer(() => ({ data: { c: claims(2000, 1000) } }))
+    const s = await claimedSessions('main', OP, 1500)
+    // One page: its oldest claim (height 1001) already predates session end 1500.
+    expect(f).toHaveBeenCalledTimes(1)
+    expect(vars(f, 0)).toEqual({ op: [OP], t: null, h: null, id: null })
+    expect(s.size).toBe(489)
+    expect(s.has(sid(1512))).toBe(true)
+    expect(s.has(sid(1511))).toBe(false)
   })
   it('refuses a non-address, and reports indexer errors instead of zeros', async () => {
     await expect(earningsByService('main', 'x', 't')).rejects.toThrow(/not an operator/)
-    answer({ errors: [{ message: 'boom' }] })
+    answer(() => ({ errors: [{ message: 'boom' }] }))
     await expect(supplierActivity('main', OP, 't')).rejects.toThrow('boom')
+    await expect(claimedSessions('main', OP, 1)).rejects.toThrow('boom')
   })
 })

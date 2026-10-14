@@ -24,6 +24,58 @@ const OP_RE = /^pokt1[0-9a-z]{38}$/
 
 // ---- claims, proofs, earnings ----
 
+/** Claims the indexer lists per call at most. */
+const CLAIMS_PAGE = 1000
+/** Pages createdClaims reads at most: 50,000 claims. */
+const CLAIMS_MAX_PAGES = 50
+
+interface CreatedClaim {
+  height: string
+  id: string
+  sessionId: string
+  sessionEndHeight: string
+}
+
+/**
+ * The claims a supplier made on chain (MsgCreateClaim), newest first, since a time or ever,
+ * read page by page, each after the last row of the one before, until a page comes back empty
+ * (a short page is not taken as the end: the indexer may serve fewer rows than asked) or
+ * `enough` says the oldest row read is far enough back. Throws rather than return a list cut
+ * short.
+ */
+async function createdClaims(
+  net: Network,
+  operator: string,
+  sinceIso: string | null,
+  enough: (oldest: CreatedClaim) => boolean = () => false
+): Promise<CreatedClaim[]> {
+  const out: CreatedClaim[] = []
+  let before: CreatedClaim | null = null
+  for (let page = 0; page < CLAIMS_MAX_PAGES; page++) {
+    const d: { c: CreatedClaim[] } = await gql(
+      net,
+      `query($op: [String]!, $t: Datetime, $h: BigInt, $id: String) {
+        c: getCreatedClaimsList(suppliers: $op, rangeStart: $t, rowLimit: ${CLAIMS_PAGE}, beforeHeight: $h, beforeId: $id) { height id sessionId sessionEndHeight }
+      }`,
+      { op: [operator], t: sinceIso, h: before?.height ?? null, id: before?.id ?? null }
+    )
+    out.push(...d.c)
+    before = d.c[d.c.length - 1] ?? null
+    if (!before || enough(before)) return out
+  }
+  throw new Error(
+    `the indexer was still answering after ${CLAIMS_MAX_PAGES} pages of claims, so they were not read to the end`
+  )
+}
+
+/** One row of an indexer `...Json` function: snake_case columns, every number a string. */
+type JsonRow = Record<string, string | null>
+type JsonRows = { data: JsonRow[] }
+
+/** A column summed over rows, read as a number. */
+const sum = (rows: JsonRow[], col: string): number =>
+  rows.reduce((t, r) => t + (Number(r[col]) || 0), 0)
+
 export interface SupplierActivity {
   claims: number
   proofs: number
@@ -42,43 +94,40 @@ export async function supplierActivity(
   sinceIso: string
 ): Promise<SupplierActivity> {
   if (!OP_RE.test(operator)) throw new Error('not an operator address')
-  type Count = { totalCount: number }
-  const d = await gql<{
-    claims: Count
-    proofs: Count
-    settled: Count
-    expired: Count & { groupedAggregates: { keys: string[]; distinctCount: { id: string } }[] }
-    last: {
-      nodes: { serviceId: string; sessionEndHeight: string; block: { timestamp: string } | null }[]
-    }
-  }>(
-    net,
-    `query($op: String!, $t: Datetime!) {
-      claims: msgCreateClaims(filter: { supplierId: { equalTo: $op }, block: { timestamp: { greaterThan: $t } } }) { totalCount }
-      proofs: msgSubmitProofs(filter: { supplierId: { equalTo: $op }, block: { timestamp: { greaterThan: $t } } }) { totalCount }
-      settled: eventClaimSettleds(filter: { supplierId: { equalTo: $op }, block: { timestamp: { greaterThan: $t } } }) { totalCount }
-      expired: eventClaimExpireds(filter: { supplierId: { equalTo: $op }, block: { timestamp: { greaterThan: $t } } }) {
-        totalCount groupedAggregates(groupBy: EXPIRATION_REASON) { keys distinctCount { id } }
-      }
-      last: msgCreateClaims(filter: { supplierId: { equalTo: $op } }, orderBy: BLOCK_ID_DESC, first: 1) {
-        nodes { serviceId sessionEndHeight block { timestamp } }
-      }
-    }`,
-    { op: operator, t: sinceIso }
-  )
+  const [d, claims] = await Promise.all([
+    gql<{
+      settled: JsonRows
+      proofs: JsonRows
+      penalties: JsonRows
+      last: { serviceId: string; sessionEndHeight: string; blockTime: string | null }[]
+    }>(
+      net,
+      `query($op: [String]!, $t: Datetime!) {
+        settled: getSupplierEarningsJson(suppliers: $op, rangeStart: $t)
+        proofs: getSupplierProofsJson(suppliers: $op, rangeStart: $t)
+        penalties: getSupplierPenaltiesJson(suppliers: $op, rangeStart: $t)
+        last: getCreatedClaimsList(suppliers: $op, rowLimit: 1) { serviceId sessionEndHeight blockTime }
+      }`,
+      { op: [operator], t: sinceIso }
+    ),
+    createdClaims(net, operator, sinceIso)
+  ])
+  const expired = (d.penalties?.data ?? []).filter((r) => r.kind === 'expired')
   const reasons: Record<string, number> = {}
-  for (const g of d.expired.groupedAggregates ?? [])
-    reasons[g.keys[0] ?? 'unknown'] = Number(g.distinctCount.id) || 0
-  const l = d.last.nodes[0]
+  for (const r of expired) {
+    const k = r.reason ?? 'unknown'
+    reasons[k] = (reasons[k] ?? 0) + (Number(r.events) || 0)
+  }
+  const l = d.last[0]
   return {
-    claims: d.claims.totalCount,
-    proofs: d.proofs.totalCount,
-    settled: d.settled.totalCount,
-    expired: d.expired.totalCount,
+    claims: claims.length,
+    proofs: sum(d.proofs?.data ?? [], 'proofs_submitted'),
+    settled: sum(d.settled?.data ?? [], 'settled_claims'),
+    expired: sum(expired, 'events'),
     expiredReasons: reasons,
     lastClaim: l
       ? {
-          time: l.block?.timestamp ?? '',
+          time: l.blockTime ?? '',
           sessionEnd: Number(l.sessionEndHeight) || 0,
           service: l.serviceId
         }
@@ -101,29 +150,20 @@ export async function earningsByService(
   sinceIso: string
 ): Promise<ServiceEarnings[]> {
   if (!OP_RE.test(operator)) throw new Error('not an operator address')
-  const d = await gql<{
-    s: {
-      groupedAggregates: {
-        keys: string[]
-        sum: { settledAmount: string; numRelays: string }
-        distinctCount: { sessionId: string }
-      }[]
-    }
-  }>(
+  const d = await gql<{ s: JsonRows }>(
     net,
-    `query($op: String!, $t: Datetime!) {
-      s: eventClaimSettleds(filter: { supplierId: { equalTo: $op }, block: { timestamp: { greaterThan: $t } } }) {
-        groupedAggregates(groupBy: SERVICE_ID) { keys sum { settledAmount numRelays } distinctCount { sessionId } }
-      }
+    `query($op: [String]!, $t: Datetime!) {
+      s: getSupplierEarningsJson(suppliers: $op, rangeStart: $t, byService: true)
     }`,
-    { op: operator, t: sinceIso }
+    { op: [operator], t: sinceIso }
   )
-  return (d.s.groupedAggregates ?? [])
-    .map((g) => ({
-      service: g.keys[0] ?? '',
-      relays: Number(g.sum.numRelays) || 0,
-      earnedUpokt: Number(g.sum.settledAmount) || 0,
-      sessions: Number(g.distinctCount.sessionId) || 0
+  return (d.s?.data ?? [])
+    .map((r) => ({
+      service: r.service_id ?? '',
+      relays: Number(r.relays) || 0,
+      earnedUpokt: Number(r.settled_upokt) || 0,
+      // One claim per session for a supplier, so settled claims are the sessions paid.
+      sessions: Number(r.settled_claims) || 0
     }))
     .sort((a, b) => b.earnedUpokt - a.earnedUpokt)
 }
@@ -135,14 +175,10 @@ export async function claimedSessions(
   fromEnd: number
 ): Promise<Set<string>> {
   if (!OP_RE.test(operator)) throw new Error('not an operator address')
-  const d = await gql<{ c: { nodes: { sessionId: string }[] } }>(
-    net,
-    `query($op: String!, $h: BigFloat!) {
-      c: msgCreateClaims(filter: { supplierId: { equalTo: $op }, sessionEndHeight: { greaterThanOrEqualTo: $h } }, first: 1000) { nodes { sessionId } }
-    }`,
-    { op: operator, h: String(fromEnd) }
-  )
-  return new Set(d.c.nodes.map((n) => n.sessionId))
+  // A claim lands after its session ends, so once a claim's own height is at or below fromEnd
+  // every older one is for a session that ended before it.
+  const c = await createdClaims(net, operator, null, (o) => Number(o.height) <= fromEnd)
+  return new Set(c.filter((x) => Number(x.sessionEndHeight) >= fromEnd).map((x) => x.sessionId))
 }
 
 // ---- what the stack's miner logged (supplier.sh health) ----
