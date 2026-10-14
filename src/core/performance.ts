@@ -283,14 +283,14 @@ export interface ServiceEarnings {
   sessions: number
 }
 
-/** Claims the monitor reads per call: a check usually needs a few dozen. */
-const MONITOR_PAGE = 200
+/** Claims the monitor reads per call: the function's most, so a check is one request. */
+const MONITOR_PAGE = 1000
 /** How far before the first session end the monitor's read starts. */
 const CLAIMS_LOOKBACK_MS = 3_600_000
 
 /**
  * The sessions (by id) the supplier claimed on chain whose session ended at or after a height.
- * It reads at most CLAIMS_MAX_PAGES pages of MONITOR_PAGE claims (10,000); when there were
+ * It reads at most CLAIMS_MAX_PAGES pages of MONITOR_PAGE claims (50,000); when there were
  * more, it returns what it read, the newest, with `complete` false.
  */
 export async function claimedSessions(
@@ -444,12 +444,9 @@ export function judgeStack(
       kind: 'miner-behind',
       text: `The miner stopped following the network at block ${h.last_height}, ${behind} blocks ago, so it is not claiming what this supplier serves.`
     }
-  const closed = h.sessions.filter((s) => claimWindowClose(s.end, p) < head)
-  const periods = [...new Set(closed.map((s) => s.end))]
-    .sort((a, b) => b - a)
-    .slice(0, sessionsInARow)
+  const periods = judgedPeriods(h, head, p, sessionsInARow)
   if (periods.length < sessionsInARow) return ok
-  const inPeriods = closed.filter((s) => periods.includes(s.end))
+  const inPeriods = h.sessions.filter((s) => periods.includes(s.end))
   if (inPeriods.some((s) => claimed.has(s.id))) return ok
   return {
     ...ok,
@@ -461,7 +458,32 @@ export function judgeStack(
   }
 }
 
-/** The lowest session end height a verdict needs claims from (the window judgeStack reads). */
-export function claimsFromEnd(h: MinerHealth): number {
-  return h.sessions.reduce((m, s) => Math.min(m, s.end), Number.MAX_SAFE_INTEGER)
+/**
+ * The session ends judgeStack judges: the newest `sessionsInARow` distinct ends among the
+ * sessions the miner served whose claim windows closed before head, newest first.
+ */
+function judgedPeriods(
+  h: MinerHealth,
+  head: number,
+  p: ClaimParams,
+  sessionsInARow: number
+): number[] {
+  return [...new Set(h.sessions.filter((s) => claimWindowClose(s.end, p) < head).map((s) => s.end))]
+    .sort((a, b) => b - a)
+    .slice(0, sessionsInARow)
+}
+
+/**
+ * The lowest session end height a verdict needs claims from: the oldest of the periods
+ * judgeStack judges, or null when there are fewer than it needs, in which case it judges no
+ * claims and none need reading.
+ */
+export function claimsFromEnd(
+  h: MinerHealth,
+  head: number,
+  p: ClaimParams,
+  sessionsInARow = UNCLAIMED_SESSIONS_WARN
+): number | null {
+  const periods = judgedPeriods(h, head, p, sessionsInARow)
+  return periods.length < sessionsInARow ? null : Math.min(...periods)
 }

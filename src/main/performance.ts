@@ -145,9 +145,12 @@ class PerformanceMonitor {
         return { ...base, error: r.ok ? h : r.err || (r as { error?: string }).error || h }
       if (!heads.has(net)) heads.set(net, await latestHeight(net))
       if (!params.has(net)) params.set(net, await claimParams(net))
-      const claimed = h.sessions.length
-        ? await claimedSessions(net, operator, claimsFromEnd(h))
-        : { sessions: new Set<string>(), complete: true }
+      // Claims only for the sessions judgeStack judges; none when it has too few to judge.
+      const fromEnd = claimsFromEnd(h, heads.get(net)!, params.get(net)!)
+      const claimed =
+        fromEnd === null
+          ? { sessions: new Set<string>(), complete: true }
+          : await claimedSessions(net, operator, fromEnd)
       const verdict = judgeStack(h, claimed.sessions, heads.get(net)!, params.get(net)!)
       // A read cut short can only miss claims, so it can wrongly say none were made; say that
       // the check could not be made instead.

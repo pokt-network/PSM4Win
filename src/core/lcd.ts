@@ -490,9 +490,9 @@ export interface OwnedSupplier {
   stakeUpokt: number
 }
 
-const OWNED_FILTER =
-  'filter: { ownerId: { equalTo: $owner }, stakeStatus: { notEqualTo: Unstaked }, id: { greaterThan: $after } }, orderBy: ID_ASC, first: 1000'
-const OWNED_FIELDS = '{ totalCount nodes { id stakeStatus stakeAmount } }'
+/** One page of an owner's suppliers after the address in `$<after>`, optionally as of `$at`. */
+const ownedPage = (alias: string, after: string, pinned: boolean): string =>
+  `${alias}: suppliers(filter: { ownerId: { equalTo: $owner }, stakeStatus: { notEqualTo: Unstaked }, id: { greaterThan: $${after} } }, orderBy: ID_ASC, first: 1000${pinned ? ', blockHeight: $at' : ''}) { totalCount nodes { id stakeStatus stakeAmount } }`
 
 /** Pages ownedSuppliers reads at most: 100,000 suppliers at the indexer's 1000 a page. */
 export const OWNED_SUPPLIERS_MAX_PAGES = 100
@@ -506,53 +506,75 @@ export const OWNED_SUPPLIERS_MAX_PAGES = 100
  * at most 1000 rows per request whatever `first` asks for, so the list is read in pages
  * keyed on the last operator address seen, until a page holds every row that remains (its
  * `totalCount`). An owner with one page of suppliers (nearly all) costs one request. With
- * more, the list is read again from the start, every page as of the block the indexer said it
- * had reached in that first request, so a supplier changing status or a new one appearing
- * mid-walk cannot shift a page; the rows read must then add up to what the first pinned page
- * counted.
+ * more, every page is read as of the block the indexer said it had reached in that first
+ * request, so a supplier changing status or a new one appearing mid-walk cannot shift a page:
+ * the second request reads page 1 again and page 2 together, both as of that block, and page 2
+ * is kept only when page 1 still ends where it did (otherwise the walk goes on from the pinned
+ * page 1). The rows read must add up to what the pinned page 1 counted.
  */
 export async function ownedSuppliers(net: Network, owner: string): Promise<OwnedSupplier[]> {
   if (!/^pokt1[0-9a-z]{38}$/.test(owner)) return []
   type Node = { id: string; stakeStatus: string; stakeAmount: string }
-  const nodes: Node[] = []
-  let counted = -1
-  let at = ''
-  for (let pageNo = 0; ; pageNo++) {
-    if (pageNo >= OWNED_SUPPLIERS_MAX_PAGES)
-      throw new Error(
-        `the indexer was still answering after ${OWNED_SUPPLIERS_MAX_PAGES} pages, so the list was not read to the end`
-      )
-    const after = nodes.at(-1)?.id ?? ''
-    const d = await gql<{
-      suppliers?: { totalCount?: number; nodes?: Node[] }
-      _metadata?: { lastProcessedHeight?: number | null }
-    }>(
-      net,
-      at
-        ? `query($owner: String!, $after: String!, $at: String!) { suppliers(${OWNED_FILTER}, blockHeight: $at) ${OWNED_FIELDS} }`
-        : `query($owner: String!, $after: String!) { _metadata { lastProcessedHeight } suppliers(${OWNED_FILTER}) ${OWNED_FIELDS} }`,
-      at ? { owner, after, at } : { owner, after },
-      20_000
-    )
-    const page = d.suppliers?.nodes ?? []
-    // Each page must move past the cursor. An indexer that ignored the filter would hand
-    // back the same rows forever; stop with an error rather than loop or show a short list.
-    if (page.length && !(page[page.length - 1].id > after))
+  type Page = { totalCount?: number; nodes?: Node[] }
+  const rows = (p: Page | undefined): Node[] => p?.nodes ?? []
+  /** Whether a page read after `after` holds every row that remains. */
+  const last = (p: Page | undefined): boolean =>
+    !rows(p).length || rows(p).length >= (p?.totalCount ?? 0)
+  // Each page must move past the cursor. An indexer that ignored the filter would hand back
+  // the same rows forever; stop with an error rather than loop or show a short list.
+  const moved = (p: Page | undefined, after: string): void => {
+    const r = rows(p)
+    if (r.length && !(r[r.length - 1].id > after))
       throw new Error(
         'the indexer did not move on to the next page, so the list was not read to the end'
       )
-    nodes.push(...page)
-    if (counted < 0) counted = d.suppliers?.totalCount ?? 0
-    // totalCount counts the rows after the cursor, so this page held all that remained.
-    if (!page.length || page.length >= (d.suppliers?.totalCount ?? 0)) break
-    if (!at) {
-      // More than one page: read them all again as of the block the first request reported.
-      const h = d._metadata?.lastProcessedHeight
-      if (!Number.isInteger(h) || !h)
-        throw new Error('the indexer did not say which block it has reached')
-      at = String(h)
-      nodes.length = 0
-      counted = -1
+  }
+  const first = await gql<{ s?: Page; _metadata?: { lastProcessedHeight?: number | null } }>(
+    net,
+    `query($owner: String!, $after: String!) { _metadata { lastProcessedHeight } ${ownedPage('s', 'after', false)} }`,
+    { owner, after: '' },
+    20_000
+  )
+  moved(first.s, '')
+  let nodes = rows(first.s)
+  let counted = first.s?.totalCount ?? 0
+  if (!last(first.s)) {
+    const h = first._metadata?.lastProcessedHeight
+    if (!Number.isInteger(h) || !h)
+      throw new Error('the indexer did not say which block it has reached')
+    const at = String(h)
+    const cursor = nodes[nodes.length - 1].id
+    const two = await gql<{ a?: Page; b?: Page }>(
+      net,
+      `query($owner: String!, $after: String!, $next: String!, $at: String!) { ${ownedPage('a', 'after', true)} ${ownedPage('b', 'next', true)} }`,
+      { owner, after: '', next: cursor, at },
+      20_000
+    )
+    moved(two.a, '')
+    nodes = rows(two.a)
+    counted = two.a?.totalCount ?? 0
+    let done = last(two.a)
+    if (!done && nodes[nodes.length - 1].id === cursor) {
+      // Page 1 ends where it did, so page 2, read as of the same block, follows it.
+      moved(two.b, cursor)
+      nodes.push(...rows(two.b))
+      done = last(two.b)
+    }
+    for (let pageNo = 2; !done; pageNo++) {
+      if (pageNo >= OWNED_SUPPLIERS_MAX_PAGES)
+        throw new Error(
+          `the indexer was still answering after ${OWNED_SUPPLIERS_MAX_PAGES} pages, so the list was not read to the end`
+        )
+      const after = nodes[nodes.length - 1].id
+      const d = await gql<{ s?: Page }>(
+        net,
+        `query($owner: String!, $after: String!, $at: String!) { ${ownedPage('s', 'after', true)} }`,
+        { owner, after, at },
+        20_000
+      )
+      moved(d.s, after)
+      nodes.push(...rows(d.s))
+      done = last(d.s)
     }
   }
   if (nodes.length !== counted)

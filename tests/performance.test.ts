@@ -92,8 +92,12 @@ describe('judgeStack', () => {
     // No height in the log window: unknown, not a warning by itself.
     expect(judgeStack(health([], { last_height: 0 }), new Set(), 5000, P).ok).toBe(true)
   })
-  it('reads claims from the oldest served session', () => {
-    expect(claimsFromEnd(health(four))).toBe(900)
+  it('reads claims from the oldest session it judges, and none when it has too few to judge', () => {
+    expect(claimsFromEnd(health(four), 1000, P)).toBe(900)
+    // An older session in the log is not judged, so no claim is read for it.
+    expect(claimsFromEnd(health([[9, 880], ...four]), 1000, P)).toBe(900)
+    // At 970 the window of 960 is still open (it closes at 982): three periods, nothing judged.
+    expect(claimsFromEnd(health(four), 970, P)).toBeNull()
   })
 })
 
@@ -331,7 +335,7 @@ describe('indexer reads', () => {
     // One page: its oldest claim (height 1801) already predates session end 1850.
     expect(calls(f)).toHaveLength(1)
     expect(pages(f)).toEqual([
-      { op: [OP], t: '2026-10-14T09:00:00.000Z', n: 200, h: null, id: null }
+      { op: [OP], t: '2026-10-14T09:00:00.000Z', n: 1000, h: null, id: null }
     ])
     expect(c.complete).toBe(true)
     expect(c.sessions.size).toBe(139)
@@ -343,7 +347,7 @@ describe('indexer reads', () => {
       data: { c: !v.h ? claims(5000, 150) : v.h === '4851' ? claims(4850, 5) : [] }
     }))
     const c = await claimedSessions('main', OP, 1)
-    // A page shorter than asked (150 of 200) is not the end; the node could not say the
+    // A page shorter than asked (150 of 1000) is not the end; the node could not say the
     // block's time, so the whole history is read.
     expect(pages(f).map((v) => [v.t, v.h, v.id])).toEqual([
       [null, null, null],
