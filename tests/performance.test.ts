@@ -6,7 +6,6 @@ import {
   claimsFromEnd,
   claimedSessions,
   claimsCreated,
-  earningsByService,
   supplierActivity,
   type MinerHealth,
   type ClaimParams
@@ -147,7 +146,10 @@ describe('indexer reads', () => {
     gaps: [],
     end_inclusive: false
   }
-  const head = { nodes: [{ timestamp: '2026-10-14T16:47:15.076' }] }
+  // The newest block and the one before it.
+  const head = {
+    nodes: [{ timestamp: '2026-10-14T16:47:15.076' }, { timestamp: '2026-10-14T16:46:14.5' }]
+  }
   const claims = (top: number, n: number): unknown[] =>
     Array.from({ length: n }, (_, i) => ({
       height: String(top - i),
@@ -160,7 +162,13 @@ describe('indexer reads', () => {
   const settlements = (r: unknown = range): unknown => ({
     data: {
       head,
-      settled: { range: r, data: [{ settled_claims: '67' }] },
+      settled: {
+        range: r,
+        data: [
+          { service_id: 'b', settled_upokt: '10', relays: '1', settled_claims: '1' },
+          { service_id: 'a', settled_upokt: '46123973', relays: '4119', settled_claims: '66' }
+        ]
+      },
       proofs: { range: r, data: [{ proofs_submitted: '1' }] },
       penalties: {
         range: r,
@@ -179,25 +187,7 @@ describe('indexer reads', () => {
       .filter((c) => c.query.includes('rowLimit: $n'))
       .map((c) => c.variables)
 
-  it('sums settled claims per service, largest first', async () => {
-    answer(() => ({
-      data: {
-        head,
-        s: {
-          range,
-          data: [
-            { service_id: 'b', settled_upokt: '10', relays: '1', settled_claims: '1' },
-            { service_id: 'a', settled_upokt: '46123973', relays: '4119', settled_claims: '332' }
-          ]
-        }
-      }
-    }))
-    expect(await earningsByService('main', OP, '2026-09-12T00:00:00Z')).toEqual([
-      { service: 'a', relays: 4119, earnedUpokt: 46123973, sessions: 332 },
-      { service: 'b', relays: 1, earnedUpokt: 10, sessions: 1 }
-    ])
-  })
-  it('counts the claims of every supplier in reads of 20, and says when one is left out', async () => {
+  it('counts the claims of every supplier in reads of 20, each with its own answer', async () => {
     const ops = Array.from({ length: 23 }, (_, i) => 'pokt1' + String(i).padStart(38, '0'))
     const f = answer((_q, v) => ({
       data: {
@@ -212,13 +202,28 @@ describe('indexer reads', () => {
     expect(calls(f).map((c) => (c.variables.op as string[]).length)).toEqual([20, 3])
     expect(calls(f)[0].variables.t).toBe('2026-10-05T00:00:00Z')
     expect(calls(f)[0].query).toContain('getCreatedClaimsCountList')
-    expect(m.get(ops[0])).toBe(0)
-    expect(m.get(ops[21])).toBe(1)
-    answer(() => ({ data: { c: [{ supplierId: OP, claims: '5' }] } }))
-    await expect(claimsCreated('main', [OP, ops[0]], 't')).rejects.toThrow(/did not count/)
-    await expect(claimsCreated('main', ['x'], 't')).rejects.toThrow(/not an operator/)
+    expect(m.get(ops[0])).toEqual({ claims: 0, error: '' })
+    expect(m.get(ops[21])).toEqual({ claims: 1, error: '' })
   })
-  it('reads settlements and reports expirations by reason, with the newest claim ever', async () => {
+  it('keeps the other suppliers counted when one is bad, left out, or in a read that failed', async () => {
+    const ops = Array.from({ length: 21 }, (_, i) => 'pokt1' + String(i).padStart(38, '0'))
+    const f = answer((_q, v) => {
+      const op = v.op as string[]
+      // The second read (one supplier) fails; the first leaves ops[1] out.
+      if (op.length === 1) return { errors: [{ message: 'boom' }] }
+      return {
+        data: { c: op.filter((o) => o !== ops[1]).map((o) => ({ supplierId: o, claims: '7' })) }
+      }
+    })
+    const m = await claimsCreated('main', ['x', ...ops], 't')
+    // The bad address is never sent.
+    expect(calls(f).flatMap((c) => c.variables.op as string[])).not.toContain('x')
+    expect(m.get('x')).toEqual({ claims: null, error: 'not an operator address' })
+    expect(m.get(ops[0])).toEqual({ claims: 7, error: '' })
+    expect(m.get(ops[1])).toEqual({ claims: null, error: 'the indexer did not count its claims' })
+    expect(m.get(ops[20])).toEqual({ claims: null, error: 'the indexer answered: boom' })
+  })
+  it('reads settlements and earnings per service in one read, with the newest claim ever', async () => {
     const f = answer((q) =>
       q.includes('getSupplierProofsJson') ? settlements() : { data: { last: claims(961390, 1) } }
     )
@@ -229,10 +234,17 @@ describe('indexer reads', () => {
       settled: 67,
       expired: 3,
       expiredReasons: { PROOF_MISSING: 2, PROOF_INVALID: 1 },
+      earnings: [
+        { service: 'a', relays: 4119, earnedUpokt: 46123973, sessions: 66 },
+        { service: 'b', relays: 1, earnedUpokt: 10, sessions: 1 }
+      ],
       covered: true,
       settlementsError: ''
     })
     expect(f).toHaveBeenCalledTimes(2)
+    expect(calls(f).find((c) => c.query.includes('getSupplierProofsJson'))?.query).toContain(
+      'getSupplierEarningsJson(suppliers: $op, rangeStart: $t, byService: true)'
+    )
     expect(calls(f).find((c) => c.query.includes('getSupplierProofsJson'))?.variables).toEqual({
       op: [OP],
       t: '2026-10-05T00:00:00Z'
@@ -262,20 +274,21 @@ describe('indexer reads', () => {
       'the indexer answered: boom'
     ])
   })
+  it('takes a window covered up to the block before the newest as covered', async () => {
+    const oneBehind = { ...range, covered_to: '2026-10-14T16:46:14.500001+00:00' }
+    answer((q) =>
+      q.includes('getSupplierProofsJson') ? settlements(oneBehind) : { data: { last: [] } }
+    )
+    expect((await supplierActivity('main', OP, '2026-10-05T00:00:00Z')).covered).toBe(true)
+  })
   it('says a window the indexer does not cover whole is not known yet, not zero', async () => {
-    const lagging = { ...range, covered_to: '2026-10-14T16:30:00.000001+00:00' }
+    // Two blocks behind the newest.
+    const lagging = { ...range, covered_to: '2026-10-14T16:45:13.000001+00:00' }
     const late = { ...range, covered_from: '2026-10-06T00:00:00+00:00' }
     const gap = { ...range, gaps: [{ from: 'a', to: 'b' }] }
     const none = { ...range, covered_from: null, covered_to: null }
     for (const r of [lagging, late, gap, none]) {
-      answer((q) =>
-        q.includes('byService')
-          ? { data: { head, s: { range: r, data: [] } } }
-          : q.includes('getSupplierProofsJson')
-            ? settlements(r)
-            : { data: { c: [], last: [] } }
-      )
-      expect(await earningsByService('main', OP, '2026-10-05T00:00:00Z')).toBeNull()
+      answer((q) => (q.includes('getSupplierProofsJson') ? settlements(r) : { data: { last: [] } }))
       expect((await supplierActivity('main', OP, '2026-10-05T00:00:00Z')).covered).toBe(false)
     }
   })
@@ -322,11 +335,13 @@ describe('indexer reads', () => {
     expect(c.sessions.size).toBe(10_000)
   })
   it('refuses a non-address, and reports indexer errors instead of zeros', async () => {
-    await expect(earningsByService('main', 'x', 't')).rejects.toThrow(/not an operator/)
+    await expect(supplierActivity('main', 'x', 't')).rejects.toThrow(/not an operator/)
     answer(() => ({ errors: [{ message: 'boom' }] }))
-    await expect(earningsByService('main', OP, 't')).rejects.toThrow('boom')
     await expect(claimedSessions('main', OP, 1)).rejects.toThrow('boom')
-    await expect(claimsCreated('main', [OP], 't')).rejects.toThrow('boom')
+    expect((await claimsCreated('main', [OP], 't')).get(OP)).toEqual({
+      claims: null,
+      error: 'the indexer answered: boom'
+    })
     const a = await supplierActivity('main', OP, 't')
     expect([a.lastClaimError, a.settlementsError]).toEqual([
       'the indexer answered: boom',

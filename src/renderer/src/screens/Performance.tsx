@@ -2,17 +2,11 @@
 // what its claims, proofs, and settled claims came to. The warnings come from the main
 // process's monitor (every 30 minutes, also from the tray); the tables are read from the
 // network's indexer for the network the app is on.
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import type { Network } from '@core/networks'
 import { fmtPokt, fmtInt, fmtDuration } from '@core/format'
-import {
-  supplierActivity,
-  earningsByService,
-  claimsCreated,
-  type SupplierActivity,
-  type ServiceEarnings
-} from '@core/performance'
+import { supplierActivity, claimsCreated, type SupplierActivity } from '@core/performance'
 import type { StackCheck } from '../../../preload/index'
 import {
   Badge,
@@ -44,11 +38,11 @@ interface Row {
   claims: number | null
   claimsError: string
   activity: SupplierActivity | null
-  earnings: ServiceEarnings[] | null
   error: string
-  /** Read apart from the activity, so one failing leaves the other on screen. */
-  earningsError: string
 }
+
+/** Suppliers whose activity is read at the same time. */
+const READS_AT_ONCE = 6
 
 function ago(iso: string): string {
   const t = Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + 'Z')
@@ -77,8 +71,11 @@ export function PerformanceScreen(): React.JSX.Element {
     .map((s) => ({ server: s, st: stackOf(s, net) }))
     .filter((x) => stackState(x.st) === 'ready' && x.st?.operator)
   const key = mine.map((x) => x.st!.operator).join(',')
+  /** The newest load; an older one that answers late is dropped. */
+  const loadId = useRef(0)
 
   const load = useCallback(async () => {
+    const id = ++loadId.current
     const since = new Date(Date.now() - WINDOWS.find((w) => w.id === win)!.ms).toISOString()
     setRows(null)
     const why = (x: unknown): string => (x instanceof Error ? x.message : String(x))
@@ -86,30 +83,32 @@ export function PerformanceScreen(): React.JSX.Element {
       net,
       mine.map((x) => x.st!.operator),
       since
-    ).then(
-      (m) => ({ m, error: '' }),
-      (e) => ({ m: null, error: why(e) })
-    )
-    const out = await Promise.all(
-      mine.map(async ({ server, st }): Promise<Row> => {
-        const operator = st!.operator
-        const [a, e] = await Promise.allSettled([
-          supplierActivity(net, operator, since),
-          earningsByService(net, operator, since)
-        ])
-        const c = await counted
-        return {
+    ).catch((e) => why(e))
+    const out: Row[] = []
+    for (let i = 0; i < mine.length; i += READS_AT_ONCE) {
+      const batch = await Promise.allSettled(
+        mine.slice(i, i + READS_AT_ONCE).map(({ st }) => supplierActivity(net, st!.operator, since))
+      )
+      batch.forEach((a, j) => {
+        const { server, st } = mine[i + j]
+        out.push({
           server,
-          operator,
-          claims: c.m?.get(operator) ?? null,
-          claimsError: c.error,
+          operator: st!.operator,
+          claims: null,
+          claimsError: '',
           activity: a.status === 'fulfilled' ? a.value : null,
-          earnings: e.status === 'fulfilled' ? e.value : null,
-          error: a.status === 'rejected' ? why(a.reason) : '',
-          earningsError: e.status === 'rejected' ? why(e.reason) : ''
-        }
+          error: a.status === 'rejected' ? why(a.reason) : ''
+        })
       })
-    )
+      if (id !== loadId.current) return
+    }
+    const c = await counted
+    for (const r of out) {
+      const n = typeof c === 'string' ? { claims: null, error: c } : c.get(r.operator)
+      r.claims = n?.claims ?? null
+      r.claimsError = n?.error ?? 'not counted'
+    }
+    if (id !== loadId.current) return
     setRows(out)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [net, win, key])
@@ -387,18 +386,22 @@ export function PerformanceScreen(): React.JSX.Element {
               </thead>
               <tbody>
                 {rows.flatMap((r) => {
-                  const e = r.earnings ?? []
+                  const a = r.activity
+                  // The same read, and so the same coverage, as Settled above.
+                  const e = a && !a.settlementsError && a.covered ? a.earnings : []
                   const total = e.reduce((t, x) => t + x.earnedUpokt, 0)
                   if (!e.length)
                     return [
                       <tr key={r.server.name}>
                         <td className="svcid">{r.server.name}</td>
                         <td colSpan={4} className="hint">
-                          {r.earningsError
-                            ? `could not be read: ${r.earningsError}`
-                            : r.earnings === null
-                              ? 'not covered by the indexer yet'
-                              : 'nothing settled in this period'}
+                          {r.error || !a
+                            ? `could not be read: ${r.error}`
+                            : a.settlementsError
+                              ? `could not be read: ${a.settlementsError}`
+                              : !a.covered
+                                ? 'not covered by the indexer yet'
+                                : 'nothing settled in this period'}
                         </td>
                       </tr>
                     ]

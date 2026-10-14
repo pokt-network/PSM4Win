@@ -84,22 +84,28 @@ const lastOf = (c: CreatedClaim): LastClaim => ({
 /** Suppliers the indexer counts claims for per call at most. */
 const COUNT_BATCH = 20
 
+/** A supplier's claims count, or why it could not be read. */
+export type ClaimsCount = { claims: number; error: '' } | { claims: null; error: string }
+
 /**
- * The claims each supplier made on chain since a time, in as few reads as the indexer allows.
- * Throws when the indexer leaves any supplier asked about out, rather than show it as 0.
+ * The claims each supplier made on chain since a time, 20 suppliers a read. Each supplier gets
+ * its own answer: a bad address, a read that failed, or a supplier the indexer left out is an
+ * error for that supplier alone, never 0.
  */
 export async function claimsCreated(
   net: Network,
   operators: string[],
   sinceIso: string
-): Promise<Map<string, number>> {
-  const ops = [...new Set(operators)]
-  if (ops.some((o) => !OP_RE.test(o))) throw new Error('not an operator address')
+): Promise<Map<string, ClaimsCount>> {
+  const out = new Map<string, ClaimsCount>()
+  const ops: string[] = []
+  for (const o of new Set(operators))
+    if (OP_RE.test(o)) ops.push(o)
+    else out.set(o, { claims: null, error: 'not an operator address' })
   const batches = Array.from({ length: Math.ceil(ops.length / COUNT_BATCH) }, (_, i) =>
     ops.slice(i * COUNT_BATCH, (i + 1) * COUNT_BATCH)
   )
-  const out = new Map<string, number>()
-  for (const d of await Promise.all(
+  const answers = await Promise.allSettled(
     batches.map((b) =>
       gql<{ c: { supplierId: string; claims: string }[] }>(
         net,
@@ -109,11 +115,23 @@ export async function claimsCreated(
         { op: b, t: sinceIso }
       )
     )
-  ))
-    for (const r of d.c) out.set(r.supplierId, Number(r.claims) || 0)
-  const missing = ops.filter((o) => !out.has(o))
-  if (missing.length)
-    throw new Error(`the indexer did not count the claims of ${missing.length} supplier(s)`)
+  )
+  answers.forEach((a, i) => {
+    const got = new Map(
+      a.status === 'fulfilled' ? a.value.c.map((r) => [r.supplierId, Number(r.claims) || 0]) : []
+    )
+    for (const o of batches[i]) {
+      const n = got.get(o)
+      out.set(
+        o,
+        a.status === 'rejected'
+          ? { claims: null, error: why(a.reason) }
+          : n === undefined
+            ? { claims: null, error: 'the indexer did not count its claims' }
+            : { claims: n, error: '' }
+      )
+    }
+  })
   return out
 }
 
@@ -137,8 +155,8 @@ interface Range {
   gaps: unknown[] | null
 }
 type JsonRows = { range?: Range; data: JsonRow[] }
-/** The newest block the indexer has read, asked for before the `...Json` reads in a document. */
-const HEAD = 'head: blocks(first: 1, orderBy: ID_DESC) { nodes { timestamp } }'
+/** The newest two blocks the indexer has read, asked for before the `...Json` reads in a document. */
+const HEAD = 'head: blocks(first: 2, orderBy: ID_DESC) { nodes { timestamp } }'
 type Head = { nodes: { timestamp: string }[] }
 
 /** Block times come without a zone; they are UTC. */
@@ -146,11 +164,12 @@ const utc = (t: string): number => Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(t) ? t
 
 /**
  * Whether an answer covers its whole window: from its start, with no gap, up to the newest
- * block the indexer has read (the tables these functions read can trail it). Where it does
- * not, a 0 or a missing row means not known yet, not that nothing happened.
+ * block the indexer has read, or the one before it (the tables these functions read are
+ * written a moment after the block, so one block behind is normal). Where it does not, a 0 or
+ * a missing row means not known yet, not that nothing happened.
  */
 function covers(r: Range | undefined, head: Head | undefined): boolean {
-  const h = head?.nodes[0]?.timestamp
+  const h = (head?.nodes[1] ?? head?.nodes[0])?.timestamp
   return (
     !!r?.requested_from &&
     !!r.covered_from &&
@@ -166,19 +185,25 @@ function covers(r: Range | undefined, head: Head | undefined): boolean {
 const sum = (rows: JsonRow[], col: string): number =>
   rows.reduce((t, r) => t + (Number(r[col]) || 0), 0)
 
-/** Proofs, settled claims, and expirations since a time, from the indexer's money tables. */
+/**
+ * Proofs, settled claims and what they paid per service, and expirations since a time, from
+ * the indexer's money tables, in one read so all of them share one coverage verdict.
+ */
 async function settlementsSince(
   net: Network,
   operator: string,
   sinceIso: string
 ): Promise<
-  Pick<SupplierActivity, 'proofs' | 'settled' | 'expired' | 'expiredReasons' | 'covered'>
+  Pick<
+    SupplierActivity,
+    'proofs' | 'settled' | 'expired' | 'expiredReasons' | 'earnings' | 'covered'
+  >
 > {
   const d = await gql<{ settled: JsonRows; proofs: JsonRows; penalties: JsonRows; head: Head }>(
     net,
     `query($op: [String]!, $t: Datetime!) {
       ${HEAD}
-      settled: getSupplierEarningsJson(suppliers: $op, rangeStart: $t)
+      settled: getSupplierEarningsJson(suppliers: $op, rangeStart: $t, byService: true)
       proofs: getSupplierProofsJson(suppliers: $op, rangeStart: $t)
       penalties: getSupplierPenaltiesJson(suppliers: $op, rangeStart: $t)
     }`,
@@ -195,6 +220,15 @@ async function settlementsSince(
     settled: sum(d.settled?.data ?? [], 'settled_claims'),
     expired: sum(expired, 'events'),
     expiredReasons: reasons,
+    earnings: (d.settled?.data ?? [])
+      .map((r) => ({
+        service: r.service_id ?? '',
+        relays: Number(r.relays) || 0,
+        earnedUpokt: Number(r.settled_upokt) || 0,
+        // One claim per session for a supplier, so settled claims are the sessions paid.
+        sessions: Number(r.settled_claims) || 0
+      }))
+      .sort((a, b) => b.earnedUpokt - a.earnedUpokt),
     covered:
       covers(d.settled?.range, d.head) &&
       covers(d.proofs?.range, d.head) &&
@@ -212,9 +246,14 @@ export interface SupplierActivity {
   /** Claims the network expired (their rewards are lost), by reason. */
   expired: number
   expiredReasons: Record<string, number>
-  /** Whether proofs, settled, and expired cover the whole window; when not, they are not known yet. */
+  /** What the settled claims paid since the time, per service, largest first. */
+  earnings: ServiceEarnings[]
+  /**
+   * Whether proofs, settled, expired, and earnings cover the whole window; when not, they are
+   * not known yet.
+   */
   covered: boolean
-  /** Why proofs, settled, and expired could not be read; empty when they were. */
+  /** Why proofs, settled, expired, and earnings could not be read; empty when they were. */
   settlementsError: string
 }
 
@@ -245,6 +284,7 @@ export async function supplierActivity(
           settled: 0,
           expired: 0,
           expiredReasons: {},
+          earnings: [],
           covered: false,
           settlementsError: why(s.reason)
         })
@@ -259,43 +299,13 @@ export interface ServiceEarnings {
   sessions: number
 }
 
-/**
- * POKT the supplier's settled claims paid since a time, per service, largest first; null when
- * the indexer does not cover the whole window yet.
- */
-export async function earningsByService(
-  net: Network,
-  operator: string,
-  sinceIso: string
-): Promise<ServiceEarnings[] | null> {
-  if (!OP_RE.test(operator)) throw new Error('not an operator address')
-  const d = await gql<{ s: JsonRows; head: Head }>(
-    net,
-    `query($op: [String]!, $t: Datetime!) {
-      ${HEAD}
-      s: getSupplierEarningsJson(suppliers: $op, rangeStart: $t, byService: true)
-    }`,
-    { op: [operator], t: sinceIso }
-  )
-  if (!covers(d.s?.range, d.head)) return null
-  return (d.s?.data ?? [])
-    .map((r) => ({
-      service: r.service_id ?? '',
-      relays: Number(r.relays) || 0,
-      earnedUpokt: Number(r.settled_upokt) || 0,
-      // One claim per session for a supplier, so settled claims are the sessions paid.
-      sessions: Number(r.settled_claims) || 0
-    }))
-    .sort((a, b) => b.earnedUpokt - a.earnedUpokt)
-}
-
 /** Claims the monitor reads per call: a check usually needs a few dozen. */
 const MONITOR_PAGE = 200
 
 /**
  * The sessions (by id) the supplier claimed on chain whose session ended at or after a height.
- * `complete` is false when there were too many claims to read them all; the set then holds
- * the newest.
+ * It reads at most CLAIMS_MAX_PAGES pages of MONITOR_PAGE claims (10,000); when there were
+ * more, it returns what it read, the newest, with `complete` false.
  */
 export async function claimedSessions(
   net: Network,
