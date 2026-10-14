@@ -5,6 +5,7 @@ import {
   claimWindowClose,
   claimsFromEnd,
   claimedSessions,
+  claimsCreated,
   earningsByService,
   supplierActivity,
   type MinerHealth,
@@ -196,16 +197,34 @@ describe('indexer reads', () => {
       { service: 'b', relays: 1, earnedUpokt: 10, sessions: 1 }
     ])
   })
-  it('counts activity, reports expirations by reason, and takes the last claim from the claims read', async () => {
-    const f = answer((q, v) =>
-      q.includes('getSupplierProofsJson')
-        ? settlements()
-        : { data: { c: v.h ? [] : claims(961390, 69) } }
+  it('counts the claims of every supplier in reads of 20, and says when one is left out', async () => {
+    const ops = Array.from({ length: 23 }, (_, i) => 'pokt1' + String(i).padStart(38, '0'))
+    const f = answer((_q, v) => ({
+      data: {
+        c: (v.op as string[]).map((o, i) => ({
+          supplierId: o,
+          claims: String(i),
+          firstHeight: null
+        }))
+      }
+    }))
+    const m = await claimsCreated('main', [...ops, ops[0]], '2026-10-05T00:00:00Z')
+    expect(calls(f).map((c) => (c.variables.op as string[]).length)).toEqual([20, 3])
+    expect(calls(f)[0].variables.t).toBe('2026-10-05T00:00:00Z')
+    expect(calls(f)[0].query).toContain('getCreatedClaimsCountList')
+    expect(m.get(ops[0])).toBe(0)
+    expect(m.get(ops[21])).toBe(1)
+    answer(() => ({ data: { c: [{ supplierId: OP, claims: '5' }] } }))
+    await expect(claimsCreated('main', [OP, ops[0]], 't')).rejects.toThrow(/did not count/)
+    await expect(claimsCreated('main', ['x'], 't')).rejects.toThrow(/not an operator/)
+  })
+  it('reads settlements and reports expirations by reason, with the newest claim ever', async () => {
+    const f = answer((q) =>
+      q.includes('getSupplierProofsJson') ? settlements() : { data: { last: claims(961390, 1) } }
     )
     expect(await supplierActivity('main', OP, '2026-10-05T00:00:00Z')).toEqual({
-      claims: 69,
       lastClaim: { time: 'T961390', sessionEnd: 961378, service: 'svc961390' },
-      claimsError: '',
+      lastClaimError: '',
       proofs: 1,
       settled: 67,
       expired: 3,
@@ -213,64 +232,22 @@ describe('indexer reads', () => {
       covered: true,
       settlementsError: ''
     })
-    // The settlements read, the claims, and the empty page that ends them; no separate last-claim read.
-    expect(f).toHaveBeenCalledTimes(3)
+    expect(f).toHaveBeenCalledTimes(2)
     expect(calls(f).find((c) => c.query.includes('getSupplierProofsJson'))?.variables).toEqual({
       op: [OP],
       t: '2026-10-05T00:00:00Z'
     })
-    expect(pages(f)[0]).toEqual({ op: [OP], t: '2026-10-05T00:00:00Z', n: 1000, h: null, id: null })
+    expect(calls(f).find((c) => c.query.includes('rowLimit: 1'))?.variables).toEqual({ op: [OP] })
   })
-  it('finds the last claim before the window when none was made in it', async () => {
-    const f = answer((q) =>
-      q.includes('getSupplierProofsJson')
-        ? settlements()
-        : q.includes('rowLimit: 1')
-          ? { data: { last: claims(900000, 1) } }
-          : { data: { c: [] } }
-    )
-    const a = await supplierActivity('main', OP, '2026-10-05T00:00:00Z')
-    expect(a.claims).toBe(0)
-    expect(a.lastClaim).toEqual({ time: 'T900000', sessionEnd: 899988, service: 'svc900000' })
-    expect(f).toHaveBeenCalledTimes(3)
-  })
-  it('reads claims until an empty page, each page after the last row of the one before', async () => {
-    const f = answer((q, v) =>
-      q.includes('getSupplierProofsJson')
-        ? settlements()
-        : { data: { c: !v.h ? claims(5000, 600) : v.h === '4401' ? claims(4400, 5) : [] } }
-    )
-    const a = await supplierActivity('main', OP, '2026-10-05T00:00:00Z')
-    // A page shorter than asked is not the end.
-    expect(a.claims).toBe(605)
-    expect(pages(f).map((v) => [v.h, v.id])).toEqual([
-      [null, null],
-      ['4401', 'tx4401-1'],
-      ['4396', 'tx4396-1']
-    ])
-  })
-  it('says the claims could not be counted, keeping the rest, when there are too many', async () => {
-    let top = 10_000_000
+  it('keeps the settlements when the last claim cannot be read, and the reverse', async () => {
     answer((q) =>
       q.includes('getSupplierProofsJson')
-        ? settlements()
-        : { data: { c: claims((top -= 1000), 1000) } }
-    )
-    const a = await supplierActivity('main', OP, '2026-10-05T00:00:00Z')
-    expect(a.claimsError).toMatch(/too many to count/)
-    expect(a.lastClaim).toBeNull()
-    expect(a.settled).toBe(67)
-    expect(a.settlementsError).toBe('')
-  })
-  it('keeps the claims when the settlements cannot be read, and the reverse', async () => {
-    answer((q, v) =>
-      q.includes('getSupplierProofsJson')
         ? { errors: [{ message: 'boom' }] }
-        : { data: { c: v.h ? [] : claims(961390, 3) } }
+        : { data: { last: claims(961390, 1) } }
     )
     let a = await supplierActivity('main', OP, '2026-10-05T00:00:00Z')
-    expect([a.claims, a.claimsError, a.settlementsError]).toEqual([
-      3,
+    expect([a.lastClaim?.sessionEnd, a.lastClaimError, a.settlementsError]).toEqual([
+      961378,
       '',
       'the indexer answered: boom'
     ])
@@ -278,9 +255,10 @@ describe('indexer reads', () => {
       q.includes('getSupplierProofsJson') ? settlements() : { errors: [{ message: 'boom' }] }
     )
     a = await supplierActivity('main', OP, '2026-10-05T00:00:00Z')
-    expect([a.settled, a.settlementsError, a.claimsError]).toEqual([
+    expect([a.settled, a.settlementsError, a.lastClaim, a.lastClaimError]).toEqual([
       67,
       '',
+      null,
       'the indexer answered: boom'
     ])
   })
@@ -318,6 +296,22 @@ describe('indexer reads', () => {
     expect(c.sessions.has(sid(1862))).toBe(true)
     expect(c.sessions.has(sid(1861))).toBe(false)
   })
+  it('reads monitor claims until an empty page, each page after the last row of the one before', async () => {
+    const f = answer((q, v) =>
+      q.includes('block(id')
+        ? { data: { b: null } }
+        : { data: { c: !v.h ? claims(5000, 150) : v.h === '4851' ? claims(4850, 5) : [] } }
+    )
+    const c = await claimedSessions('main', OP, 1)
+    // A page shorter than asked (150 of 200) is not the end; with no block time, no range.
+    expect(pages(f).map((v) => [v.t, v.h, v.id])).toEqual([
+      [null, null, null],
+      [null, '4851', 'tx4851-1'],
+      [null, '4846', 'tx4846-1']
+    ])
+    expect(c).toEqual(expect.objectContaining({ complete: true }))
+    expect(c.sessions.size).toBe(155)
+  })
   it('says when the monitor could not read every claim, keeping the newest', async () => {
     let top = 10_000_000
     answer((q) =>
@@ -332,8 +326,9 @@ describe('indexer reads', () => {
     answer(() => ({ errors: [{ message: 'boom' }] }))
     await expect(earningsByService('main', OP, 't')).rejects.toThrow('boom')
     await expect(claimedSessions('main', OP, 1)).rejects.toThrow('boom')
+    await expect(claimsCreated('main', [OP], 't')).rejects.toThrow('boom')
     const a = await supplierActivity('main', OP, 't')
-    expect([a.claimsError, a.settlementsError]).toEqual([
+    expect([a.lastClaimError, a.settlementsError]).toEqual([
       'the indexer answered: boom',
       'the indexer answered: boom'
     ])

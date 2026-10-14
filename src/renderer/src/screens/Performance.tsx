@@ -9,6 +9,7 @@ import { fmtPokt, fmtInt, fmtDuration } from '@core/format'
 import {
   supplierActivity,
   earningsByService,
+  claimsCreated,
   type SupplierActivity,
   type ServiceEarnings
 } from '@core/performance'
@@ -39,6 +40,9 @@ type WindowId = (typeof WINDOWS)[number]['id']
 interface Row {
   server: ServerEntry
   operator: string
+  /** Claims made in the window, counted for every supplier in one read; null when it failed. */
+  claims: number | null
+  claimsError: string
   activity: SupplierActivity | null
   earnings: ServiceEarnings[] | null
   error: string
@@ -77,6 +81,15 @@ export function PerformanceScreen(): React.JSX.Element {
   const load = useCallback(async () => {
     const since = new Date(Date.now() - WINDOWS.find((w) => w.id === win)!.ms).toISOString()
     setRows(null)
+    const why = (x: unknown): string => (x instanceof Error ? x.message : String(x))
+    const counted = claimsCreated(
+      net,
+      mine.map((x) => x.st!.operator),
+      since
+    ).then(
+      (m) => ({ m, error: '' }),
+      (e) => ({ m: null, error: why(e) })
+    )
     const out = await Promise.all(
       mine.map(async ({ server, st }): Promise<Row> => {
         const operator = st!.operator
@@ -84,10 +97,12 @@ export function PerformanceScreen(): React.JSX.Element {
           supplierActivity(net, operator, since),
           earningsByService(net, operator, since)
         ])
-        const why = (x: unknown): string => (x instanceof Error ? x.message : String(x))
+        const c = await counted
         return {
           server,
           operator,
+          claims: c.m?.get(operator) ?? null,
+          claimsError: c.error,
           activity: a.status === 'fulfilled' ? a.value : null,
           earnings: e.status === 'fulfilled' ? e.value : null,
           error: a.status === 'rejected' ? why(a.reason) : '',
@@ -294,10 +309,10 @@ export function PerformanceScreen(): React.JSX.Element {
                       ) : (
                         <>
                           <td>
-                            {a.claimsError ? (
-                              <ErrText>Could not read: {a.claimsError}</ErrText>
+                            {r.claims === null ? (
+                              <ErrText>Could not read: {r.claimsError}</ErrText>
                             ) : (
-                              fmtInt(a.claims)
+                              fmtInt(r.claims)
                             )}
                           </td>
                           {a.settlementsError ? (
@@ -322,8 +337,8 @@ export function PerformanceScreen(): React.JSX.Element {
                             </td>
                           )}
                           <td>
-                            {a.claimsError ? (
-                              <span className="hint">could not be read</span>
+                            {a.lastClaimError ? (
+                              <span className="hint">could not be read: {a.lastClaimError}</span>
                             ) : a.lastClaim ? (
                               <>
                                 {ago(a.lastClaim.time)}

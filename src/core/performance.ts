@@ -24,8 +24,6 @@ const OP_RE = /^pokt1[0-9a-z]{38}$/
 
 // ---- claims, proofs, earnings ----
 
-/** Claims the indexer lists per call at most. */
-const CLAIMS_PAGE = 1000
 /** Pages createdClaims reads at most. */
 const CLAIMS_MAX_PAGES = 50
 
@@ -50,7 +48,7 @@ async function createdClaims(
   net: Network,
   operator: string,
   sinceIso: string | null,
-  pageRows = CLAIMS_PAGE,
+  pageRows: number,
   enough: (oldest: CreatedClaim) => boolean = () => false
 ): Promise<{ rows: CreatedClaim[]; complete: boolean }> {
   const rows: CreatedClaim[] = []
@@ -83,27 +81,50 @@ const lastOf = (c: CreatedClaim): LastClaim => ({
   service: c.serviceId
 })
 
+/** Suppliers the indexer counts claims for per call at most. */
+const COUNT_BATCH = 20
+
 /**
- * Claims made since a time, counted by reading them (the indexer has no count of them), and
- * the newest claim ever: the newest read, or when none was, the newest before the window.
+ * The claims each supplier made on chain since a time, in as few reads as the indexer allows.
+ * Throws when the indexer leaves any supplier asked about out, rather than show it as 0.
  */
-async function claimsSince(
+export async function claimsCreated(
   net: Network,
-  operator: string,
+  operators: string[],
   sinceIso: string
-): Promise<{ count: number; last: LastClaim | null }> {
-  const c = await createdClaims(net, operator, sinceIso)
-  if (!c.complete)
-    throw new Error(
-      `more than ${CLAIMS_PAGE * CLAIMS_MAX_PAGES} claims in this period, too many to count`
+): Promise<Map<string, number>> {
+  const ops = [...new Set(operators)]
+  if (ops.some((o) => !OP_RE.test(o))) throw new Error('not an operator address')
+  const batches = Array.from({ length: Math.ceil(ops.length / COUNT_BATCH) }, (_, i) =>
+    ops.slice(i * COUNT_BATCH, (i + 1) * COUNT_BATCH)
+  )
+  const out = new Map<string, number>()
+  for (const d of await Promise.all(
+    batches.map((b) =>
+      gql<{ c: { supplierId: string; claims: string }[] }>(
+        net,
+        `query($op: [String]!, $t: Datetime!) {
+          c: getCreatedClaimsCountList(suppliers: $op, rangeStart: $t) { supplierId claims }
+        }`,
+        { op: b, t: sinceIso }
+      )
     )
-  if (c.rows.length) return { count: c.rows.length, last: lastOf(c.rows[0]) }
+  ))
+    for (const r of d.c) out.set(r.supplierId, Number(r.claims) || 0)
+  const missing = ops.filter((o) => !out.has(o))
+  if (missing.length)
+    throw new Error(`the indexer did not count the claims of ${missing.length} supplier(s)`)
+  return out
+}
+
+/** The newest claim a supplier made, at any time. */
+async function newestClaim(net: Network, operator: string): Promise<LastClaim | null> {
   const d = await gql<{ last: CreatedClaim[] }>(
     net,
     `query($op: [String]!) { last: getCreatedClaimsList(suppliers: $op, rowLimit: 1) { ${CLAIM_FIELDS} } }`,
     { op: [operator] }
   )
-  return { count: 0, last: d.last[0] ? lastOf(d.last[0]) : null }
+  return d.last[0] ? lastOf(d.last[0]) : null
 }
 
 /** One row of an indexer `...Json` function: snake_case columns, every number a string. */
@@ -182,11 +203,10 @@ async function settlementsSince(
 }
 
 export interface SupplierActivity {
-  claims: number
   /** The newest claim this supplier made, at any time. */
   lastClaim: LastClaim | null
-  /** Why claims and the last claim could not be read; empty when they were. */
-  claimsError: string
+  /** Why the last claim could not be read; empty when it was. */
+  lastClaimError: string
   proofs: number
   settled: number
   /** Claims the network expired (their rewards are lost), by reason. */
@@ -201,8 +221,9 @@ export interface SupplierActivity {
 const why = (e: unknown): string => (e instanceof Error ? e.message : String(e))
 
 /**
- * Claims, proofs, settlements, and expirations since a time, plus the newest claim ever. The
- * claims and the rest are read apart, so one failing leaves the other, with its error said.
+ * Proofs, settlements, and expirations since a time, plus the newest claim ever (the claims
+ * made are counted for every supplier at once by claimsCreated). The two are read apart, so
+ * one failing leaves the other, with its error said.
  */
 export async function supplierActivity(
   net: Network,
@@ -211,13 +232,12 @@ export async function supplierActivity(
 ): Promise<SupplierActivity> {
   if (!OP_RE.test(operator)) throw new Error('not an operator address')
   const [c, s] = await Promise.allSettled([
-    claimsSince(net, operator, sinceIso),
+    newestClaim(net, operator),
     settlementsSince(net, operator, sinceIso)
   ])
   return {
-    claims: c.status === 'fulfilled' ? c.value.count : 0,
-    lastClaim: c.status === 'fulfilled' ? c.value.last : null,
-    claimsError: c.status === 'rejected' ? why(c.reason) : '',
+    lastClaim: c.status === 'fulfilled' ? c.value : null,
+    lastClaimError: c.status === 'rejected' ? why(c.reason) : '',
     ...(s.status === 'fulfilled'
       ? { ...s.value, settlementsError: '' }
       : {
