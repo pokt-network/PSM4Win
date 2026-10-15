@@ -292,7 +292,7 @@ export function PerformanceScreen(): React.JSX.Element {
                   <th>Claims</th>
                   <th>Proofs</th>
                   <th>Settled</th>
-                  <th>Expired</th>
+                  <th>Unpaid</th>
                   <th>Last claim</th>
                   <th>Status</th>
                 </tr>
@@ -389,9 +389,9 @@ export function PerformanceScreen(): React.JSX.Element {
               </tbody>
             </table>
             <p className="hint">
-              Expired claims are rewards the network did not pay, usually because a required proof
-              was not sent in time; the count includes claims it discarded at settlement (in the
-              tooltip).
+              Unpaid counts the claims the network settled without paying: expired ones (a required
+              proof was missing or invalid) and, rarely, ones it discarded as faulty. Hover a number
+              to see why.
             </p>
 
             <h3 style={{ marginTop: 18 }}>Earned per service</h3>
