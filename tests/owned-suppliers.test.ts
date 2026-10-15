@@ -162,6 +162,16 @@ describe('ownedSuppliers (indexer)', () => {
     )
     expect(f).toHaveBeenCalledTimes(OWNED_SUPPLIERS_MAX_PAGES)
   })
+  it('reads up to the same number of pinned pages when page 1 is read again alone', async () => {
+    // Page 1 lists an address twice, so it is read again pinned, without page 2: the unpinned
+    // first request plus OWNED_SUPPLIERS_MAX_PAGES pinned pages.
+    const pinned = Array.from({ length: 400 }, (_, i) => node(i))
+    const f = indexer(pinned, { per: 2, liveList: [node(0), node(0), ...pinned.slice(1)] })
+    await expect(ownedSuppliers('main', OWNER)).rejects.toThrow(
+      `after ${OWNED_SUPPLIERS_MAX_PAGES} pages`
+    )
+    expect(f).toHaveBeenCalledTimes(OWNED_SUPPLIERS_MAX_PAGES + 1)
+  })
   it('stops with an error when the rows read do not add up to what the indexer counted', async () => {
     // The pinned page 1 counts two suppliers but lists one, and nothing follows it.
     const f = vi.fn(async (_url: string, init: { body: string }) => {
