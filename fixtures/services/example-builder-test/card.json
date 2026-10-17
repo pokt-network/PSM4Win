@@ -59,7 +59,7 @@
         "notes": "Functional probe with a deterministic expected value."
       }
     ],
-    "notes": "Gateway operators: configure as type passthrough with rpc_types [\"rest\"]."
+    "notes": "SAGE operators: type generic (its name for passthrough), rpc_types [\"rest\"]."
   },
   "updated": "2026-09-13"
 }

@@ -54,7 +54,7 @@
         "notes": "Functional probe with a deterministic expected value. Keep it cheap; gateways run it every cycle."
       }
     ],
-    "notes": "REPLACE: rate limits to disable for the RelayMiner's address, request sizes, timeouts. Gateway operators: configure as type passthrough with rpc_types [\"rest\"]; see sage-service.yaml."
+    "notes": "REPLACE: rate limits to disable for the RelayMiner's address, request sizes, timeouts. SAGE operators: type generic (its name for passthrough), rpc_types [\"rest\"], relay_timeout at least 15s; see sage-service.yaml."
   },
   "docs": "https://REPLACE.example/docs",
   "updated": "REPLACE-YYYY-MM-DD"

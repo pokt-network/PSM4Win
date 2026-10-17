@@ -55,7 +55,7 @@
         "notes": "Functional probe: renders one bar and reports one data mark. Cheap and deterministic."
       }
     ],
-    "notes": "Every request is a POST JSON body to /v1/chart; typical renders finish in well under a second. No rate limits to disable. Gateway operators: configure as type passthrough with rpc_types [\"rest\"] and a relay_timeout of at least 15s; see sage-service.yaml in the service repository."
+    "notes": "Every request is a POST JSON body to /v1/chart; typical renders finish in well under a second. No rate limits to disable. SAGE operators: type generic (its name for passthrough), rpc_types [\"rest\"], relay_timeout at least 15s; see sage-service.yaml in the service repository."
   },
   "docs": "https://example.org/example-charts/",
   "updated": "2026-09-13"
