@@ -9,10 +9,9 @@ import { NETWORKS, type Network } from '@core/networks'
 import { latestHeight } from '@core/lcd'
 import {
   parseHealth,
-  judgeStack,
   claimParams,
   claimedSessions,
-  claimsFromEnd,
+  verdictWithClaims,
   type StackVerdict,
   type ClaimParams
 } from '@core/performance'
@@ -145,12 +144,19 @@ class PerformanceMonitor {
         return { ...base, error: r.ok ? h : r.err || (r as { error?: string }).error || h }
       if (!heads.has(net)) heads.set(net, await latestHeight(net))
       if (!params.has(net)) params.set(net, await claimParams(net))
-      const claimed = h.sessions.length
-        ? await claimedSessions(net, operator, claimsFromEnd(h))
-        : new Set<string>()
+      const verdict = await verdictWithClaims(h, heads.get(net)!, params.get(net)!, (e) =>
+        claimedSessions(net, operator, e)
+      )
+      if (typeof verdict === 'string')
+        return {
+          ...base,
+          error: `For ${sv.name}, ${verdict}.`,
+          lastHeight: h.last_height,
+          sessions: h.sessions.length
+        }
       return {
         ...base,
-        verdict: judgeStack(h, claimed, heads.get(net)!, params.get(net)!),
+        verdict,
         lastHeight: h.last_height,
         sessions: h.sessions.length
       }

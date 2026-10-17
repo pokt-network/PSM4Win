@@ -2,6 +2,7 @@
 // Nothing here signs or broadcasts. Used by the renderer (screens) and by main
 // (the signer's own preflight reads).
 import { NETWORK_INFO, type Network } from './networks'
+import { gql } from './indexer'
 
 export class LcdError extends Error {
   constructor(
@@ -489,6 +490,10 @@ export interface OwnedSupplier {
   stakeUpokt: number
 }
 
+/** One page of an owner's suppliers after the address in `$<after>`, optionally as of `$at`. */
+const ownedPage = (alias: string, after: string, pinned: boolean): string =>
+  `${alias}: suppliers(filter: { ownerId: { equalTo: $owner }, stakeStatus: { notEqualTo: Unstaked }, id: { greaterThan: $${after} } }, orderBy: ID_ASC, first: 1000${pinned ? ', blockHeight: $at' : ''}) { totalCount nodes { id stakeStatus stakeAmount } }`
+
 /** Pages ownedSuppliers reads at most: 100,000 suppliers at the indexer's 1000 a page. */
 export const OWNED_SUPPLIERS_MAX_PAGES = 100
 
@@ -499,47 +504,95 @@ export const OWNED_SUPPLIERS_MAX_PAGES = 100
  * left out. A custodial supplier, staked by its operator as its own owner, is not under
  * the owner wallet at all; it is found from its operator instead. The indexer answers
  * at most 1000 rows per request whatever `first` asks for, so the list is read in pages
- * keyed on the last operator address seen, which a supplier changing status or a new one
- * appearing mid-walk cannot shift, until a page holds every row that remains (its
- * `totalCount`).
+ * keyed on the last operator address seen, until a page holds every row that remains (its
+ * `totalCount`). An owner with one page of suppliers (nearly all) costs one request. With
+ * more, every page is read as of the block the indexer said it had reached in that first
+ * request, so a supplier changing status or a new one appearing mid-walk cannot shift a page:
+ * the second request reads page 1 again and page 2 together, both as of that block, and page 2
+ * is kept only when page 1 still ends where it did (otherwise the walk goes on from the pinned
+ * page 1). The rows read must add up to what the pinned page 1 counted. One request is not
+ * one snapshot (each list is its own statement), and while the indexer writes a block a
+ * restaked supplier can show twice (old and new version); a page 1 that lists an address twice,
+ * or does not hold the rows it counted, is read again as of the block, on its own.
  */
 export async function ownedSuppliers(net: Network, owner: string): Promise<OwnedSupplier[]> {
   if (!/^pokt1[0-9a-z]{38}$/.test(owner)) return []
   type Node = { id: string; stakeStatus: string; stakeAmount: string }
-  const nodes: Node[] = []
-  for (let pageNo = 0; ; pageNo++) {
-    if (pageNo >= OWNED_SUPPLIERS_MAX_PAGES)
-      throw new Error(
-        `the indexer was still answering after ${OWNED_SUPPLIERS_MAX_PAGES} pages, so the list was not read to the end`
-      )
-    const after = nodes.at(-1)?.id ?? ''
-    const res = await fetch(NETWORK_INFO[net].indexer, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        query:
-          'query($owner: String!, $after: String!) { suppliers(filter: { ownerId: { equalTo: $owner }, stakeStatus: { notEqualTo: Unstaked }, id: { greaterThan: $after } }, orderBy: ID_ASC, first: 1000) { totalCount nodes { id stakeStatus stakeAmount } } }',
-        variables: { owner, after }
-      }),
-      signal: AbortSignal.timeout(20_000)
-    })
-    if (!res.ok) throw new LcdError(`HTTP ${res.status} from the indexer`, res.status)
-    const j = (await res.json()) as {
-      data?: { suppliers?: { totalCount?: number; nodes?: Node[] } }
-      errors?: { message: string }[]
-    }
-    if (j.errors?.length) throw new Error(`the indexer answered: ${j.errors[0].message}`)
-    const page = j.data?.suppliers?.nodes ?? []
-    // Each page must move past the cursor. An indexer that ignored the filter would hand
-    // back the same rows forever; stop with an error rather than loop or show a short list.
-    if (page.length && !(page[page.length - 1].id > after))
+  type Page = { totalCount?: number; nodes?: Node[] }
+  const rows = (p: Page | undefined): Node[] => p?.nodes ?? []
+  /** Whether a page read after `after` holds every row that remains. */
+  const last = (p: Page | undefined): boolean =>
+    !rows(p).length || rows(p).length >= (p?.totalCount ?? 0)
+  // Each page must move past the cursor. An indexer that ignored the filter would hand back
+  // the same rows forever; stop with an error rather than loop or show a short list.
+  const moved = (p: Page | undefined, after: string): void => {
+    const r = rows(p)
+    if (r.length && !(r[r.length - 1].id > after))
       throw new Error(
         'the indexer did not move on to the next page, so the list was not read to the end'
       )
-    nodes.push(...page)
-    // totalCount counts the rows after the cursor, so this page held all that remained.
-    if (!page.length || page.length >= (j.data?.suppliers?.totalCount ?? 0)) break
   }
+  const first = await gql<{ s?: Page; _metadata?: { lastProcessedHeight?: number | null } }>(
+    net,
+    `query($owner: String!, $after: String!) { _metadata { lastProcessedHeight } ${ownedPage('s', 'after', false)} }`,
+    { owner, after: '' },
+    20_000
+  )
+  moved(first.s, '')
+  let nodes = rows(first.s)
+  let counted = first.s?.totalCount ?? 0
+  // A page that lists an address twice, or does not hold what it counted, was read while a
+  // block was being written: read it again as of the block, without guessing a page 2.
+  const odd =
+    new Set(nodes.map((n) => n.id)).size < nodes.length ||
+    (last(first.s) && nodes.length !== counted)
+  if (!last(first.s) || odd) {
+    const h = first._metadata?.lastProcessedHeight
+    if (!Number.isInteger(h) || !h)
+      throw new Error('the indexer did not say which block it has reached')
+    const at = String(h)
+    const cursor = odd ? '' : nodes[nodes.length - 1].id
+    const two = await gql<{ a?: Page; b?: Page }>(
+      net,
+      odd
+        ? `query($owner: String!, $after: String!, $at: String!) { ${ownedPage('a', 'after', true)} }`
+        : `query($owner: String!, $after: String!, $next: String!, $at: String!) { ${ownedPage('a', 'after', true)} ${ownedPage('b', 'next', true)} }`,
+      odd ? { owner, after: '', at } : { owner, after: '', next: cursor, at },
+      20_000
+    )
+    moved(two.a, '')
+    nodes = rows(two.a)
+    counted = two.a?.totalCount ?? 0
+    let done = last(two.a)
+    let pinnedPages = 1
+    if (!done && !odd && nodes[nodes.length - 1].id === cursor) {
+      // Page 1 ends where it did, so page 2, read as of the same block, follows it.
+      moved(two.b, cursor)
+      nodes.push(...rows(two.b))
+      done = last(two.b)
+      pinnedPages = 2
+    }
+    for (let pageNo = pinnedPages; !done; pageNo++) {
+      if (pageNo >= OWNED_SUPPLIERS_MAX_PAGES)
+        throw new Error(
+          `the indexer was still answering after ${OWNED_SUPPLIERS_MAX_PAGES} pages, so the list was not read to the end`
+        )
+      const after = nodes[nodes.length - 1].id
+      const d = await gql<{ s?: Page }>(
+        net,
+        `query($owner: String!, $after: String!, $at: String!) { ${ownedPage('s', 'after', true)} }`,
+        { owner, after, at },
+        20_000
+      )
+      moved(d.s, after)
+      nodes.push(...rows(d.s))
+      done = last(d.s)
+    }
+  }
+  if (nodes.length !== counted)
+    throw new Error(
+      `the indexer counted ${counted} suppliers but listed ${nodes.length}, so the list was not read whole`
+    )
   // The query already leaves Unstaked out; filtered again in case an indexer ignores that.
   return nodes
     .filter((n) => n.stakeStatus !== 'Unstaked')

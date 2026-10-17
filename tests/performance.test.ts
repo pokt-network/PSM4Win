@@ -3,9 +3,12 @@ import {
   parseHealth,
   judgeStack,
   claimWindowClose,
-  claimsFromEnd,
-  earningsByService,
+  claimedSessions,
+  claimsBySupplier,
+  READS_AT_ONCE,
   supplierActivity,
+  verdictWithClaims,
+  type ClaimsRead,
   type MinerHealth,
   type ClaimParams
 } from '@core/performance'
@@ -91,8 +94,43 @@ describe('judgeStack', () => {
     // No height in the log window: unknown, not a warning by itself.
     expect(judgeStack(health([], { last_height: 0 }), new Set(), 5000, P).ok).toBe(true)
   })
-  it('reads claims from the oldest served session', () => {
-    expect(claimsFromEnd(health(four))).toBe(900)
+  describe('verdictWithClaims', () => {
+    // The four periods 900-960 close by 982; the newest judged window closes at 982.
+    const read = (r: Partial<ClaimsRead>) => (): Promise<ClaimsRead> =>
+      Promise.resolve({ sessions: new Set(), complete: true, indexedHeight: 1000, ...r })
+    it('reads no claims when the verdict does not depend on them', async () => {
+      const f = vi.fn(read({}))
+      const down = health(four, { miner: { status: 'exited', started: '', restarts: 0 } })
+      expect(await verdictWithClaims(down, 1000, P, f)).toMatchObject({ kind: 'miner-down' })
+      expect(await verdictWithClaims(health(four.slice(1)), 1000, P, f)).toMatchObject({ ok: true })
+      expect(f).not.toHaveBeenCalled()
+    })
+    it('reads the claims of the judged periods from the oldest, and is fine when one was claimed', async () => {
+      const f = vi.fn(read({ sessions: new Set([sid(3)]) }))
+      expect(await verdictWithClaims(health(four), 1000, P, f)).toMatchObject({ ok: true })
+      expect(f).toHaveBeenCalledWith(900)
+    })
+    it('warns only when the indexer reached the newest claim window and read every claim', async () => {
+      expect(await verdictWithClaims(health(four), 1000, P, read({}))).toMatchObject({
+        kind: 'unclaimed'
+      })
+      expect(
+        await verdictWithClaims(health(four), 1000, P, read({ indexedHeight: 982 }))
+      ).toMatchObject({
+        kind: 'unclaimed'
+      })
+    })
+    it('says the check could not be made when the indexer is behind, never "not claiming"', async () => {
+      expect(await verdictWithClaims(health(four), 1000, P, read({ indexedHeight: 981 }))).toMatch(
+        /has not reached block 982 yet \(it is at 981\)/
+      )
+      expect(
+        await verdictWithClaims(health(four), 1000, P, read({ indexedHeight: Number.NaN }))
+      ).toMatch(/did not say where it is/)
+      expect(await verdictWithClaims(health(four), 1000, P, read({ complete: false }))).toMatch(
+        /could not all be read/
+      )
+    })
   })
 })
 
@@ -127,66 +165,281 @@ describe('parseHealth', () => {
 
 describe('indexer reads', () => {
   afterEach(() => vi.unstubAllGlobals())
-  const answer = (data: unknown): ReturnType<typeof vi.fn> => {
-    const f = vi.fn(async () => ({ ok: true, status: 200, json: async () => data }))
+  type Vars = Record<string, unknown>
+  /** Answers each indexer call with what `reply` gives for its query and variables. */
+  const answer = (reply: (query: string, v: Vars) => unknown): ReturnType<typeof vi.fn> => {
+    const f = vi.fn(async (_url: string, init: { body: string }) => {
+      const { query, variables } = JSON.parse(init.body) as { query: string; variables: Vars }
+      return { ok: true, status: 200, json: async () => reply(query, variables) }
+    })
     vi.stubGlobal('fetch', f)
     return f
   }
-  it('sums settled claims per service, largest first', async () => {
-    answer({
-      data: {
-        s: {
-          groupedAggregates: [
-            {
-              keys: ['b'],
-              sum: { settledAmount: '10', numRelays: '1' },
-              distinctCount: { sessionId: '1' }
-            },
-            {
-              keys: ['a'],
-              sum: { settledAmount: '46123973', numRelays: '4119' },
-              distinctCount: { sessionId: '332' }
-            }
-          ]
-        }
+  // A window the indexer covers whole: from its start to just past its newest block.
+  const range = {
+    requested_from: '2026-10-05T00:00:00+00:00',
+    covered_from: '2026-10-05T00:00:00+00:00',
+    covered_to: '2026-10-14T16:47:15.076001+00:00',
+    gaps: [],
+    end_inclusive: false
+  }
+  // The newest block and the one before it.
+  const head = {
+    nodes: [{ timestamp: '2026-10-14T16:47:15.076' }, { timestamp: '2026-10-14T16:46:14.5' }]
+  }
+  const claims = (top: number, n: number): unknown[] =>
+    Array.from({ length: n }, (_, i) => ({
+      height: String(top - i),
+      id: `tx${top - i}-1`,
+      sessionId: sid(top - i),
+      sessionEndHeight: String(top - i - 12),
+      serviceId: `svc${top - i}`,
+      blockTime: `T${top - i}`
+    }))
+  const settlements = (r: unknown = range): unknown => ({
+    data: {
+      head,
+      settled: {
+        range: r,
+        data: [
+          { service_id: 'b', settled_upokt: '10', relays: '1', settled_claims: '1' },
+          { service_id: 'a', settled_upokt: '46123973', relays: '4119', settled_claims: '66' }
+        ]
+      },
+      proofs: { range: r, data: [{ proofs_submitted: '1' }] },
+      penalties: {
+        range: r,
+        data: [
+          { kind: 'expired', reason: 'PROOF_MISSING', events: '2' },
+          { kind: 'expired', reason: 'PROOF_INVALID', events: '1' },
+          { kind: 'slashed', reason: 'unknown', events: '5' },
+          { kind: 'discarded', reason: 'claim settled twice', events: '4' }
+        ]
       }
-    })
-    expect(await earningsByService('main', OP, '2026-09-12T00:00:00Z')).toEqual([
-      { service: 'a', relays: 4119, earnedUpokt: 46123973, sessions: 332 },
-      { service: 'b', relays: 1, earnedUpokt: 10, sessions: 1 }
-    ])
+    }
   })
-  it('counts activity and reports expirations by reason', async () => {
-    const f = answer({
-      data: {
-        claims: { totalCount: 69 },
-        proofs: { totalCount: 1 },
-        settled: { totalCount: 67 },
-        expired: {
-          totalCount: 2,
-          groupedAggregates: [{ keys: ['PROOF_MISSING'], distinctCount: { id: '2' } }]
-        },
-        last: {
-          nodes: [
-            { serviceId: 'meme-watch', sessionEndHeight: '961380', block: { timestamp: 'T' } }
-          ]
-        }
-      }
+  const calls = (f: ReturnType<typeof vi.fn>): { query: string; variables: Vars }[] =>
+    f.mock.calls
+      .map((c) => (c as unknown as [string, { body?: string } | undefined])[1]?.body)
+      .filter((b): b is string => !!b)
+      .map((b) => JSON.parse(b))
+  const pages = (f: ReturnType<typeof vi.fn>): Vars[] =>
+    calls(f)
+      .filter((c) => c.query.includes('rowLimit: $n'))
+      .map((c) => c.variables)
+
+  /** A claims read: the count for the batch, and each supplier's newest claim as l<k>. */
+  const claimsAnswer = (
+    op: string[],
+    count = (i: number) => String(i),
+    r: unknown = range
+  ): unknown => ({
+    data: {
+      head,
+      c: op.map((o, i) => ({ supplierId: o, claims: count(i) })),
+      ...Object.fromEntries(
+        op.map((_, k) => [
+          `l${k}`,
+          {
+            range: r,
+            data:
+              k === 2
+                ? []
+                : [
+                    {
+                      block_time: `T${961390 - k}`,
+                      session_end_height: String(961378 - k),
+                      service_id: `svc${961390 - k}`
+                    }
+                  ]
+          }
+        ])
+      )
+    }
+  })
+  it('reads the claims count and newest claim of every supplier in one read per 20', async () => {
+    const ops = Array.from({ length: 23 }, (_, i) => 'pokt1' + String(i).padStart(38, '0'))
+    const f = answer((_q, v) => claimsAnswer(v.op as string[]))
+    const m = await claimsBySupplier('main', [...ops, ops[0]], '2026-10-05T00:00:00Z')
+    expect(calls(f).map((c) => (c.variables.op as string[]).length)).toEqual([20, 3])
+    const first = calls(f)[0]
+    expect(first.variables.t).toBe('2026-10-05T00:00:00Z')
+    expect(first.variables.o19).toEqual([ops[19]])
+    expect(first.query).toContain('getCreatedClaimsCountList(suppliers: $op, rangeStart: $t)')
+    // The newest claim is read within the window only.
+    expect(first.query).toContain(
+      'l19: getCreatedClaimsJson(suppliers: $o19, rangeStart: $t, rowLimit: 1)'
+    )
+    const last = { time: 'T961390', sessionEnd: 961378, service: 'svc961390' }
+    expect(m.get(ops[0])).toEqual({ claims: 0, lastClaim: last, covered: true, error: '' })
+    expect(m.get(ops[21])).toEqual({
+      claims: 1,
+      lastClaim: { ...last, time: 'T961389', sessionEnd: 961377, service: 'svc961389' },
+      covered: true,
+      error: ''
     })
+    // None in the window: no last claim, not "never".
+    expect(m.get(ops[2])).toEqual({ claims: 2, lastClaim: null, covered: true, error: '' })
+  })
+  it('says the claims are not covered when the indexed blocks do not span the window', async () => {
+    const late = { ...range, covered_from: '2026-10-06T00:00:00+00:00' }
+    answer((_q, v) => claimsAnswer(v.op as string[], (i) => String(i), late))
+    expect((await claimsBySupplier('main', [OP], '2026-10-05T00:00:00Z')).get(OP)?.covered).toBe(
+      false
+    )
+  })
+  it('reads at most READS_AT_ONCE batches of claims at the same time', async () => {
+    const ops = Array.from({ length: 20 * 7 }, (_, i) => 'pokt1' + String(i).padStart(38, '0'))
+    let now = 0
+    let most = 0
+    const f = vi.fn(async (_url: string, init: { body: string }) => {
+      const { variables } = JSON.parse(init.body) as { variables: Vars }
+      most = Math.max(most, ++now)
+      await new Promise((r) => setTimeout(r, 5))
+      now--
+      return { ok: true, status: 200, json: async () => claimsAnswer(variables.op as string[]) }
+    })
+    vi.stubGlobal('fetch', f)
+    const m = await claimsBySupplier('main', ops, 't')
+    expect(f).toHaveBeenCalledTimes(7)
+    expect(most).toBe(READS_AT_ONCE)
+    expect(m.size).toBe(140)
+  })
+  it('keeps the other suppliers when one is bad, left out, or in a read that failed', async () => {
+    const ops = Array.from({ length: 21 }, (_, i) => 'pokt1' + String(i).padStart(38, '0'))
+    const f = answer((_q, v) => {
+      const op = v.op as string[]
+      // The second read (one supplier) fails; the first leaves ops[1] out of the count.
+      if (op.length === 1) return { errors: [{ message: 'boom' }] }
+      const a = claimsAnswer(op, () => '7') as { data: { c: { supplierId: string }[] } }
+      a.data.c = a.data.c.filter((r) => r.supplierId !== ops[1])
+      return a
+    })
+    const m = await claimsBySupplier('main', ['x', ...ops], 't')
+    // The bad address is never sent.
+    expect(calls(f).flatMap((c) => c.variables.op as string[])).not.toContain('x')
+    const fail = (error: string): unknown => ({
+      claims: null,
+      lastClaim: null,
+      covered: false,
+      error
+    })
+    expect(m.get('x')).toEqual(fail('not an operator address'))
+    expect(m.get(ops[0])?.claims).toBe(7)
+    expect(m.get(ops[1])).toEqual(fail('the indexer did not count its claims'))
+    expect(m.get(ops[20])).toEqual(fail('the indexer answered: boom'))
+  })
+  it('reads settlements and earnings per service in one read', async () => {
+    const f = answer(() => settlements())
     expect(await supplierActivity('main', OP, '2026-10-05T00:00:00Z')).toEqual({
-      claims: 69,
       proofs: 1,
       settled: 67,
-      expired: 2,
-      expiredReasons: { PROOF_MISSING: 2 },
-      lastClaim: { time: 'T', sessionEnd: 961380, service: 'meme-watch' }
+      expired: 3,
+      expiredReasons: { PROOF_MISSING: 2, PROOF_INVALID: 1 },
+      discarded: 4,
+      discardedReasons: { 'claim settled twice': 4 },
+      earnings: [
+        { service: 'a', relays: 4119, earnedUpokt: 46123973, sessions: 66 },
+        { service: 'b', relays: 1, earnedUpokt: 10, sessions: 1 }
+      ],
+      covered: true,
+      error: ''
     })
-    const body = JSON.parse((f.mock.calls[0] as unknown as [string, { body: string }])[1].body)
-    expect(body.variables).toEqual({ op: OP, t: '2026-10-05T00:00:00Z' })
+    expect(f).toHaveBeenCalledTimes(1)
+    expect(calls(f)[0].query).toContain(
+      'getSupplierEarningsJson(suppliers: $op, rangeStart: $t, byService: true)'
+    )
+    expect(calls(f)[0].variables).toEqual({ op: [OP], t: '2026-10-05T00:00:00Z' })
+  })
+  it('takes a window covered up to the block before the newest as covered', async () => {
+    const oneBehind = { ...range, covered_to: '2026-10-14T16:46:14.500001+00:00' }
+    answer(() => settlements(oneBehind))
+    expect((await supplierActivity('main', OP, '2026-10-05T00:00:00Z')).covered).toBe(true)
+  })
+  it('says a window the indexer does not cover whole is not known yet, not zero', async () => {
+    // Two blocks behind the newest.
+    const lagging = { ...range, covered_to: '2026-10-14T16:45:13.000001+00:00' }
+    const late = { ...range, covered_from: '2026-10-06T00:00:00+00:00' }
+    const gap = { ...range, gaps: [{ from: 'a', to: 'b' }] }
+    const none = { ...range, covered_from: null, covered_to: null }
+    for (const r of [lagging, late, gap, none]) {
+      answer(() => settlements(r))
+      expect((await supplierActivity('main', OP, '2026-10-05T00:00:00Z')).covered).toBe(false)
+    }
+  })
+  /** A monitor read: the count (first request only) and the page the variables ask for. */
+  const monitor = (count: string | null, page: (v: Vars) => unknown[]): ReturnType<typeof vi.fn> =>
+    answer((q, v) => ({
+      data: {
+        ...(q.includes('getCreatedClaimsCountList') && count !== null
+          ? { n: [{ claims: count }], _metadata: { lastProcessedHeight: 3000 } }
+          : {}),
+        c: page(v)
+      }
+    }))
+  it('reads the claims of the sessions ending at or after fromEnd, with their count, in one request', async () => {
+    const f = monitor('139', () => claims(2000, 139))
+    const c = await claimedSessions('main', OP, 1850)
+    expect(f).toHaveBeenCalledTimes(1)
+    const [r] = calls(f)
+    expect(r.query).toContain('getCreatedClaimsCountList(suppliers: $op, fromSessionEndHeight: $e)')
+    expect(r.query).toContain(
+      'getCreatedClaimsList(suppliers: $op, fromSessionEndHeight: $e, rowLimit: $n'
+    )
+    expect(r.variables).toEqual({ op: [OP], e: '1850', n: 1000, h: null, id: null })
+    expect(c).toEqual({
+      sessions: new Set(claims(2000, 139).map((x) => (x as { sessionId: string }).sessionId)),
+      complete: true,
+      indexedHeight: 3000
+    })
+    expect(r.query).toContain('_metadata { lastProcessedHeight }')
+  })
+  it('reads on after a full page, each page after the last row of the one before, until a short one', async () => {
+    const f = monitor('1500', (v) =>
+      !v.h ? claims(5000, 1000) : v.h === '4001' ? claims(4000, 500) : []
+    )
+    const c = await claimedSessions('main', OP, 1)
+    expect(pages(f).map((v) => [v.h, v.id])).toEqual([
+      [null, null],
+      ['4001', 'tx4001-1']
+    ])
+    expect(calls(f)[1].query).not.toContain('getCreatedClaimsCountList')
+    expect(c).toEqual(expect.objectContaining({ complete: true }))
+    expect(c.sessions.size).toBe(1500)
+  })
+  it('never ends on the count: fewer rows than counted is a check that could not be made', async () => {
+    // The count saw a claim the list did not (a block still being written).
+    let f = monitor('10', () => claims(5000, 9))
+    let c = await claimedSessions('main', OP, 1)
+    expect([c.sessions.size, c.complete]).toEqual([9, false])
+    expect(f).toHaveBeenCalledTimes(1)
+    // A count smaller than the rows (a claim landed between the two) does not cut the read.
+    f = monitor('5', () => claims(5000, 9))
+    c = await claimedSessions('main', OP, 1)
+    expect([c.sessions.size, c.complete]).toEqual([9, true])
+    // No count: the rows alone decide.
+    f = monitor(null, () => claims(5000, 9))
+    expect((await claimedSessions('main', OP, 1)).complete).toBe(true)
+    expect(f).toHaveBeenCalledTimes(1)
+  })
+  it('says when the monitor could not read every claim, keeping the newest', async () => {
+    let top = 100_000_000
+    monitor('1000000', () => claims((top -= 1000), 1000))
+    const c = await claimedSessions('main', OP, 1)
+    expect(c.complete).toBe(false)
+    expect(c.sessions.size).toBe(50_000)
   })
   it('refuses a non-address, and reports indexer errors instead of zeros', async () => {
-    await expect(earningsByService('main', 'x', 't')).rejects.toThrow(/not an operator/)
-    answer({ errors: [{ message: 'boom' }] })
-    await expect(supplierActivity('main', OP, 't')).rejects.toThrow('boom')
+    await expect(supplierActivity('main', 'x', 't')).rejects.toThrow(/not an operator/)
+    answer(() => ({ errors: [{ message: 'boom' }] }))
+    await expect(claimedSessions('main', OP, 1)).rejects.toThrow('boom')
+    expect((await claimsBySupplier('main', [OP], 't')).get(OP)).toEqual({
+      claims: null,
+      lastClaim: null,
+      covered: false,
+      error: 'the indexer answered: boom'
+    })
+    expect((await supplierActivity('main', OP, 't')).proofs).toBeNull()
+    expect((await supplierActivity('main', OP, 't')).error).toBe('the indexer answered: boom')
   })
 })

@@ -2,15 +2,18 @@
 // what its claims, proofs, and settled claims came to. The warnings come from the main
 // process's monitor (every 30 minutes, also from the tray); the tables are read from the
 // network's indexer for the network the app is on.
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import type { Network } from '@core/networks'
 import { fmtPokt, fmtInt, fmtDuration } from '@core/format'
 import {
   supplierActivity,
-  earningsByService,
+  claimsBySupplier,
+  why,
+  utc,
+  READS_AT_ONCE,
   type SupplierActivity,
-  type ServiceEarnings
+  type SupplierClaims
 } from '@core/performance'
 import type { StackCheck } from '../../../preload/index'
 import {
@@ -39,13 +42,14 @@ type WindowId = (typeof WINDOWS)[number]['id']
 interface Row {
   server: ServerEntry
   operator: string
+  /** Claims made in the window and the newest claim, read for every supplier at once. */
+  claims: SupplierClaims
   activity: SupplierActivity | null
-  earnings: ServiceEarnings[] | null
   error: string
 }
 
 function ago(iso: string): string {
-  const t = Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + 'Z')
+  const t = utc(iso)
   if (!Number.isFinite(t)) return ''
   const s = Math.max(0, (Date.now() - t) / 1000)
   if (s < 90) return 'just now'
@@ -71,31 +75,49 @@ export function PerformanceScreen(): React.JSX.Element {
     .map((s) => ({ server: s, st: stackOf(s, net) }))
     .filter((x) => stackState(x.st) === 'ready' && x.st?.operator)
   const key = mine.map((x) => x.st!.operator).join(',')
+  /** The newest load; an older one that answers late is dropped. */
+  const loadId = useRef(0)
 
   const load = useCallback(async () => {
+    const id = ++loadId.current
     const since = new Date(Date.now() - WINDOWS.find((w) => w.id === win)!.ms).toISOString()
     setRows(null)
-    const out = await Promise.all(
-      mine.map(async ({ server, st }): Promise<Row> => {
+    const counted = claimsBySupplier(
+      net,
+      mine.map((x) => x.st!.operator),
+      since
+    ).catch((e) => why(e))
+    const acts: PromiseSettledResult<SupplierActivity>[] = []
+    for (let i = 0; i < mine.length; i += READS_AT_ONCE) {
+      acts.push(
+        ...(await Promise.allSettled(
+          mine
+            .slice(i, i + READS_AT_ONCE)
+            .map(({ st }) => supplierActivity(net, st!.operator, since))
+        ))
+      )
+      if (id !== loadId.current) return
+    }
+    const c = await counted
+    if (id !== loadId.current) return
+    setRows(
+      mine.map(({ server, st }, i): Row => {
+        const a = acts[i]
         const operator = st!.operator
-        try {
-          const [activity, earnings] = await Promise.all([
-            supplierActivity(net, operator, since),
-            earningsByService(net, operator, since)
-          ])
-          return { server, operator, activity, earnings, error: '' }
-        } catch (e) {
-          return {
-            server,
-            operator,
-            activity: null,
-            earnings: null,
-            error: e instanceof Error ? e.message : String(e)
-          }
+        return {
+          server,
+          operator,
+          claims: (typeof c === 'string' ? undefined : c.get(operator)) ?? {
+            claims: null,
+            lastClaim: null,
+            covered: false,
+            error: typeof c === 'string' ? c : 'not read'
+          },
+          activity: a.status === 'fulfilled' ? a.value : null,
+          error: a.status === 'rejected' ? why(a.reason) : ''
         }
       })
     )
-    setRows(out)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [net, win, key])
 
@@ -270,7 +292,7 @@ export function PerformanceScreen(): React.JSX.Element {
                   <th>Claims</th>
                   <th>Proofs</th>
                   <th>Settled</th>
-                  <th>Expired</th>
+                  <th>Unpaid</th>
                   <th>Last claim</th>
                   <th>Status</th>
                 </tr>
@@ -293,27 +315,59 @@ export function PerformanceScreen(): React.JSX.Element {
                         </td>
                       ) : (
                         <>
-                          <td>{fmtInt(a.claims)}</td>
-                          <td>{fmtInt(a.proofs)}</td>
-                          <td>{fmtInt(a.settled)}</td>
-                          <td
-                            title={Object.entries(a.expiredReasons)
-                              .map(([k, n]) => `${k}: ${n}`)
-                              .join(', ')}
-                          >
-                            {a.expired ? <Badge cls="bad">{fmtInt(a.expired)}</Badge> : '0'}
-                          </td>
                           <td>
-                            {a.lastClaim ? (
+                            {r.claims.claims === null ? (
+                              <ErrText>Could not read: {r.claims.error}</ErrText>
+                            ) : r.claims.covered ? (
+                              fmtInt(r.claims.claims)
+                            ) : (
+                              <span className="hint">not covered by the indexer yet</span>
+                            )}
+                          </td>
+                          {a.proofs === null ? (
+                            <td colSpan={3}>
+                              <ErrText>Could not read: {a.error}</ErrText>
+                            </td>
+                          ) : a.covered ? (
+                            <>
+                              <td>{fmtInt(a.proofs)}</td>
+                              <td>{fmtInt(a.settled)}</td>
+                              {/* Expired and discarded claims alike went unpaid. */}
+                              <td
+                                title={[
+                                  ...Object.entries(a.expiredReasons).map(([k, n]) => `${k}: ${n}`),
+                                  ...Object.entries(a.discardedReasons).map(
+                                    ([k, n]) => `discarded (${k}): ${n}`
+                                  )
+                                ].join(', ')}
+                              >
+                                {a.expired + a.discarded ? (
+                                  <Badge cls="bad">{fmtInt(a.expired + a.discarded)}</Badge>
+                                ) : (
+                                  '0'
+                                )}
+                              </td>
+                            </>
+                          ) : (
+                            <td colSpan={3} className="hint">
+                              not covered by the indexer yet
+                            </td>
+                          )}
+                          <td>
+                            {r.claims.error ? (
+                              <span className="hint">could not be read</span>
+                            ) : !r.claims.covered ? (
+                              <span className="hint">not covered by the indexer yet</span>
+                            ) : r.claims.lastClaim ? (
                               <>
-                                {ago(a.lastClaim.time)}
+                                {ago(r.claims.lastClaim.time)}
                                 <div className="hint">
-                                  {a.lastClaim.service}, session ending at{' '}
-                                  {fmtInt(a.lastClaim.sessionEnd)}
+                                  {r.claims.lastClaim.service}, session ending at{' '}
+                                  {fmtInt(r.claims.lastClaim.sessionEnd)}
                                 </div>
                               </>
                             ) : (
-                              <span className="hint">never</span>
+                              <span className="hint">none in this period</span>
                             )}
                           </td>
                         </>
@@ -335,8 +389,9 @@ export function PerformanceScreen(): React.JSX.Element {
               </tbody>
             </table>
             <p className="hint">
-              Expired claims are rewards the network did not pay, usually because a required proof
-              was not sent in time.
+              Unpaid counts the claims the network settled without paying: expired ones (a required
+              proof was missing or invalid) and, rarely, ones it discarded as faulty. Hover a number
+              to see why.
             </p>
 
             <h3 style={{ marginTop: 18 }}>Earned per service</h3>
@@ -352,14 +407,22 @@ export function PerformanceScreen(): React.JSX.Element {
               </thead>
               <tbody>
                 {rows.flatMap((r) => {
-                  const e = r.earnings ?? []
+                  const a = r.activity
+                  // The same read, and so the same coverage, as Settled above.
+                  const e = a && a.earnings !== null && a.covered ? a.earnings : []
                   const total = e.reduce((t, x) => t + x.earnedUpokt, 0)
                   if (!e.length)
                     return [
                       <tr key={r.server.name}>
                         <td className="svcid">{r.server.name}</td>
                         <td colSpan={4} className="hint">
-                          {r.error ? 'could not be read' : 'nothing settled in this period'}
+                          {r.error || !a
+                            ? `could not be read${r.error ? `: ${r.error}` : ''}`
+                            : a.error
+                              ? `could not be read: ${a.error}`
+                              : !a.covered
+                                ? 'not covered by the indexer yet'
+                                : 'nothing settled in this period'}
                         </td>
                       </tr>
                     ]
