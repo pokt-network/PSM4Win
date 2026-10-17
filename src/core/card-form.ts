@@ -280,7 +280,14 @@ function probe(
   return { rpc_type: rpc, request: req, expect: { json_path: jsonPath, matches }, notes }
 }
 
-export const GATEWAY_SENTENCE_RE = /\s*Gateway operators: configure as type passthrough.*$/
+/**
+ * The gateway sentence buildCard appends to serving.notes, in both wordings: the old
+ * "Gateway operators: configure as type passthrough ..." and the current "SAGE operators:
+ * type generic ...". Stripped through to the end when a card is loaded for editing, so it
+ * is never doubled. Same regex as app.js GATEWAY_NOTE_RE.
+ */
+export const GATEWAY_SENTENCE_RE =
+  /\s*(?:Gateway operators: configure as type passthrough|SAGE operators: type generic)[\s\S]*$/
 
 /** Same key order as app.js buildCard so the bytes match. */
 export function buildCard(form: CreateForm): Record<string, unknown> {
@@ -328,7 +335,7 @@ export function buildCard(form: CreateForm): Record<string, unknown> {
       )
     )
   if (hc.length) sv.healthcheck = hc
-  const gw = `Gateway operators: configure as type passthrough with rpc_types ["${f.rpc.toLowerCase()}"].`
+  const gw = `SAGE operators: type generic (its name for passthrough), rpc_types ["${f.rpc.toLowerCase()}"].`
   sv.notes = f.servingNotes ? f.servingNotes + ' ' + gw : gw
   card.serving = sv
   if (f.docs) card.docs = f.docs
