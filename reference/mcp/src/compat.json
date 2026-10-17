@@ -1,11 +1,18 @@
 {
   "app": "Pocket Service Manager",
-  "updated": "2026-10-13",
+  "updated": "2026-10-17",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.29",
+  "latest": "electron-0.1.30",
   "minimum_supported": "hta-2026-09-14",
   "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.30": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.28",
+      "changes": [
+        "Create writes the SAGE gateway sentence as 'SAGE operators: type generic (its name for passthrough), rpc_types [...]' in serving.notes; up to 0.1.29 it wrote 'Gateway operators: configure as type passthrough ...'. 'passthrough' still routes in SAGE but is logged as an unrecognised type at boot, so tell a gateway operator to use type generic. Loading a card for editing strips either wording, so re-saving an old card rewrites it once without doubling"
+      ]
+    },
     "electron-0.1.29": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.28",

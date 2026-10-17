@@ -2,6 +2,10 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
+## 0.1.30
+
+- Cards you create or re-save now tell gateway operators to use SAGE's type `generic` (its name for passthrough) instead of `passthrough`. Cards with the old sentence still load and are rewritten cleanly.
+
 ## 0.1.29
 
 **Priority update.** In 0.1.28, pressing Update stack updated the server but then failed to save, and every server disappeared from the app until it was restarted. Nothing was deleted: restarting the app brings your servers back. This version fixes it; install it before pressing Update stack.
