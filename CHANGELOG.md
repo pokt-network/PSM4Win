@@ -4,6 +4,8 @@ One line per user-visible change. Versions are tags `v<version>`; compat strings
 
 ## 0.1.31
 
+**Priority update.** This version moves the app to Electron 44.9.3 for the October 2026 Chromium and V8 security fixes, and keeps Performance working as the network indexer retires the data 0.1.30 reads; install it now.
+
 - Security: the app now runs on Electron 44.9.3, which carries the October 21, 2026 Chromium and V8 security fixes. (Electron has not yet shipped the October 21 Node.js 24.22.1 fixes; a later version will pick them up.)
 - Performance reads the indexer's new claim and earnings functions, so it keeps working as the indexer retires the lists it used to read. Two columns change meaning: **Last claim** is now the newest claim in the period you chose ("none in this period" when there was none), and **Expired** is now **Unpaid**, which counts claims the network settled without paying (expired ones and ones discarded at settlement; the tooltip lists each). A period the indexer has not fully covered yet says so instead of showing numbers that look final.
 

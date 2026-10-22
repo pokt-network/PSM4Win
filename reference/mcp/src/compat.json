@@ -9,6 +9,7 @@
     "electron-0.1.31": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.28",
+      "priority": "This version moves the app to Electron 44.9.3 for the October 2026 Chromium and V8 security fixes, and keeps Performance working as the network indexer retires the data 0.1.30 reads; install it now.",
       "changes": [
         "runs on Electron 44.9.3 (Chromium 152.0.7977.167, Node 24.22.0) with the 2026-10-21 Chromium and V8 security backports; up to 0.1.30 it ran Electron 44.5.1 (Node 24.21.0). The Node.js 24.22.1 security release is not in any Electron release yet",
         "Performance reads the indexer's claim and earnings functions instead of the message and event lists the indexer is removing. Last claim is now the newest claim inside the chosen window ('none in this period' when there is none), not the newest ever; the Expired column is renamed Unpaid and counts claims settled without payment (expired and discarded at settlement). Cells the indexer has not covered for the whole window say 'not covered by the indexer yet'. A user on 0.1.30 whose Performance numbers go blank or wrong after the indexer change: tell them to update"
