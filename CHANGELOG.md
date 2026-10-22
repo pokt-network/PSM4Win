@@ -2,6 +2,11 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
+## 0.1.31
+
+- Security: the app now runs on Electron 44.9.3, which carries the October 21, 2026 Chromium and V8 security fixes. (Electron has not yet shipped the October 21 Node.js 24.22.1 fixes; a later version will pick them up.)
+- Performance reads the indexer's new claim and earnings functions, so it keeps working as the indexer retires the lists it used to read. Two columns change meaning: **Last claim** is now the newest claim in the period you chose ("none in this period" when there was none), and **Expired** is now **Unpaid**, which counts claims the network settled without paying (expired ones and ones discarded at settlement; the tooltip lists each). A period the indexer has not fully covered yet says so instead of showing numbers that look final.
+
 ## 0.1.30
 
 - Cards you create or re-save now tell gateway operators to use SAGE's type `generic` (its name for passthrough) instead of `passthrough`. Cards with the old sentence still load and are rewritten cleanly.
