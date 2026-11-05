@@ -19,23 +19,27 @@ export function hasSealedPassphrase(): boolean {
   return exists(dataFiles.passEnc())
 }
 
+// The asynchronous safeStorage calls (Electron 45; the synchronous ones are removed in 46).
+// They use the same Windows key store, so a file sealed by an earlier version unseals here.
 export async function sealPassphrase(plain: string): Promise<void> {
-  if (!safeStorage.isEncryptionAvailable())
+  if (!(await safeStorage.isAsyncEncryptionAvailable()))
     fail('Windows data protection is not available, so the keyring passphrase cannot be sealed.')
   if (!RE.passphrase.test(plain)) fail('The passphrase has an unexpected shape and was not sealed.')
   await ensureDir(dirname(dataFiles.passEnc()))
-  await fs.writeFile(dataFiles.passEnc(), safeStorage.encryptString(plain))
+  await fs.writeFile(dataFiles.passEnc(), await safeStorage.encryptStringAsync(plain))
 }
 
 /** Returns the plain passphrase, or null when no sealed file exists. */
 export async function unsealPassphrase(): Promise<string | null> {
   if (!hasSealedPassphrase()) return null
-  if (!safeStorage.isEncryptionAvailable())
+  if (!(await safeStorage.isAsyncEncryptionAvailable()))
     fail('Windows data protection is not available, so the keyring passphrase cannot be unsealed.')
   const buf = await fs.readFile(dataFiles.passEnc())
-  const plain = safeStorage.decryptString(buf)
+  const { result: plain, shouldReEncrypt } = await safeStorage.decryptStringAsync(buf)
   if (!RE.passphrase.test(plain))
     fail('The sealed passphrase did not unseal to the expected shape.')
+  // Windows moved to a newer key: seal it again under that key. The passphrase is unchanged.
+  if (shouldReEncrypt) await sealPassphrase(plain)
   return plain
 }
 

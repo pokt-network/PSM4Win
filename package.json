@@ -1,7 +1,7 @@
 {
   "name": "pocket-service-manager",
   "productName": "Pocket Service Manager",
-  "version": "0.1.31",
+  "version": "0.1.32",
   "description": "Register, stake, supply, deploy, and test services on Pocket Network.",
   "main": "./out/main/index.js",
   "license": "MIT",
@@ -37,7 +37,7 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
-    "electron": "44.9.3",
+    "electron": "45.2.3",
     "electron-builder": "^26.0.12",
     "electron-vite": "^5.0.0",
     "eslint": "^9.39.1",
