@@ -2,6 +2,14 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
+## 0.1.32
+
+**Priority update.** This version moves the app to Electron 45.2.3 for the November 2026 Node.js and Chromium security fixes; install it now.
+
+- Security: the app now runs on Electron 45.2.3, with Node.js 24.22.2 (the October and November Node.js security fixes, which 0.1.31 could not yet include) and Chromium 156 with the security fixes released up to November 4, 2026.
+- The keyring passphrase this PC keeps sealed with Windows data protection is now read and written the way Electron 45 requires. Nothing changes for you: the passphrase sealed by earlier versions opens as before.
+- Security: updated the network library Electron's installer uses, and the app's build tools, past their published vulnerabilities.
+
 ## 0.1.31
 
 **Priority update.** This version moves the app to Electron 44.9.3 for the October 2026 Chromium and V8 security fixes, and keeps Performance working as the network indexer retires the data 0.1.30 reads; install it now.

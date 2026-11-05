@@ -1,11 +1,20 @@
 {
   "app": "Pocket Service Manager",
-  "updated": "2026-10-22",
+  "updated": "2026-11-05",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.31",
+  "latest": "electron-0.1.32",
   "minimum_supported": "hta-2026-09-14",
   "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.32": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.28",
+      "priority": "This version moves the app to Electron 45.2.3 for the November 2026 Node.js and Chromium security fixes; install it now.",
+      "changes": [
+        "runs on Electron 45.2.3 (Chromium 156, Node 24.22.2) with the security backports released up to 2026-11-04; up to 0.1.31 it ran Electron 44.9.3 (Node 24.22.0), without the October and November Node.js fixes. A user on 0.1.31 or older should update now",
+        "the sealed keyring passphrase uses Electron's asynchronous safeStorage calls (the synchronous ones are removed in Electron 46); a passphrase sealed by an earlier version opens unchanged, and is sealed again under the new key when Windows rotates it"
+      ]
+    },
     "electron-0.1.31": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.28",
