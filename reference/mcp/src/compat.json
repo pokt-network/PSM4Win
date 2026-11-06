@@ -1,11 +1,20 @@
 {
   "app": "Pocket Service Manager",
-  "updated": "2026-11-05",
+  "updated": "2026-11-06",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.32",
+  "latest": "electron-0.1.33",
   "minimum_supported": "hta-2026-09-14",
   "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.33": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.28",
+      "priority": "Both networks now run poktroll 0.1.36, and this version signs your transactions with the matching pocketd; install it now.",
+      "changes": [
+        "signs with ghcr.io/pokt-network/pocketd:0.1.36, matching the v0.1.36 upgrade both networks applied (MainNet at height 983087, 2026-10-27); up to 0.1.32 it signed with pocketd 0.1.35. No command shape changed; the app already refused lowering a supplier or application stake, which v0.1.36 now refuses on chain",
+        "supplier stacks need pocket-relay-miner v0.1.5 or later on a v0.1.36 chain (older versions build proofs the chain refuses); Update stack installs upstream's latest release"
+      ]
+    },
     "electron-0.1.32": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.28",

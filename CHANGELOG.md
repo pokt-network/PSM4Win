@@ -2,6 +2,13 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
+## 0.1.33
+
+**Priority update.** Both networks now run poktroll 0.1.36, and this version signs your transactions with the matching pocketd; install it now.
+
+- The app signs with pocketd 0.1.36, the version MainNet and Beta TestNet moved to at their October upgrade. The Dashboard's notice that the network runs a newer version than the app goes away.
+- Nothing else changes for you. Your supplier stacks keep serving; the Dashboard tells you when a newer RelayMiner is out for them.
+
 ## 0.1.32
 
 **Priority update.** This version moves the app to Electron 45.2.3 for the November 2026 Node.js and Chromium security fixes; install it now.
