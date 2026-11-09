@@ -1,11 +1,20 @@
 {
   "app": "Pocket Service Manager",
-  "updated": "2026-11-06",
+  "updated": "2026-11-09",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.33",
+  "latest": "electron-0.1.34",
   "minimum_supported": "hta-2026-09-14",
   "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.34": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.28",
+      "priority": "In 0.1.32 and 0.1.33 the Claude bridge, the update check, and the supplier monitor did not start when the app started; this version fixes that. Install it now.",
+      "changes": [
+        "fixes startup: 0.1.32 and 0.1.33 shipped without the tray icon, and Electron 45 stopped startup on it, so the local action bridge never started at launch (turned on by hand it served an empty token, so every call got 401 until the token was rotated, and every signing call returned 'Not approved in the app window' at once with no dialog), the release check and in-app install did not work, and the Performance monitor and upgrade checks did not run. An assistant talking to a user on 0.1.32 or 0.1.33 whose bridge fails this way should tell them to update to 0.1.34; on those versions the app cannot install the update itself, so the user updates once with Scoop",
+        "docker-start also finds a per-user Docker Desktop (%LOCALAPPDATA%\\Programs\\DockerDesktop) and a custom install folder from docker.exe on PATH"
+      ]
+    },
     "electron-0.1.33": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.28",

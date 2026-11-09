@@ -2,6 +2,14 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
+## 0.1.34
+
+**Priority update.** In 0.1.32 and 0.1.33 the Claude bridge, the update check, and the supplier monitor did not start when the app started; this version fixes that. Install it now.
+
+- Fixed: in 0.1.32 and 0.1.33 the app stopped part-way through starting, because its tray icon was missing from the installed files. The Claude bridge did not start (or, turned on by hand, refused every call and every approval), the app did not look for updates and could not install one, and the Performance monitor and the RelayMiner and network upgrade checks did not run. All of them start again, and the tray icon shows.
+- If you are on 0.1.32 or 0.1.33, the app cannot install this update for you. Update it with Scoop once; after that, updates work from the app again.
+- Start Docker Desktop now also finds Docker Desktop installed for your user only, or in a folder of your choice.
+
 ## 0.1.33
 
 **Priority update.** Both networks now run poktroll 0.1.36, and this version signs your transactions with the matching pocketd; install it now.
