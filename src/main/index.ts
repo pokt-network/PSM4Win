@@ -14,7 +14,7 @@ import { updater } from './update'
 import { performance } from './performance'
 import { upgrades } from './upgrades'
 import { readSettings } from './state/settings'
-import { applyPrefs, hideOnClose, initTray, setTrayWarnings, HIDDEN_ARG } from './tray'
+import { applyPrefs, hasTray, hideOnClose, initTray, setTrayWarnings, HIDDEN_ARG } from './tray'
 
 configureAppPaths()
 
@@ -109,33 +109,43 @@ if (!gotLock) {
     }
     // Started by Windows at sign-in (Settings, Start with Windows): stay in the tray.
     mainWindow = await createMainWindow({ hidden: process.argv.includes(HIDDEN_ARG) })
+    // Each service starts on its own: one that fails is logged and the others still start.
+    const step = async (name: string, f: () => unknown): Promise<void> => {
+      try {
+        await f()
+      } catch (e) {
+        log.error('startup step failed', { step: name, error: (e as Error)?.stack ?? String(e) })
+      }
+    }
     if (!smokeMode) {
       initTray({ open: () => void showWindow(), check: () => void performance.check() })
       const s = await readSettings()
-      applyPrefs({ trayEnabled: s.trayEnabled !== false, startWithWindows: !!s.startWithWindows })
+      await step('tray', () =>
+        applyPrefs({ trayEnabled: s.trayEnabled !== false, startWithWindows: !!s.startWithWindows })
+      )
       // Hidden with no tray to open it from would leave the app running out of reach.
-      if (s.trayEnabled === false) mainWindow.show()
+      if (s.trayEnabled === false || !hasTray()) mainWindow.show()
       watchWindow(mainWindow)
-      performance.init(
+      await step('performance', () => performance.init(
         (st) => {
           setTrayWarnings(st.warnings)
           if (mainWindow && !mainWindow.isDestroyed())
             mainWindow.webContents.send('psm:performance', st)
         },
         () => void openPerformance()
-      )
-      upgrades.init(
+      ))
+      await step('upgrades', () => upgrades.init(
         (st) => {
           if (mainWindow && !mainWindow.isDestroyed())
             mainWindow.webContents.send('psm:upgrades', st)
         },
         () => void openSuppliers()
-      )
+      ))
     }
     // The local MCP action bridge starts only when Settings enabled it.
-    await bridge.init(() => mainWindow)
+    await step('bridge', () => bridge.init(() => mainWindow))
     // Release checks: 20 s after start, then every six hours, and on demand from Settings.
-    if (!smokeMode) updater.init(() => mainWindow)
+    if (!smokeMode) await step('updater', () => updater.init(() => mainWindow))
 
     // `--smoke`: prove the window, preload, and renderer load without console errors, then exit.
     if (smokeMode) {
@@ -158,6 +168,8 @@ if (!gotLock) {
     app.on('activate', async () => {
       if (BrowserWindow.getAllWindows().length === 0) mainWindow = await createMainWindow()
     })
+  }).catch((e: unknown) => {
+    log.error("startup failed", { error: (e as Error)?.stack ?? String(e) })
   })
 
   app.on('window-all-closed', () => {

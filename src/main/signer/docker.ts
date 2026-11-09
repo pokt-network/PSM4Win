@@ -10,13 +10,13 @@ import {
   POCKET_AP_IMAGE,
   KEYRING_VOLUME,
   HOME_IN_BOX,
-  DOCKER_DESKTOP_EXE
 } from '@core/versions'
 import { shQuote, firstLine } from '@core/text'
 import { fail } from '@core/errors'
 import { RE } from '@core/validate'
 import type { DockerCheckResult } from '@core/contract'
 import { log } from '../state/log'
+import { dockerDesktopCandidates } from '@core/docker-desktop'
 
 export interface DockerOptions {
   env?: Record<string, string>
@@ -157,9 +157,14 @@ export async function requireDocker(ctx?: OpContext): Promise<void> {
 }
 
 export function dockerStart(): { ok: true } {
-  if (!existsSync(DOCKER_DESKTOP_EXE))
-    fail('Docker Desktop is not installed at the expected location.', DOCKER_DESKTOP_EXE)
-  const child = spawn(DOCKER_DESKTOP_EXE, [], {
+  const candidates = dockerDesktopCandidates(process.env)
+  const exe = candidates.find((p) => existsSync(p))
+  if (!exe)
+    fail(
+      'Docker Desktop was not found on this PC. Install it, or start it from the Start menu.',
+      candidates.join('; ')
+    )
+  const child = spawn(exe, [], {
     detached: true,
     stdio: 'ignore',
     windowsHide: false

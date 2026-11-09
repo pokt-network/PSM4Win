@@ -140,6 +140,8 @@ class BridgeService {
 
   private async start(): Promise<void> {
     await this.stop()
+    // Never serve with an empty token (a start that came before init loaded it).
+    if (!this.token) await this.loadToken()
     this.error = null
     const dispatch: BridgeDispatch = {
       serverVersion: APP_VERSION_PREFIX + app.getVersion(),

@@ -11,6 +11,10 @@ extraResources:
     to: server
   - from: resources/fonts
     to: fonts
+  # The tray and window icon. Missing from 0.1.27 to 0.1.33: Electron 45 throws on it, which
+  # stopped startup before the bridge, the update check, and the monitors (0.1.34).
+  - from: resources/pocket.ico
+    to: pocket.ico
 asar: true
 npmRebuild: false
 win:

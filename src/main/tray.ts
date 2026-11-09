@@ -6,6 +6,7 @@ import { app, Menu, Tray, type BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { resourcesDir } from './paths'
 import { loginItemPath } from '@core/update'
+import { log } from './state/log'
 
 export interface AppPrefs {
   /** Keep running in the tray when the window is closed (default on). */
@@ -26,6 +27,11 @@ export function initTray(m: { open: () => void; check: () => void }): void {
 
 /** The launch argument start-with-Windows passes, so the app starts in the tray. */
 export const HIDDEN_ARG = '--hidden'
+
+/** Whether the tray icon exists (false when it is off, or could not be created). */
+export function hasTray(): boolean {
+  return tray !== null
+}
 
 export function isQuitting(): boolean {
   return quitting
@@ -52,7 +58,14 @@ export function applyPrefs(next: Partial<AppPrefs>): void {
 }
 
 function createTray(menu: { open: () => void; check: () => void }): void {
-  tray = new Tray(join(resourcesDir(), 'pocket.ico'))
+  // Without a tray the window closes normally (hideOnClose), so the app stays in reach.
+  try {
+    tray = new Tray(join(resourcesDir(), 'pocket.ico'))
+  } catch (e) {
+    log.error('tray failed', { error: (e as Error).message })
+    tray = null
+    return
+  }
   tray.setToolTip('Pocket Service Manager')
   tray.setContextMenu(
     Menu.buildFromTemplate([
