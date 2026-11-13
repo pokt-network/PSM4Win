@@ -133,7 +133,7 @@ export async function installDemo(): Promise<void> {
       docker: '27.5.1',
       image: true,
       pocketap: true,
-      pocketd: '0.1.36'
+      pocketd: '0.1.37'
     },
     dockerNote: null,
     imported: true,

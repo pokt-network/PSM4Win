@@ -4,8 +4,8 @@
 /** The Electron runtime the app ships (package.json pins it exactly; docs/ARCHITECTURE.md). */
 export const ELECTRON_VERSION = '45.2.3'
 
-export const POCKETD_IMAGE = 'ghcr.io/pokt-network/pocketd:0.1.36'
-export const POCKETD_VERSION = '0.1.36'
+export const POCKETD_IMAGE = 'ghcr.io/pokt-network/pocketd:0.1.37'
+export const POCKETD_VERSION = '0.1.37'
 
 /**
  * The supplier stack Provision ships. Relayer and miner run one exact RelayMiner tag

@@ -86,7 +86,7 @@ Windows only, in every phase of this repository. Do not add macOS conditionals, 
 
 ## Protocol references (versions this app's behaviour was verified against)
 
-- `pokt-network/poktroll` main @ `fea9e14`, `pocketd` v0.1.36. Chain IDs: MainNet `pocket`, Beta TestNet `pocket-lego-testnet`. LCD: `https://sauron-api.infra.pocket.network` and `https://sauron-api.beta.infra.pocket.network`. Explorer: `https://explorer.pocket.network` and `/beta`.
+- `pokt-network/poktroll` main @ `fea9e14`, `pocketd` v0.1.37. Chain IDs: MainNet `pocket`, Beta TestNet `pocket-lego-testnet`. LCD: `https://sauron-api.infra.pocket.network` and `https://sauron-api.beta.infra.pocket.network`. Explorer: `https://explorer.pocket.network` and `/beta`.
 - `pokt-network/sage` @ `703d8d9` (response grading, hence the JSON envelope rule).
 - `pokt-network/pocket-relay-miner` main (the HA RelayMiner the Provision templates run).
 - `pokt-network/pocket-ap` v0.1.2 (relay client for the Test screen; the built-in `pocketd relayminer relay` is JSON-RPC only).
