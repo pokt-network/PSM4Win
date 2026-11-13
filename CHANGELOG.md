@@ -2,6 +2,11 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
+## 0.1.35
+
+- The app now signs with pocketd 0.1.37, the version both networks moved to on 12 November. Nothing you do in the app changes.
+- New supplier stacks, and stacks you update or re-provision, get pocketd 0.1.37 on the server too.
+
 ## 0.1.34
 
 **Priority update.** In 0.1.32 and 0.1.33 the Claude bridge, the update check, and the supplier monitor did not start when the app started; this version fixes that. Install it now.

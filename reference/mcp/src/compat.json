@@ -1,11 +1,18 @@
 {
   "app": "Pocket Service Manager",
-  "updated": "2026-11-09",
+  "updated": "2026-11-13",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.34",
+  "latest": "electron-0.1.35",
   "minimum_supported": "hta-2026-09-14",
   "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.35": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.28",
+      "changes": [
+        "signs with pocketd 0.1.37 (both networks applied the poktroll v0.1.37 upgrade on 2026-11-12); Provision writes the same image into each stack it creates, updates, or re-provisions. The new service supplier allowlist commands are not used by the app yet"
+      ]
+    },
     "electron-0.1.34": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.28",
