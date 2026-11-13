@@ -369,6 +369,8 @@ export interface SignerResults {
     out: string
     /** The RelayMiner release written into stack.env (relayminerTarget at the time). */
     relayminer: string
+    /** The pocketd version written into stack.env (POCKETD_VERSION). */
+    pocketd: string
   }
   'supplier-run': SupplierRunResult
   'deploy-ship': {

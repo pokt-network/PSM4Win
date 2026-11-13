@@ -9,7 +9,8 @@ import {
   type SupplyState
 } from '@core/chain'
 import { clearLcdCache } from '@core/lcd'
-import { hasProvisionedStack } from '@core/stack'
+import { hasProvisionedStack, stackPocketdBehind } from '@core/stack'
+import { POCKETD_VERSION } from '@core/versions'
 import { relayminerBehind } from '@core/upgrades'
 import { networkUpgradeText } from '../lib/upgrades'
 import { Badge, NetBadge, Busy, netLabel, RunButton } from '../components/ui'
@@ -56,6 +57,9 @@ export function DashboardScreen(): React.JSX.Element {
         .filter((s) => relayminerBehind(s.suppliers?.[net], rm))
         .map((s) => s.name)
     : []
+  const pdBehind = (settings?.servers ?? [])
+    .filter((s) => stackPocketdBehind(s.suppliers?.[net]))
+    .map((s) => s.name)
   const [rows, setRows] = useState<SupplierRow[] | null>(null)
   const [stakes, setStakes] = useState<Record<string, AppStakeHolder[]>>({})
   const [supply, setSupply] = useState<Record<string, SupplyState>>({})
@@ -139,6 +143,16 @@ export function DashboardScreen(): React.JSX.Element {
           {rmBehind.length === 1 ? 'runs' : 'run'} an older one on {label}. Press Update stack under{' '}
           <a onClick={() => goTo('supply')}>Suppliers</a> when it suits you; nothing changes until
           you do.
+        </div>
+      ) : null}
+      {pdBehind.length ? (
+        <div className="warnbox" id="dashPocketd">
+          <b>pocketd {POCKETD_VERSION} for your servers.</b>{' '}
+          {pdBehind.length > 1
+            ? `${pdBehind.slice(0, -1).join(', ')} and ${pdBehind[pdBehind.length - 1]}`
+            : pdBehind[0]}{' '}
+          {pdBehind.length === 1 ? 'has' : 'have'} an older one on {label}. Press Update stack under{' '}
+          <a onClick={() => goTo('supply')}>Suppliers</a> when it suits you; relays do not pause.
         </div>
       ) : null}
       {upgradeNote ? (

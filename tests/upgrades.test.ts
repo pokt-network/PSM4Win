@@ -10,17 +10,24 @@ import {
   parseUpgradeTx,
   parseCurrentPlan,
   pickUpgrade,
-  upgradeEta
+  upgradeEta,
+  relayminerFromStackEnv,
+  relayminerToShip,
+  relayminerImage
 } from '@core/upgrades'
-import { renderStack, stackNeedsUpdate, type StackTemplates } from '@core/stack'
-import { RELAYMINER_IMAGE, RELAYMINER_VERSION, STACK_LAYOUT } from '@core/versions'
+import { renderStack, stackNeedsUpdate, stackPocketdBehind, type StackTemplates } from '@core/stack'
+import { POCKETD_VERSION, RELAYMINER_IMAGE, RELAYMINER_VERSION, STACK_LAYOUT } from '@core/versions'
 
 const bump = (v: string, by = 1): string => {
   const [a, b, c] = v.replace(/^v/, '').split('.').map(Number)
   return `v${a}.${b}.${c + by}`
 }
 const newer = bump(RELAYMINER_VERSION)
-const ready = { provisioned_at: '2026-10-12T00:00:00Z', layout: STACK_LAYOUT }
+const ready = {
+  provisioned_at: '2026-10-12T00:00:00Z',
+  layout: STACK_LAYOUT,
+  pocketd: POCKETD_VERSION
+}
 
 describe('RelayMiner target', () => {
   it('follows a newer upstream release and never goes below the floor', () => {
@@ -50,6 +57,41 @@ describe('stack RelayMiner', () => {
     expect(stackNeedsUpdate(st)).toBe(false)
     expect(stackNeedsUpdate({ ...st, relayminer: newer }, newer)).toBe(false)
     expect(stackNeedsUpdate({ provisioned_at: 'x', layout: STACK_LAYOUT - 1 })).toBe(true)
+  })
+})
+
+describe('supplier-ship never moves a stack to an older RelayMiner', () => {
+  it('reads the tag from the stack.env line', () => {
+    expect(
+      relayminerFromStackEnv(`PSM_HAVE_RELAYER\nRELAYMINER_IMAGE=${relayminerImage(newer)}\n`)
+    ).toBe(newer)
+    expect(relayminerFromStackEnv('PSM_HAVE_RELAYER\n')).toBeNull()
+    expect(relayminerFromStackEnv('RELAYMINER_IMAGE=ghcr.io/x/y:rc\n')).toBeNull()
+    expect(relayminerFromStackEnv('RELAYMINER_IMAGE=ghcr.io/x/y:v1.2.3;rm\n')).toBeNull()
+  })
+  it('keeps a newer one the stack runs, otherwise ships the target', () => {
+    expect(relayminerToShip(RELAYMINER_VERSION, newer)).toBe(newer)
+    expect(relayminerToShip(newer, RELAYMINER_VERSION)).toBe(newer)
+    expect(relayminerToShip(newer, null)).toBe(newer)
+    expect(relayminerToShip(RELAYMINER_VERSION, null)).toBe(RELAYMINER_VERSION)
+  })
+})
+
+describe('stack pocketd', () => {
+  const older = bump(POCKETD_VERSION, -1).slice(1)
+  it('asks for Update stack when the stack has an older pocketd, or does not say', () => {
+    const st = { ...ready, relayminer: RELAYMINER_VERSION }
+    expect(stackPocketdBehind(st)).toBe(false)
+    expect(stackNeedsUpdate(st, RELAYMINER_VERSION)).toBe(false)
+    expect(stackPocketdBehind({ ...st, pocketd: older })).toBe(true)
+    expect(stackNeedsUpdate({ ...st, pocketd: older }, RELAYMINER_VERSION)).toBe(true)
+    expect(stackPocketdBehind({ ...st, pocketd: undefined })).toBe(true)
+    expect(stackPocketdBehind({ ...st, pocketd: 'latest' })).toBe(true)
+    expect(stackPocketdBehind({ ...st, pocketd: bump(POCKETD_VERSION).slice(1) })).toBe(false)
+  })
+  it('says nothing about a stack that is not provisioned', () => {
+    expect(stackPocketdBehind({ pocketd: older })).toBe(false)
+    expect(stackPocketdBehind(null)).toBe(false)
   })
 })
 

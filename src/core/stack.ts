@@ -3,7 +3,14 @@
 import { NETWORK_INFO, isNetwork, type Network } from './networks'
 import { renderTemplate, toLf } from './text'
 import type { StakeService } from './contract'
-import { POCKETD_IMAGE, RELAYMINER_IMAGE, REDIS_IMAGE, STACK_LAYOUT } from './versions'
+import {
+  POCKETD_IMAGE,
+  POCKETD_VERSION,
+  RELAYMINER_IMAGE,
+  REDIS_IMAGE,
+  STACK_LAYOUT
+} from './versions'
+import { compareVersions } from './update'
 import { RELAYMINER_TAG_RE, relayminerBehind, relayminerImage } from './upgrades'
 
 export interface StackTokens {
@@ -106,15 +113,40 @@ export function stackLayoutBehind(
   return !!st?.provisioned_at && (st.layout ?? 1) < STACK_LAYOUT
 }
 
+/** A pocketd version as recorded on a stack entry: plain X.Y.Z. */
+export const POCKETD_TAG_RE = /^\d{1,4}\.\d{1,4}\.\d{1,4}$/
+
 /**
- * Whether Update stack is due: older files than this app ships, or (given the RelayMiner the
- * app would install, relayminerTarget) an older RelayMiner than that.
+ * Whether a provisioned stack's supplier.sh signs its operator's transactions (stake, key
+ * import) with an older pocketd than this app pins (POCKETD_VERSION). Provision records the
+ * version since 0.1.35; a stack recorded before that does not say, and counts as older.
+ */
+export function stackPocketdBehind(
+  st: { provisioned_at?: string; pocketd?: string } | null | undefined
+): boolean {
+  if (!st?.provisioned_at) return false
+  return !st.pocketd || !POCKETD_TAG_RE.test(st.pocketd)
+    ? true
+    : compareVersions(st.pocketd, POCKETD_VERSION) < 0
+}
+
+/**
+ * Whether Update stack is due: older files than this app ships, (given the RelayMiner the
+ * app would install, relayminerTarget) an older RelayMiner than that, or an older pocketd
+ * than the app pins.
  */
 export function stackNeedsUpdate(
-  st: { provisioned_at?: string; layout?: number; relayminer?: string } | null | undefined,
+  st:
+    | { provisioned_at?: string; layout?: number; relayminer?: string; pocketd?: string }
+    | null
+    | undefined,
   relayminer?: string
 ): boolean {
-  return stackLayoutBehind(st) || (!!relayminer && relayminerBehind(st, relayminer))
+  return (
+    stackLayoutBehind(st) ||
+    (!!relayminer && relayminerBehind(st, relayminer)) ||
+    stackPocketdBehind(st)
+  )
 }
 
 /**

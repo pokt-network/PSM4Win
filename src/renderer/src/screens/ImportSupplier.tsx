@@ -268,6 +268,7 @@ export function ImportWizard({
       url: stackUrl(host, port),
       operator,
       relayminer: r1.relayminer,
+      pocketd: r1.pocketd,
       import: {
         stage: 'staged',
         first: ph.first,

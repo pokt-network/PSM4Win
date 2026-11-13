@@ -4,8 +4,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { useStore, S, type SupplyRow } from '../store'
 import type { ChainSupplier, OwnedSupplierServices } from '@core/lcd'
 import { account, readAfterTx, ownedSuppliers, withServices } from '@core/lcd'
-import { stackLayoutBehind, stackNeedsUpdate } from '@core/stack'
+import { stackLayoutBehind, stackNeedsUpdate, stackPocketdBehind } from '@core/stack'
 import { relayminerBehind, stackRelayminer } from '@core/upgrades'
+import { POCKETD_VERSION } from '@core/versions'
 import { fmtPokt, fmtInt, fmtDuration, POKT } from '@core/format'
 import { unbondingOf, unbondingNote, nextSessionBoundary, supplierServiceIds } from '@core/chain'
 import { RPC_TYPES } from '@core/validate'
@@ -166,6 +167,10 @@ function SuppliersList(): React.JSX.Element {
                           <div>
                             <Badge cls="warn">RelayMiner {rm} available</Badge>
                           </div>
+                        ) : stackPocketdBehind(st) ? (
+                          <div>
+                            <Badge cls="warn">pocketd {POCKETD_VERSION} available</Badge>
+                          </div>
                         ) : null}
                       </td>
                       <td>{ids.length ? ids.join(', ') : <span className="hint">none</span>}</td>
@@ -197,7 +202,9 @@ function SuppliersList(): React.JSX.Element {
                               title={
                                 stackLayoutBehind(st)
                                   ? 'The server runs an older RelayMiner stack than this version of the app ships. Updating keeps the operator key, the services, and the stake.'
-                                  : `RelayMiner ${rm} is out; this stack runs ${stackRelayminer(st)}. Updating keeps the operator key, the services, and the stake.`
+                                  : rm && relayminerBehind(st, rm)
+                                    ? `RelayMiner ${rm} is out; this stack runs ${stackRelayminer(st)}. Updating keeps the operator key, the services, and the stake.`
+                                    : `This stack has an older pocketd than ${POCKETD_VERSION}, the version the networks run. Updating puts ${POCKETD_VERSION} on the server without pausing relays, and keeps the operator key, the services, and the stake.`
                               }
                               onClick={() => provisionOn(x.server.name, net)}
                             >

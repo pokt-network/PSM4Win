@@ -5,12 +5,13 @@ import { copy, goTo, openFolder } from '../lib/actions'
 import type { Network } from '@core/networks'
 import type { RemoteClaudeStatus } from '../../../preload/index'
 import { RE } from '@core/validate'
-import { STACK_LAYOUT } from '@core/versions'
+import { POCKETD_VERSION, STACK_LAYOUT } from '@core/versions'
 import { relayminerBehind, stackRelayminer } from '@core/upgrades'
 import { networkUpgradeText } from '../lib/upgrades'
 import {
   stackLayoutBehind,
   stackNeedsUpdate,
+  stackPocketdBehind,
   stackUrl,
   portOfStackUrl,
   publicPortError,
@@ -490,6 +491,8 @@ function StackCell({ s, net }: { s: ServerEntry; net: Network }): React.JSX.Elem
         <Badge cls="warn">stack update needed</Badge>
       ) : ss === 'ready' && rm && relayminerBehind(st, rm) ? (
         <Badge cls="warn">RelayMiner {rm} available</Badge>
+      ) : ss === 'ready' && stackPocketdBehind(st) ? (
+        <Badge cls="warn">pocketd {POCKETD_VERSION} available</Badge>
       ) : ss === 'ready' ? (
         <Badge cls="ok">provisioned</Badge>
       ) : (
@@ -670,14 +673,16 @@ function ProvisionPanel(): React.JSX.Element {
       ? `This server runs an older ${netLabel(appNet)} stack than this version of the app ships. Updating downloads RelayMiner ${rm ?? ''} and the pinned Redis, checks both configs with them before anything restarts, and keeps the operator key, the services, and the stake.`
       : ss === 'ready' && rm && relayminerBehind(st, rm)
         ? `RelayMiner ${rm} is out; this ${netLabel(appNet)} stack runs ${stackRelayminer(st)}. Updating downloads it, checks both configs with it before anything restarts (the running stack stays up if the check fails), then restarts the miner and relayer; relays pause for about a minute. The operator key, the services, and the stake are kept.`
-        : ss === 'ready'
-          ? `This server already has a ${netLabel(appNet)} stack there; its operator key and relayer config are kept.`
-          : ss === 'pending'
-            ? 'Provisioning of this stack was interrupted after its operator key was created. Start provisioning resumes it; finished steps are not repeated.'
-            : probing
-              ? 'Looking on the server for a stack the app made there before.'
-              : adoptHint ||
-                `A new stack for ${netLabel(appNet)}; a new operator key is created on the server. If the app made a stack in this directory before, from this PC or another, it is adopted instead and its key is kept.`
+        : ss === 'ready' && stackPocketdBehind(st)
+          ? `This ${netLabel(appNet)} stack signs its operator's transactions on the server with ${st?.pocketd ? `pocketd ${st.pocketd}` : 'an older pocketd'}; this version of the app uses ${POCKETD_VERSION}, the version the networks run. Updating puts ${POCKETD_VERSION} on the server; the RelayMiner keeps running, so relays do not pause. The operator key, the services, and the stake are kept.`
+          : ss === 'ready'
+            ? `This server already has a ${netLabel(appNet)} stack there; its operator key and relayer config are kept.`
+            : ss === 'pending'
+              ? 'Provisioning of this stack was interrupted after its operator key was created. Start provisioning resumes it; finished steps are not repeated.'
+              : probing
+                ? 'Looking on the server for a stack the app made there before.'
+                : adoptHint ||
+                  `A new stack for ${netLabel(appNet)}; a new operator key is created on the server. If the app made a stack in this directory before, from this PC or another, it is adopted instead and its key is kept.`
   const btnLabel =
     adopt && !adoptOtherNet && ss === 'none'
       ? 'Adopt stack'
@@ -765,6 +770,7 @@ function ProvisionPanel(): React.JSX.Element {
     }
     // The RelayMiner supplier-ship wrote into stack.env, recorded only once the stack is up.
     let shippedRelayminer = ''
+    let shippedPocketd = ''
     const done = async (): Promise<void> => {
       await setStack(s.name, net, {
         dir,
@@ -773,7 +779,8 @@ function ProvisionPanel(): React.JSX.Element {
         operator,
         provisioned_at: new Date().toISOString(),
         layout: STACK_LAYOUT,
-        ...(shippedRelayminer ? { relayminer: shippedRelayminer } : {})
+        ...(shippedRelayminer ? { relayminer: shippedRelayminer } : {}),
+        ...(shippedPocketd ? { pocketd: shippedPocketd } : {})
       })
       log(
         adopted
@@ -821,6 +828,7 @@ function ProvisionPanel(): React.JSX.Element {
       return fail('Shipping failed.')
     }
     shippedRelayminer = r2.relayminer
+    shippedPocketd = r2.pocketd
     mark(
       'Ship the stack',
       true,

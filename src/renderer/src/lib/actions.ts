@@ -649,6 +649,8 @@ export interface StackEntry {
   layout?: number
   /** The RelayMiner release Provision last shipped (since 0.1.28; see stackRelayminer for older entries). */
   relayminer?: string
+  /** The pocketd version Provision last wrote into stack.env (since 0.1.35; absent means older). */
+  pocketd?: string
   /** An import of a supplier set up by hand, while it is under way (src/core/import.ts). */
   import?: ImportProgress
 }

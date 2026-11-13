@@ -46,6 +46,8 @@ import { SUPPLIER_STEP_TIMEOUTS_MS } from '@core/contract'
 import type { OpContext } from './context'
 import { resolveSsh, runSsh, runScp } from './ssh'
 import { getRelayminerTarget } from '../relayminer-target'
+import { relayminerFromStackEnv, relayminerToShip } from '@core/upgrades'
+import { POCKETD_VERSION } from '@core/versions'
 import { runNative } from './native'
 import { withWorkDir } from './work'
 import { serverTemplatesDir, toolPath } from '../paths'
@@ -180,37 +182,42 @@ export async function supplierShip(
     }
   }
 
-  // Upstream's latest RelayMiner once the upgrade check has seen its image, else the pinned one.
-  const relayminer = getRelayminerTarget()
-  const rendered = renderStack(await loadTemplates(), {
-    network: net,
-    blockTime: bt,
-    hostname,
-    project,
-    healthPort: hp,
-    relayerMetricsPort: rmp,
-    minerMetricsPort: mmp,
-    caddyDir,
-    relayminer
-  })
+  const templates = await loadTemplates()
 
   return withWorkDir(async (work) => {
+    ctx.progress('info', `Creating ${path} on ${conn.target}`, undefined, 'mkdir')
+    const mk = await runSsh(
+      conn,
+      `${mkdirOwned([path, caddyDir, `${caddyDir}/sites`])} && { test -f '${path}/relayer-config.yaml' && echo PSM_HAVE_RELAYER; grep -h '^RELAYMINER_IMAGE=' '${path}/stack.env' 2>/dev/null | head -1; true; }`,
+      ctx
+    )
+    if (mk.code !== 0)
+      fail('Could not create the stack directory over SSH.', cleanErr(mk.err + '\n' + mk.out))
+    const keepRelayer = /PSM_HAVE_RELAYER/.test(mk.out)
+
+    // Upstream's latest RelayMiner once the upgrade check has seen its image, else the pinned
+    // one; never older than the one the stack already runs.
+    const onServer = relayminerFromStackEnv(mk.out)
+    const relayminer = relayminerToShip(getRelayminerTarget(), onServer)
+    if (onServer && relayminer === onServer && onServer !== getRelayminerTarget())
+      ctx.progress('info', `Keeping RelayMiner ${onServer}, which this stack already runs`)
+    const rendered = renderStack(templates, {
+      network: net,
+      blockTime: bt,
+      hostname,
+      project,
+      healthPort: hp,
+      relayerMetricsPort: rmp,
+      minerMetricsPort: mmp,
+      caddyDir,
+      relayminer
+    })
     await ensureDir(join(work, 'caddy', 'sites'))
     for (const [name, text] of Object.entries(rendered.stack))
       await writeText(join(work, name), text)
     for (const [name, text] of Object.entries(rendered.caddy))
       await writeText(join(work, 'caddy', name), text)
     await writeText(join(work, 'caddy', 'sites', rendered.site.name), rendered.site.text)
-
-    ctx.progress('info', `Creating ${path} on ${conn.target}`, undefined, 'mkdir')
-    const mk = await runSsh(
-      conn,
-      `${mkdirOwned([path, caddyDir, `${caddyDir}/sites`])} && { test -f '${path}/relayer-config.yaml' && echo PSM_HAVE_RELAYER; true; }`,
-      ctx
-    )
-    if (mk.code !== 0)
-      fail('Could not create the stack directory over SSH.', cleanErr(mk.err + '\n' + mk.out))
-    const keepRelayer = /PSM_HAVE_RELAYER/.test(mk.out)
     const files = [
       'docker-compose.yaml',
       'miner-config.yaml',
@@ -258,7 +265,14 @@ export async function supplierShip(
       `${caddyDir}/Caddyfile`,
       `${caddyDir}/sites/${rendered.site.name}`
     )
-    return { ok: true, files, relayer_kept: keepRelayer, out: firstLine(r.out), relayminer }
+    return {
+      ok: true,
+      files,
+      relayer_kept: keepRelayer,
+      out: firstLine(r.out),
+      relayminer,
+      pocketd: POCKETD_VERSION
+    }
   })
 }
 

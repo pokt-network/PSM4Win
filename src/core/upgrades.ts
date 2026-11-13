@@ -39,6 +39,27 @@ export function relayminerTarget(latest: string | null | undefined): string {
     : RELAYMINER_VERSION
 }
 
+/**
+ * The RelayMiner tag in a stack.env line `RELAYMINER_IMAGE=<repo>:<tag>` found in ssh output,
+ * or null when there is none or it is not a plain tag.
+ */
+export function relayminerFromStackEnv(out: string): string | null {
+  for (const line of out.split(/\r?\n/)) {
+    const m = /^RELAYMINER_IMAGE=\S*:(v[0-9.]+)\s*$/.exec(line.trim())
+    if (m && RELAYMINER_TAG_RE.test(m[1])) return m[1]
+  }
+  return null
+}
+
+/**
+ * The RelayMiner supplier-ship writes: the target, unless the stack already runs a newer one
+ * (set by hand, or shipped while the target was higher), which it keeps. Provisioning never
+ * moves a stack to an older RelayMiner, also not before the upgrade check has run.
+ */
+export function relayminerToShip(target: string, onServer: string | null): string {
+  return onServer && compareVersions(onServer, target) > 0 ? onServer : target
+}
+
 /** 0.1.27 shipped layout 5 with this RelayMiner and did not record the version in the stack entry. */
 const LAYOUT_5_RELAYMINER = 'v0.1.2'
 
