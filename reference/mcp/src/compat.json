@@ -2,10 +2,19 @@
   "app": "Pocket Service Manager",
   "updated": "2026-11-13",
   "summary": "What each released version of the desktop app can do, so an assistant knows which steps it can hand to the app and when to tell the user to update. The app performs every transaction; this MCP server only reads.",
-  "latest": "electron-0.1.35",
+  "latest": "electron-0.1.36",
   "minimum_supported": "hta-2026-09-14",
   "resolving_a_version": "An entry is keyed by the version that introduced its capability set. A version carrying \"capabilities_as\" behaves exactly as the entry it names, with the fixes in its \"changes\" list; a version with no entry at all behaves as the newest entry at or below it.",
   "versions": {
+    "electron-0.1.36": {
+      "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
+      "capabilities_as": "electron-0.1.28",
+      "priority": "Update stack pressed in the first minute after the app started could put a supplier stack back on an old RelayMiner that can no longer prove its work; this version never does that. Install it before you update a stack.",
+      "changes": [
+        "fixes Update stack (supplier-ship) moving a stack to an older RelayMiner: from 0.1.28 to 0.1.35, pressed before the upgrade check had run (about the first minute after start) it shipped the floor v0.1.2, which cannot prove on a chain at poktroll v0.1.36 or later. It now reads the RelayMiner the stack runs and keeps it when newer. An assistant helping a user on 0.1.28 to 0.1.35 should tell them to update before pressing Update stack, or to wait until Suppliers shows the latest RelayMiner; a stack already moved to v0.1.2 is put right by Update stack on 0.1.36",
+        "stack entries record the pocketd written into stack.env; Update stack (and the bridge status update_needed) is also due when that pocketd is older than the app's, or unrecorded, and does not restart the RelayMiner"
+      ]
+    },
     "electron-0.1.35": {
       "channel": "Scoop bucket pokt-network/PSM4Win (Electron, Windows)",
       "capabilities_as": "electron-0.1.28",

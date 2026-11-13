@@ -2,6 +2,13 @@
 
 One line per user-visible change. Versions are tags `v<version>`; compat strings are `electron-<version>`. A release people must install now opens its section with `**Priority update.** <why>`; the app shows it as a priority update (docs/PACKAGING.md).
 
+## 0.1.36
+
+**Priority update.** Update stack pressed in the first minute after the app started could put a supplier stack back on an old RelayMiner that can no longer prove its work; this version never does that. Install it before you update a stack.
+
+- Fixed: Update stack never installs an older RelayMiner than the one your stack already runs. Since 0.1.28, pressing it in the first minute after the app started, before the app had looked up the latest RelayMiner, installed RelayMiner v0.1.2. On the networks today that version cannot submit valid proofs, so the supplier stops earning.
+- Update stack now also appears when a stack has an older pocketd than the app (the badge says "pocketd 0.1.37 available"), and the Dashboard tells you which servers need it. This update does not pause relays. Every stack made before this version shows it once.
+
 ## 0.1.35
 
 - The app now signs with pocketd 0.1.37, the version both networks moved to on 12 November. Nothing you do in the app changes.
